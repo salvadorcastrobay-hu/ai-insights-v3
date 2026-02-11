@@ -8,8 +8,12 @@ Deploy: Streamlit Community Cloud (free)
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 import streamlit as st
+import streamlit_authenticator as stauth
+import yaml
+from yaml.loader import SafeLoader
 import plotly.express as px
 import plotly.graph_objects as go
 from supabase import create_client
@@ -17,6 +21,20 @@ import pandas as pd
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# ── Auth ──
+
+CONFIG_PATH = Path(__file__).parent / "config.yaml"
+
+
+def load_auth_config():
+    with open(CONFIG_PATH) as f:
+        return yaml.load(f, Loader=SafeLoader)
+
+
+def save_auth_config(config):
+    with open(CONFIG_PATH, "w") as f:
+        yaml.dump(config, f, default_flow_style=False)
 
 # ── Config ──
 
@@ -27,11 +45,22 @@ st.set_page_config(
 )
 
 
+def _get_secret(key: str) -> str:
+    """Read from env vars (local) or st.secrets (Streamlit Cloud)."""
+    val = os.environ.get(key)
+    if val:
+        return val
+    try:
+        return st.secrets[key]
+    except (KeyError, FileNotFoundError):
+        raise RuntimeError(f"Missing secret: {key}. Set it as env var or in Streamlit Cloud secrets.")
+
+
 @st.cache_resource
 def get_supabase():
     return create_client(
-        os.environ["SUPABASE_URL"],
-        os.environ["SUPABASE_KEY"],
+        _get_secret("SUPABASE_URL"),
+        _get_secret("SUPABASE_KEY"),
     )
 
 
@@ -855,7 +884,8 @@ def page_faq_detail(df: pd.DataFrame) -> None:
 
 # ── Main ──
 
-def main():
+def dashboard():
+    """Protected dashboard content — only runs after authentication."""
     st.title("Humand Sales Insights")
 
     df = load_data()
@@ -879,6 +909,40 @@ def main():
     st.sidebar.markdown("---")
     if not df.empty:
         st.sidebar.caption(f"{len(filtered_df)}/{len(df)} insights mostrados")
+
+
+def main():
+    config = load_auth_config()
+
+    authenticator = stauth.Authenticate(
+        config["credentials"],
+        config["cookie"]["name"],
+        config["cookie"]["key"],
+        config["cookie"]["expiry_days"],
+        auto_hash=False,
+    )
+
+    try:
+        authenticator.login()
+    except Exception as e:
+        st.error(e)
+
+    if st.session_state.get("authentication_status"):
+        # Sidebar: user info + logout
+        with st.sidebar:
+            st.write(f"**{st.session_state.get('name')}**")
+            authenticator.logout("Cerrar sesion")
+            st.markdown("---")
+
+        dashboard()
+
+    elif st.session_state.get("authentication_status") is False:
+        st.error("Usuario o contrasena incorrectos.")
+
+    elif st.session_state.get("authentication_status") is None:
+        st.info("Ingresa tu usuario y contrasena para acceder.")
+
+    save_auth_config(config)
 
 
 if __name__ == "__main__":
