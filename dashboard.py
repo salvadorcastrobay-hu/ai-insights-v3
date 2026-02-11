@@ -942,7 +942,10 @@ def main():
     elif st.session_state.get("authentication_status") is None:
         st.info("Ingresa tu usuario y contrasena para acceder.")
 
-    save_auth_config(config)
+    try:
+        save_auth_config(config)
+    except OSError:
+        pass  # Read-only filesystem (Streamlit Cloud)
 
 
 if __name__ == "__main__":
