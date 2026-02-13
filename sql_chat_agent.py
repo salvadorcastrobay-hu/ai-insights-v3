@@ -173,6 +173,17 @@ def _get_secret(key: str) -> str:
         raise RuntimeError(f"Missing secret: {key}")
 
 
+def _get_secret_optional(key: str) -> str | None:
+    """Like _get_secret but returns None instead of raising."""
+    val = os.environ.get(key)
+    if val:
+        return val
+    try:
+        return st.secrets[key]
+    except (KeyError, FileNotFoundError):
+        return None
+
+
 def _get_chat_model() -> str:
     return os.getenv("OPENAI_CHAT_AGENT_MODEL", "gpt-4o")
 
@@ -241,9 +252,12 @@ def execute_query(sql: str) -> tuple[list[str], list[tuple]]:
 
     Returns (columns, rows). Raises on error.
     """
-    from config import get_db_connection_params
-    params = get_db_connection_params()
-    conn = psycopg2.connect(**params)
+    database_url = _get_secret_optional("DATABASE_URL")
+    if database_url:
+        conn = psycopg2.connect(database_url)
+    else:
+        from config import get_db_connection_params
+        conn = psycopg2.connect(**get_db_connection_params())
     try:
         conn.set_session(readonly=True, autocommit=True)
         with conn.cursor() as cur:
