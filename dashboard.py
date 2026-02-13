@@ -19,6 +19,7 @@ import plotly.graph_objects as go
 from supabase import create_client
 import pandas as pd
 from dotenv import load_dotenv
+from sql_chat_agent import page_sql_chat
 
 load_dotenv()
 
@@ -900,6 +901,7 @@ def dashboard():
         "Pains (detalle)": page_pains_detail,
         "Product Gaps (detalle)": page_product_gaps_detail,
         "FAQs (detalle)": page_faq_detail,
+        "Chat con IA": page_sql_chat,
     }
 
     page = st.sidebar.radio("Pagina", list(pages.keys()))

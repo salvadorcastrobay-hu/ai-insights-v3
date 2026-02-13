@@ -33,6 +33,7 @@ HUBSPOT_API_KEY = os.getenv("HUBSPOT_API_KEY", "")
 # OpenAI
 OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+OPENAI_CHAT_AGENT_MODEL = os.getenv("OPENAI_CHAT_AGENT_MODEL", "gpt-4o")
 
 # Pipeline
 TRANSCRIPT_VIEW_NAME = os.getenv("TRANSCRIPT_VIEW_NAME", "v_transcripts")
