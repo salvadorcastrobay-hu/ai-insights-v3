@@ -19,7 +19,7 @@ import psycopg2.extras
 import streamlit as st
 from openai import OpenAI
 
-from config import OPENAI_API_KEY, OPENAI_CHAT_AGENT_MODEL, get_db_connection_params
+from config import OPENAI_CHAT_AGENT_MODEL, get_db_connection_params
 
 # ---------------------------------------------------------------------------
 # System prompt
@@ -161,8 +161,20 @@ def validate_sql(sql: str) -> tuple[bool, str]:
 # OpenAI helpers
 # ---------------------------------------------------------------------------
 
+def _get_secret(key: str) -> str:
+    """Read from env vars (local) or st.secrets (Streamlit Cloud)."""
+    import os
+    val = os.environ.get(key)
+    if val:
+        return val
+    try:
+        return st.secrets[key]
+    except (KeyError, FileNotFoundError):
+        raise RuntimeError(f"Missing secret: {key}")
+
+
 def _get_openai_client() -> OpenAI:
-    return OpenAI(api_key=OPENAI_API_KEY)
+    return OpenAI(api_key=_get_secret("OPENAI_API_KEY"))
 
 
 def generate_sql(client: OpenAI, question: str, history: list[dict]) -> str:
