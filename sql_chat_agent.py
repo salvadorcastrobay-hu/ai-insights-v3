@@ -258,7 +258,7 @@ def execute_query(sql: str) -> tuple[list[str], list[tuple]]:
             "Falta configurar DATABASE_URL en los Secrets de Streamlit Cloud. "
             "Usa la URL del Transaction Pooler de Supabase."
         )
-    conn = psycopg2.connect(database_url)
+    conn = psycopg2.connect(database_url, sslmode="require")
     try:
         conn.set_session(readonly=True, autocommit=True)
         with conn.cursor() as cur:
