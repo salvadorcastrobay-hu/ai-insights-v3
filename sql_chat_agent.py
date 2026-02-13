@@ -205,10 +205,14 @@ def generate_sql(client: OpenAI, question: str, history: list[dict]) -> str:
         max_tokens=1024,
     )
     raw = response.choices[0].message.content.strip()
-    # Strip markdown code fences if present
-    if raw.startswith("```"):
-        raw = re.sub(r"^```(?:sql)?\n?", "", raw)
-        raw = re.sub(r"\n?```$", "", raw)
+    # Strip markdown code fences anywhere in the response
+    fence_match = re.search(r"```(?:sql)?\s*\n(.*?)```", raw, re.DOTALL)
+    if fence_match:
+        return fence_match.group(1).strip()
+    # If no fences, try to find the SQL starting with SELECT or WITH
+    sql_match = re.search(r"((?:SELECT|WITH)\b.*)", raw, re.DOTALL | re.IGNORECASE)
+    if sql_match:
+        return sql_match.group(1).strip()
     return raw.strip()
 
 
