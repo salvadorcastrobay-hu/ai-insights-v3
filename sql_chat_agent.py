@@ -12,6 +12,7 @@ Flujo:
 
 from __future__ import annotations
 
+import os
 import re
 
 import psycopg2
@@ -19,7 +20,6 @@ import psycopg2.extras
 import streamlit as st
 from openai import OpenAI
 
-from config import OPENAI_CHAT_AGENT_MODEL, get_db_connection_params
 
 # ---------------------------------------------------------------------------
 # System prompt
@@ -173,6 +173,10 @@ def _get_secret(key: str) -> str:
         raise RuntimeError(f"Missing secret: {key}")
 
 
+def _get_chat_model() -> str:
+    return os.getenv("OPENAI_CHAT_AGENT_MODEL", "gpt-4o")
+
+
 def _get_openai_client() -> OpenAI:
     return OpenAI(api_key=_get_secret("OPENAI_API_KEY"))
 
@@ -184,7 +188,7 @@ def generate_sql(client: OpenAI, question: str, history: list[dict]) -> str:
     messages.append({"role": "user", "content": question})
 
     response = client.chat.completions.create(
-        model=OPENAI_CHAT_AGENT_MODEL,
+        model=_get_chat_model(),
         messages=messages,
         temperature=0,
         max_tokens=1024,
@@ -217,7 +221,7 @@ def summarize_results(
     )
 
     response = client.chat.completions.create(
-        model=OPENAI_CHAT_AGENT_MODEL,
+        model=_get_chat_model(),
         messages=[
             {"role": "system", "content": SUMMARIZE_SYSTEM_PROMPT},
             {"role": "user", "content": user_msg},
@@ -237,6 +241,7 @@ def execute_query(sql: str) -> tuple[list[str], list[tuple]]:
 
     Returns (columns, rows). Raises on error.
     """
+    from config import get_db_connection_params
     params = get_db_connection_params()
     conn = psycopg2.connect(**params)
     try:
