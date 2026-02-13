@@ -253,11 +253,12 @@ def execute_query(sql: str) -> tuple[list[str], list[tuple]]:
     Returns (columns, rows). Raises on error.
     """
     database_url = _get_secret_optional("DATABASE_URL")
-    if database_url:
-        conn = psycopg2.connect(database_url)
-    else:
-        from config import get_db_connection_params
-        conn = psycopg2.connect(**get_db_connection_params())
+    if not database_url:
+        raise RuntimeError(
+            "Falta configurar DATABASE_URL en los Secrets de Streamlit Cloud. "
+            "Usa la URL del Transaction Pooler de Supabase."
+        )
+    conn = psycopg2.connect(database_url)
     try:
         conn.set_session(readonly=True, autocommit=True)
         with conn.cursor() as cur:
