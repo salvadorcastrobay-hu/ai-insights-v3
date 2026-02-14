@@ -105,4 +105,5 @@ with st.sidebar:
     authenticator.logout("Cerrar sesion")
 
 if not st.session_state.get("authentication_status"):
+    st.cache_data.clear()
     st.rerun()
