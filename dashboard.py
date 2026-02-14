@@ -98,8 +98,6 @@ def load_data() -> pd.DataFrame:
 # ── Sidebar Filters ──
 
 def render_sidebar(df: pd.DataFrame) -> pd.DataFrame:
-    st.sidebar.title("Filtros")
-
     if df.empty:
         return df
 
@@ -890,7 +888,50 @@ def dashboard():
     st.title("Humand Sales Insights")
 
     df = load_data()
-    filtered_df = render_sidebar(df)
+
+    # Navigation (antes de filtros)
+    page_options = [
+        "Executive Summary",
+        "Product Intelligence",
+        "Competitive Intelligence",
+        "Sales Enablement",
+        "Regional / GTM",
+        "─" * 20,
+        "Pains (detalle)",
+        "Product Gaps (detalle)",
+        "FAQs (detalle)",
+        "─" * 20,
+        "Chat con IA",
+    ]
+    separators = {x for x in page_options if x.startswith("─")}
+
+    page = st.sidebar.selectbox(
+        "Pagina",
+        page_options,
+        format_func=lambda x: {
+            "Executive Summary": "📊  Executive Summary",
+            "Product Intelligence": "🧩  Product Intelligence",
+            "Competitive Intelligence": "⚔️  Competitive Intelligence",
+            "Sales Enablement": "🎯  Sales Enablement",
+            "Regional / GTM": "🌎  Regional / GTM",
+            "Pains (detalle)": "🔍  Pains",
+            "Product Gaps (detalle)": "🔍  Product Gaps",
+            "FAQs (detalle)": "🔍  FAQs",
+            "Chat con IA": "🤖  Chat con IA",
+        }.get(x, x),
+    )
+
+    # Si selecciono un separador, default a Executive Summary
+    if page in separators:
+        page = "Executive Summary"
+
+    st.sidebar.markdown("---")
+
+    # Filtros solo en paginas de datos (no Chat con IA)
+    if page != "Chat con IA":
+        filtered_df = render_sidebar(df)
+    else:
+        filtered_df = df
 
     pages = {
         "Executive Summary": page_executive_summary,
@@ -904,12 +945,11 @@ def dashboard():
         "Chat con IA": page_sql_chat,
     }
 
-    page = st.sidebar.radio("Pagina", list(pages.keys()))
     pages[page](filtered_df)
 
     # Footer
     st.sidebar.markdown("---")
-    if not df.empty:
+    if not df.empty and page != "Chat con IA":
         st.sidebar.caption(f"{len(filtered_df)}/{len(df)} insights mostrados")
 
 
