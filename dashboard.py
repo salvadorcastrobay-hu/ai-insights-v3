@@ -46,10 +46,13 @@ try:
 except OSError:
     pass  # Read-only filesystem (Streamlit Cloud)
 
-if not st.session_state.get("authentication_status"):
-    st.stop()
+# ── Navigation (must always run to suppress pages/ auto-detection) ──
 
-# ── Navigation ──
+if not st.session_state.get("authentication_status"):
+    # Not logged in: show a blank page so the sidebar stays clean
+    nav = st.navigation([st.Page(lambda: None, title="Login", icon="🔒")])
+    nav.run()
+    st.stop()
 
 pages = {
     "Dashboards": [
