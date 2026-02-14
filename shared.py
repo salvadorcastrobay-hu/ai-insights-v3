@@ -50,7 +50,7 @@ def get_supabase():
     )
 
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=300, show_spinner=False)
 def load_data() -> pd.DataFrame:
     """Load insights from the dashboard view."""
     client = get_supabase()

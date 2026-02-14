@@ -7,6 +7,8 @@ Deploy: Streamlit Community Cloud (free)
 
 from __future__ import annotations
 
+import time
+
 import streamlit as st
 import streamlit_authenticator as stauth
 from shared import load_auth_config, save_auth_config, load_data, render_sidebar
@@ -75,7 +77,11 @@ nav = st.navigation(pages)
 
 # ── Load data & sidebar filters ──
 
-df = load_data()
+t0 = time.time()
+with st.spinner("Cargando datos..."):
+    df = load_data()
+if time.time() - t0 > 5:
+    st.balloons()
 st.session_state["df"] = df
 
 if nav.title != "Chat con IA":
@@ -97,3 +103,6 @@ if not df.empty and nav.title != "Chat con IA":
 with st.sidebar:
     st.write(f"**{st.session_state.get('name')}**")
     authenticator.logout("Cerrar sesion")
+
+if not st.session_state.get("authentication_status"):
+    st.rerun()
