@@ -76,6 +76,7 @@ CREATE TABLE IF NOT EXISTS raw_transcripts (
     participants       JSONB,
     external_domains   TEXT[],
     fathom_crm_matches JSONB,
+    fathom_summary     TEXT,
     ingested_at        TIMESTAMPTZ DEFAULT NOW()
 );
 

@@ -16,6 +16,7 @@ Usage:
     python main.py qa --sample 30                     # QA evaluate 30 transcripts
     python main.py qa --report                        # View last QA report
     python main.py qa --apply                         # Apply QA refinements
+    python main.py backfill-summaries                 # Backfill Fathom summaries
 """
 
 from __future__ import annotations
@@ -29,6 +30,7 @@ from db import get_client, execute_schema_direct
 from seed_taxonomy import run_seed
 from pipeline import run_pipeline, get_batch_status
 from ingest import run_ingestion
+from fathom_client import fetch_summary
 from qa_evaluator import run_qa, print_report, apply_refinements
 
 logging.basicConfig(
@@ -149,6 +151,52 @@ def cmd_status(args: argparse.Namespace) -> None:
         print(f"Failed:    {status['failed']}")
 
 
+def cmd_backfill_summaries(args: argparse.Namespace) -> None:
+    """Backfill fathom_summary for existing transcripts that don't have one."""
+    import time
+
+    logger.info("Starting summary backfill...")
+    supabase = get_client()
+
+    # Fetch recording_ids where fathom_summary is NULL
+    all_ids = []
+    offset = 0
+    page_size = 1000
+    while True:
+        response = (
+            supabase.table("raw_transcripts")
+            .select("recording_id")
+            .is_("fathom_summary", "null")
+            .range(offset, offset + page_size - 1)
+            .execute()
+        )
+        all_ids.extend(row["recording_id"] for row in response.data)
+        if len(response.data) < page_size:
+            break
+        offset += page_size
+
+    logger.info(f"Found {len(all_ids)} transcripts without summary")
+
+    updated = 0
+    skipped = 0
+    for i, recording_id in enumerate(all_ids):
+        summary = fetch_summary(recording_id)
+        if summary:
+            supabase.table("raw_transcripts").update(
+                {"fathom_summary": summary}
+            ).eq("recording_id", recording_id).execute()
+            updated += 1
+        else:
+            skipped += 1
+
+        if (i + 1) % 10 == 0:
+            logger.info(f"  Progress: {i + 1}/{len(all_ids)} (updated={updated}, skipped={skipped})")
+
+        time.sleep(1)  # Respect rate limit
+
+    logger.info(f"Backfill complete: {updated} updated, {skipped} skipped (no summary available)")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Humand Sales Insights - Transcript Analysis Pipeline",
@@ -166,6 +214,7 @@ Examples:
   python main.py qa --report                         View last QA report
   python main.py qa --apply                          Apply QA refinements
   python main.py status                              Check batch progress
+  python main.py backfill-summaries                  Backfill Fathom summaries
         """,
     )
     subparsers = parser.add_subparsers(dest="command", help="Command to run")
@@ -205,6 +254,9 @@ Examples:
     # status
     subparsers.add_parser("status", help="Check batch status")
 
+    # backfill-summaries
+    subparsers.add_parser("backfill-summaries", help="Backfill Fathom summaries for existing transcripts")
+
     args = parser.parse_args()
 
     if args.command is None:
@@ -217,6 +269,7 @@ Examples:
         "run": cmd_run,
         "qa": cmd_qa,
         "status": cmd_status,
+        "backfill-summaries": cmd_backfill_summaries,
     }
     commands[args.command](args)
 

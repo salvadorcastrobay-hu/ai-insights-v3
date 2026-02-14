@@ -39,6 +39,20 @@ def _get(endpoint: str, params: dict | None = None) -> dict:
     return resp.json()
 
 
+def fetch_summary(recording_id: str) -> str | None:
+    """
+    Fetch the native Fathom summary for a recording.
+
+    Returns the markdown-formatted summary, or None if unavailable.
+    """
+    try:
+        data = _get(f"/recordings/{recording_id}/summary")
+        return data.get("summary", {}).get("markdown_formatted")
+    except Exception as e:
+        logger.debug(f"No summary for {recording_id}: {e}")
+        return None
+
+
 def fetch_meetings(
     team: str | None = None,
     since: str | None = None,
@@ -87,6 +101,16 @@ def fetch_meetings(
 
         # Respect rate limit: 60 req/min
         time.sleep(1)
+
+    # Fetch summaries for each meeting
+    logger.info(f"Fetching summaries for {len(all_meetings)} meetings...")
+    for i, m in enumerate(all_meetings):
+        rid = str(m.get("recording_id", ""))
+        if rid:
+            m["_fathom_summary"] = fetch_summary(rid)
+            time.sleep(0.5)  # Respect rate limit
+        if (i + 1) % 20 == 0:
+            logger.info(f"  Summaries fetched: {i + 1}/{len(all_meetings)}")
 
     return all_meetings
 
@@ -157,6 +181,7 @@ def parse_meeting(meeting: dict) -> dict:
         "participants": participants,
         "external_domains": list(external_domains),
         "fathom_crm_matches": meeting.get("crm_matches"),
+        "fathom_summary": meeting.get("_fathom_summary"),
     }
 
 

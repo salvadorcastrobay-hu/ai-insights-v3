@@ -63,6 +63,14 @@ WHERE t.team = 'Account Executives'
 """)
 print("View v_transcripts updated")
 
+# Add fathom_summary column to raw_transcripts
+try:
+    cur.execute("ALTER TABLE raw_transcripts ADD COLUMN fathom_summary TEXT")
+    print("Added raw_transcripts.fathom_summary")
+except psycopg2.errors.DuplicateColumn:
+    print("raw_transcripts.fathom_summary already exists")
+    conn.rollback()
+
 cur.close()
 conn.close()
 print("Done!")
