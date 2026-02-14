@@ -1,5 +1,6 @@
 import streamlit as st
 import plotly.express as px
+from shared import humanize
 
 df = st.session_state.get("filtered_df")
 if df is None or df.empty:
@@ -8,14 +9,20 @@ if df is None or df.empty:
 
 st.header("Pains — Detalle")
 
-pains = df[df["insight_type"] == "pain"]
+pains = df[df["insight_type"] == "pain"].copy()
 if pains.empty:
     st.info("No hay pains en los datos filtrados.")
     st.stop()
 
+# Humanize coded columns for display
+pains["pain_theme"] = pains["pain_theme"].map(humanize)
+pains["pain_scope"] = pains["pain_scope"].map(humanize)
+if "module_status" in pains.columns:
+    pains["module_status"] = pains["module_status"].map(humanize)
+
 col1, col2, col3 = st.columns(3)
-general = pains[pains["pain_scope"] == "general"]
-module_linked = pains[pains["pain_scope"] == "module_linked"]
+general = pains[pains["pain_scope"] == "General"]
+module_linked = pains[pains["pain_scope"] == "Vinculado a Módulo"]
 col1.metric("Total Pains", len(pains))
 col2.metric("Generales", len(general))
 col3.metric("Vinculados a Modulo", len(module_linked))

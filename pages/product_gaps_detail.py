@@ -1,5 +1,6 @@
 import streamlit as st
 import plotly.express as px
+from shared import humanize
 
 df = st.session_state.get("filtered_df")
 if df is None or df.empty:
@@ -8,10 +9,14 @@ if df is None or df.empty:
 
 st.header("Product Gaps — Detalle")
 
-gaps = df[df["insight_type"] == "product_gap"]
+gaps = df[df["insight_type"] == "product_gap"].copy()
 if gaps.empty:
     st.info("No hay product gaps en los datos filtrados.")
     st.stop()
+
+# Humanize coded columns for display
+if "gap_priority" in gaps.columns:
+    gaps["gap_priority"] = gaps["gap_priority"].map(humanize)
 
 col1, col2, col3 = st.columns(3)
 col1.metric("Total Gaps", len(gaps))

@@ -1,6 +1,7 @@
 import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
+from shared import humanize
 
 df = st.session_state.get("filtered_df")
 if df is None or df.empty:
@@ -11,10 +12,11 @@ st.header("Product Intelligence")
 
 # === Section A: Pains ===
 st.subheader("A. Pains")
-pains = df[df["insight_type"] == "pain"]
+pains = df[df["insight_type"] == "pain"].copy()
 if pains.empty:
     st.info("No hay pains en los datos filtrados.")
 else:
+    pains["pain_theme"] = pains["pain_theme"].map(humanize)
     # Top 15 pains
     top_pains = pains["insight_subtype_display"].value_counts().head(15).reset_index()
     top_pains.columns = ["Pain", "Frecuencia"]
@@ -80,10 +82,14 @@ else:
 
 # === Section B: Feature Gaps ===
 st.subheader("B. Feature Gaps")
-gaps = df[df["insight_type"] == "product_gap"]
+gaps = df[df["insight_type"] == "product_gap"].copy()
 if gaps.empty:
     st.info("No hay product gaps en los datos filtrados.")
 else:
+    if "gap_priority" in gaps.columns:
+        gaps["gap_priority"] = gaps["gap_priority"].map(humanize)
+    if "module_status" in gaps.columns:
+        gaps["module_status"] = gaps["module_status"].map(humanize)
     # Top 20 features
     feature_counts = gaps["feature_display"].value_counts().head(20).reset_index()
     feature_counts.columns = ["Feature", "Frecuencia"]

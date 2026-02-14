@@ -171,3 +171,32 @@ def format_currency(value: float) -> str:
 
 def safe_nunique(series: pd.Series) -> int:
     return series.dropna().nunique()
+
+
+# ── Display-name mapping ──
+
+DISPLAY_NAMES = {
+    "must_have": "Debe tener",
+    "nice_to_have": "Deseable",
+    "dealbreaker": "Dealbreaker",
+    "general": "General",
+    "module_linked": "Vinculado a Módulo",
+    "existing": "Existente",
+    "missing": "Faltante",
+    "technology": "Tecnología",
+    "processes": "Procesos",
+    "communication": "Comunicación",
+    "talent": "Talento",
+    "engagement": "Engagement",
+    "data": "Datos",
+    "compliance": "Compliance",
+    "compensation": "Compensación",
+    "operations": "Operaciones",
+}
+
+
+def humanize(value):
+    """Return a human-readable Spanish label for a raw enum/code value."""
+    if not isinstance(value, str):
+        return value
+    return DISPLAY_NAMES.get(value, value.replace("_", " ").title())

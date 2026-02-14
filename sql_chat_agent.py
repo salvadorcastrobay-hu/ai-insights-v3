@@ -3,11 +3,10 @@ Chat SQL Agent con IA — Preguntas en lenguaje natural sobre datos de insights.
 
 Flujo:
 1. Usuario escribe pregunta en español
-2. GPT-4o genera SQL (con schema + taxonomia + ejemplos)
-3. Se valida que el SQL sea solo SELECT
-4. Se ejecuta contra PostgreSQL en conexion read-only
-5. GPT-4o resume los resultados en lenguaje natural ejecutivo
-6. Se muestra: respuesta + SQL colapsable + datos crudos colapsables
+2. GPT-4o decide si responder conversacionalmente (CHAT:) o generar SQL (SQL:)
+3. Si SQL: se valida que sea solo SELECT, se ejecuta contra PostgreSQL read-only,
+   GPT-4o resume los resultados en lenguaje natural ejecutivo
+4. Se muestra: respuesta + SQL colapsable + datos crudos colapsables
 """
 
 from __future__ import annotations
@@ -27,8 +26,21 @@ from openai import OpenAI
 
 SYSTEM_PROMPT = """\
 Eres un asistente de datos para el equipo de liderazgo de Humand. Tu trabajo es \
-convertir preguntas de negocio en SQL y luego resumir los resultados en espanol \
-ejecutivo.
+ayudar al usuario respondiendo preguntas de negocio con datos reales o manteniendo \
+una conversacion amigable y profesional.
+
+## Modos de respuesta
+
+Debes responder en exactamente uno de estos dos formatos:
+
+**Modo SQL** — cuando el usuario hace una pregunta que requiere consultar datos:
+SQL:
+SELECT ...
+
+**Modo CHAT** — cuando el usuario saluda, agradece, hace una pregunta general \
+que no requiere datos, o pide aclaracion:
+CHAT:
+Tu respuesta conversacional aqui.
 
 ## Schema de la base de datos
 
@@ -115,9 +127,8 @@ LIMIT 15;
 2. Siempre incluye LIMIT (maximo 50 filas).
 3. Usa las columnas _display para valores legibles (insight_subtype_display, module_display, etc.).
 4. Responde siempre en espanol.
-5. Si la pregunta no se puede responder con los datos disponibles, dilo claramente.
+5. Si la pregunta no se puede responder con los datos disponibles, dilo claramente usando modo CHAT.
 6. Para calcular revenue, usa SUM(DISTINCT amount) cuando agrupes por deal_id, o haz un subquery/CTE para evitar duplicados.
-7. Devuelve SOLO el SQL, sin explicaciones ni markdown. No uses ```.
 """
 
 SUMMARIZE_SYSTEM_PROMPT = """\
@@ -192,8 +203,46 @@ def _get_openai_client() -> OpenAI:
     return OpenAI(api_key=_get_secret("OPENAI_API_KEY"))
 
 
-def generate_sql(client: OpenAI, question: str, history: list[dict]) -> str:
-    """Ask GPT-4o to generate SQL from a natural-language question."""
+# ---------------------------------------------------------------------------
+# Response parsing
+# ---------------------------------------------------------------------------
+
+def _parse_response(raw: str) -> tuple[str, str]:
+    """Parse a GPT response into (mode, content).
+
+    Returns ("sql", sql_text) or ("chat", chat_text).
+    """
+    stripped = raw.strip()
+
+    if stripped.upper().startswith("SQL:"):
+        sql_text = stripped[4:].strip()
+        # Strip markdown code fences if present
+        fence_match = re.search(r"```(?:sql)?\s*\n(.*?)```", sql_text, re.DOTALL)
+        if fence_match:
+            sql_text = fence_match.group(1).strip()
+        return "sql", sql_text
+
+    if stripped.upper().startswith("CHAT:"):
+        return "chat", stripped[5:].strip()
+
+    # Fallback heuristic: if it contains SELECT/WITH, treat as SQL
+    if re.search(r"\b(SELECT|WITH)\b", stripped, re.IGNORECASE):
+        fence_match = re.search(r"```(?:sql)?\s*\n(.*?)```", stripped, re.DOTALL)
+        if fence_match:
+            return "sql", fence_match.group(1).strip()
+        sql_match = re.search(r"((?:SELECT|WITH)\b.*)", stripped, re.DOTALL | re.IGNORECASE)
+        if sql_match:
+            return "sql", sql_match.group(1).strip()
+
+    return "chat", stripped
+
+
+# ---------------------------------------------------------------------------
+# GPT calls
+# ---------------------------------------------------------------------------
+
+def generate_response(client: OpenAI, question: str, history: list[dict]) -> tuple[str, str]:
+    """Main entry point: ask GPT and return (mode, content)."""
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
     messages.extend(history)
     messages.append({"role": "user", "content": question})
@@ -205,15 +254,13 @@ def generate_sql(client: OpenAI, question: str, history: list[dict]) -> str:
         max_tokens=1024,
     )
     raw = response.choices[0].message.content.strip()
-    # Strip markdown code fences anywhere in the response
-    fence_match = re.search(r"```(?:sql)?\s*\n(.*?)```", raw, re.DOTALL)
-    if fence_match:
-        return fence_match.group(1).strip()
-    # If no fences, try to find the SQL starting with SELECT or WITH
-    sql_match = re.search(r"((?:SELECT|WITH)\b.*)", raw, re.DOTALL | re.IGNORECASE)
-    if sql_match:
-        return sql_match.group(1).strip()
-    return raw.strip()
+    return _parse_response(raw)
+
+
+def generate_sql(client: OpenAI, question: str, history: list[dict]) -> str:
+    """Ask GPT-4o to generate SQL (used for retry flow)."""
+    mode, content = generate_response(client, question, history)
+    return content
 
 
 def summarize_results(
@@ -333,103 +380,150 @@ def page_sql_chat(df) -> None:
 
     # --- Process ---
     with st.chat_message("assistant"):
-        with st.spinner("Pensando..."):
-            client = _get_openai_client()
+        try:
+            with st.spinner("Pensando..."):
+                client = _get_openai_client()
 
-            # 1. Generate SQL
-            sql = generate_sql(
-                client, question, st.session_state.sql_chat_openai_history,
-            )
+                # 1. Generate response (SQL or CHAT)
+                try:
+                    mode, content = generate_response(
+                        client, question, st.session_state.sql_chat_openai_history,
+                    )
+                except Exception:
+                    response_text = "No pude conectarme con el servicio de IA. Intenta de nuevo en unos segundos."
+                    st.markdown(response_text)
+                    st.session_state.sql_chat_messages.append(
+                        {"role": "assistant", "content": response_text}
+                    )
+                    return
 
-            # 2. Validate SQL
-            valid, err = validate_sql(sql)
-            if not valid:
-                response_text = f"No puedo ejecutar esa consulta: {err}"
-                st.markdown(response_text)
-                st.session_state.sql_chat_messages.append(
-                    {"role": "assistant", "content": response_text}
-                )
-                st.session_state.sql_chat_openai_history.append(
-                    {"role": "user", "content": question}
-                )
-                st.session_state.sql_chat_openai_history.append(
-                    {"role": "assistant", "content": response_text}
-                )
-                _trim_history()
-                return
+                # --- CHAT mode: respond directly, no SQL ---
+                if mode == "chat":
+                    st.markdown(content)
+                    st.session_state.sql_chat_messages.append(
+                        {"role": "assistant", "content": content}
+                    )
+                    st.session_state.sql_chat_openai_history.append(
+                        {"role": "user", "content": question}
+                    )
+                    st.session_state.sql_chat_openai_history.append(
+                        {"role": "assistant", "content": content}
+                    )
+                    _trim_history()
+                    return
 
-            # 3. Execute query (with 1 retry on error)
-            columns, rows = [], []
-            exec_error = None
-            try:
-                columns, rows = execute_query(sql)
-            except Exception as e:
-                exec_error = str(e)
+                # --- SQL mode: validate → execute → summarize ---
+                sql = content
 
-            # Auto-retry: pass the error back to GPT-4o for a corrected query
-            if exec_error:
-                retry_prompt = (
-                    f"El SQL anterior fallo con este error:\n{exec_error}\n\n"
-                    f"SQL que fallo:\n{sql}\n\n"
-                    f"Pregunta original: {question}\n\n"
-                    "Genera un SQL corregido."
-                )
-                sql = generate_sql(
-                    client, retry_prompt, st.session_state.sql_chat_openai_history,
-                )
+                # 2. Validate SQL
                 valid, err = validate_sql(sql)
                 if not valid:
-                    response_text = f"No pude generar una consulta valida: {err}"
+                    response_text = f"No puedo ejecutar esa consulta: {err}"
                     st.markdown(response_text)
                     st.session_state.sql_chat_messages.append(
+                        {"role": "assistant", "content": response_text}
+                    )
+                    st.session_state.sql_chat_openai_history.append(
+                        {"role": "user", "content": question}
+                    )
+                    st.session_state.sql_chat_openai_history.append(
                         {"role": "assistant", "content": response_text}
                     )
                     _trim_history()
                     return
 
+                # 3. Execute query (with 1 retry on error)
+                columns, rows = [], []
+                exec_error = None
                 try:
                     columns, rows = execute_query(sql)
-                except Exception as e2:
-                    response_text = f"La consulta fallo incluso despues de reintentar: {e2}"
-                    st.markdown(response_text)
-                    st.session_state.sql_chat_messages.append(
-                        {"role": "assistant", "content": response_text}
+                except Exception as e:
+                    exec_error = str(e)
+
+                # Auto-retry: pass the error back to GPT-4o for a corrected query
+                if exec_error:
+                    retry_prompt = (
+                        f"El SQL anterior fallo con este error:\n{exec_error}\n\n"
+                        f"SQL que fallo:\n{sql}\n\n"
+                        f"Pregunta original: {question}\n\n"
+                        "Genera un SQL corregido. Responde con SQL: seguido del query."
                     )
-                    _trim_history()
-                    return
+                    try:
+                        sql = generate_sql(
+                            client, retry_prompt, st.session_state.sql_chat_openai_history,
+                        )
+                    except Exception:
+                        response_text = "Hubo un error al generar la consulta. Intenta reformular tu pregunta."
+                        st.markdown(response_text)
+                        st.session_state.sql_chat_messages.append(
+                            {"role": "assistant", "content": response_text}
+                        )
+                        _trim_history()
+                        return
 
-            # 4. Summarize results
-            summary = summarize_results(client, question, sql, columns, rows)
+                    valid, err = validate_sql(sql)
+                    if not valid:
+                        response_text = f"No pude generar una consulta valida: {err}"
+                        st.markdown(response_text)
+                        st.session_state.sql_chat_messages.append(
+                            {"role": "assistant", "content": response_text}
+                        )
+                        _trim_history()
+                        return
 
-        # 5. Display
-        st.markdown(summary)
-        with st.expander("Ver SQL"):
-            st.code(sql, language="sql")
+                    try:
+                        columns, rows = execute_query(sql)
+                    except Exception as e2:
+                        response_text = f"La consulta fallo incluso despues de reintentar: {e2}"
+                        st.markdown(response_text)
+                        st.session_state.sql_chat_messages.append(
+                            {"role": "assistant", "content": response_text}
+                        )
+                        _trim_history()
+                        return
 
-        raw_data = None
-        if columns and rows:
-            import pandas as pd
-            raw_data = {"columns": columns, "rows": [list(r) for r in rows]}
-            with st.expander("Ver datos crudos"):
-                st.dataframe(
-                    pd.DataFrame(rows, columns=columns),
-                    use_container_width=True,
-                )
+                # 4. Summarize results
+                try:
+                    summary = summarize_results(client, question, sql, columns, rows)
+                except Exception:
+                    summary = "No pude generar el resumen, pero los datos se consultaron correctamente. Revisa los datos crudos abajo."
 
-    # --- Update state ---
-    st.session_state.sql_chat_messages.append({
-        "role": "assistant",
-        "content": summary,
-        "sql": sql,
-        "raw_data": raw_data,
-    })
-    st.session_state.sql_chat_openai_history.append(
-        {"role": "user", "content": question}
-    )
-    st.session_state.sql_chat_openai_history.append(
-        {"role": "assistant", "content": f"SQL: {sql}\nResultado resumido: {summary}"}
-    )
-    _trim_history()
+            # 5. Display
+            st.markdown(summary)
+            with st.expander("Ver SQL"):
+                st.code(sql, language="sql")
+
+            raw_data = None
+            if columns and rows:
+                import pandas as pd
+                raw_data = {"columns": columns, "rows": [list(r) for r in rows]}
+                with st.expander("Ver datos crudos"):
+                    st.dataframe(
+                        pd.DataFrame(rows, columns=columns),
+                        use_container_width=True,
+                    )
+
+            # --- Update state ---
+            st.session_state.sql_chat_messages.append({
+                "role": "assistant",
+                "content": summary,
+                "sql": sql,
+                "raw_data": raw_data,
+            })
+            st.session_state.sql_chat_openai_history.append(
+                {"role": "user", "content": question}
+            )
+            st.session_state.sql_chat_openai_history.append(
+                {"role": "assistant", "content": f"SQL: {sql}\nResultado resumido: {summary}"}
+            )
+            _trim_history()
+
+        except Exception:
+            response_text = "Ocurrio un error inesperado. Intenta de nuevo."
+            st.markdown(response_text)
+            st.session_state.sql_chat_messages.append(
+                {"role": "assistant", "content": response_text}
+            )
 
 
 def _trim_history() -> None:
