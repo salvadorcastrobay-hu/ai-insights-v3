@@ -46,29 +46,28 @@ try:
 except OSError:
     pass  # Read-only filesystem (Streamlit Cloud)
 
-# ── Navigation (must always run to suppress pages/ auto-detection) ──
+# ── Auth gate ──
 
 if not st.session_state.get("authentication_status"):
-    # Not logged in: show a blank page so the sidebar stays clean
-    nav = st.navigation([st.Page(lambda: None, title="Login", icon="🔒")])
-    nav.run()
     st.stop()
+
+# ── Navigation (views/ dir avoids Streamlit auto-detection) ──
 
 pages = {
     "Dashboards": [
-        st.Page("pages/executive_summary.py", title="Executive Summary", icon="📊", default=True),
-        st.Page("pages/product_intelligence.py", title="Product Intelligence", icon="🧩"),
-        st.Page("pages/competitive_intelligence.py", title="Competitive Intelligence", icon="⚔️"),
-        st.Page("pages/sales_enablement.py", title="Sales Enablement", icon="🎯"),
-        st.Page("pages/regional_gtm.py", title="Regional / GTM", icon="🌎"),
+        st.Page("views/executive_summary.py", title="Executive Summary", icon="📊", default=True),
+        st.Page("views/product_intelligence.py", title="Product Intelligence", icon="🧩"),
+        st.Page("views/competitive_intelligence.py", title="Competitive Intelligence", icon="⚔️"),
+        st.Page("views/sales_enablement.py", title="Sales Enablement", icon="🎯"),
+        st.Page("views/regional_gtm.py", title="Regional / GTM", icon="🌎"),
     ],
     "Detalle": [
-        st.Page("pages/pains_detail.py", title="Pains", icon="🔍"),
-        st.Page("pages/product_gaps_detail.py", title="Product Gaps", icon="🔍"),
-        st.Page("pages/faq_detail.py", title="FAQs", icon="🔍"),
+        st.Page("views/pains_detail.py", title="Pains", icon="🔍"),
+        st.Page("views/product_gaps_detail.py", title="Product Gaps", icon="🔍"),
+        st.Page("views/faq_detail.py", title="FAQs", icon="🔍"),
     ],
     "Herramientas": [
-        st.Page("pages/sql_chat.py", title="Chat con IA", icon="🤖"),
+        st.Page("views/sql_chat.py", title="Chat con IA", icon="🤖"),
     ],
 }
 
