@@ -3,8 +3,6 @@ import config
 import psycopg2
 
 db_params = config.get_db_connection_params()
-# Use default port
-db_params["port"] = 5432
 print(f"Connecting to {db_params['host']}:{db_params['port']}...")
 
 conn = psycopg2.connect(**db_params, connect_timeout=10)
