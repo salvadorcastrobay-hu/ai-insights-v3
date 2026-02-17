@@ -3,10 +3,13 @@ Chat SQL Agent con IA — Preguntas en lenguaje natural sobre datos de insights.
 
 Flujo:
 1. Usuario escribe pregunta en español
-2. GPT-4o decide si responder conversacionalmente (CHAT:) o generar SQL (SQL:)
+2. GPT-4o decide si responder conversacionalmente (CHAT:), generar SQL (SQL:),
+   o combinar datos cuantitativos + cualitativos (HYBRID:)
 3. Si SQL: se valida que sea solo SELECT, se ejecuta contra PostgreSQL read-only,
    GPT-4o resume los resultados en lenguaje natural ejecutivo
-4. Se muestra: respuesta + SQL colapsable + datos crudos colapsables
+4. Si HYBRID: se ejecutan 2 queries (cuantitativa + cualitativa),
+   GPT-4o sintetiza ambos en una respuesta rica con números y contexto
+5. Se muestra: respuesta + SQL colapsable + datos crudos colapsables
 """
 
 from __future__ import annotations
@@ -31,16 +34,35 @@ una conversacion amigable y profesional.
 
 ## Modos de respuesta
 
-Debes responder en exactamente uno de estos dos formatos:
+Debes responder en exactamente uno de estos tres formatos:
 
-**Modo SQL** — cuando el usuario hace una pregunta que requiere consultar datos:
+**Modo SQL** — cuando el usuario hace una pregunta puramente cuantitativa \
+(conteos, rankings, totales, revenue):
 SQL:
 SELECT ...
+
+**Modo HYBRID** — cuando el usuario necesita datos cuantitativos + contexto \
+cualitativo (por que, que opinan, que dicen, ejemplos, citas textuales):
+HYBRID:
+---CUANTITATIVO---
+SELECT ... (agregaciones, conteos, rankings)
+---CUALITATIVO---
+SELECT ... (summary, verbatim_quote y contexto textual, LIMIT 25)
 
 **Modo CHAT** — cuando el usuario saluda, agradece, hace una pregunta general \
 que no requiere datos, o pide aclaracion:
 CHAT:
 Tu respuesta conversacional aqui.
+
+## Cuando usar HYBRID vs SQL
+
+Usa HYBRID cuando la pregunta incluya palabras o intencion como:
+- "por que", "que opinan", "que dicen", "ejemplos", "detalle", "contexto"
+- "como describen", "que piensan", "cuales son las quejas"
+- Cualquier pregunta que pida entender motivaciones, opiniones o contexto textual
+- Preguntas de tipo "y por que?" o "dame ejemplos"
+
+Usa SQL cuando solo necesites numeros: "cuantos", "top 10", "total revenue", "ranking".
 
 ## Schema de la base de datos
 
@@ -59,8 +81,19 @@ Columnas principales:
 - competitor_relationship_display
 - feature_name (codigo), feature_display (nombre legible), feature_is_seed (boolean)
 - gap_description, gap_priority ('must_have'|'nice_to_have'|'dealbreaker')
-- summary, verbatim_quote, confidence (0-1)
+- **summary** (TEXT — resumen normalizado del insight en 1-2 oraciones, siempre disponible)
+- **verbatim_quote** (TEXT — cita textual exacta de la transcripcion, puede ser NULL)
+- confidence (0-1)
 - model_used, prompt_version, batch_id, processed_at
+
+### Tabla: raw_transcripts
+- recording_id (TEXT PK — equivale a transcript_id en v_insights_dashboard)
+- fathom_summary (TEXT — resumen completo de la llamada generado por Fathom)
+- transcript_text (TEXT — transcripcion completa de la llamada)
+- title, call_date, recorded_by_name, team
+
+Para acceder al resumen de la llamada completa:
+  JOIN raw_transcripts rt ON v.transcript_id = rt.recording_id -> rt.fathom_summary
 
 ### Tabla: raw_deals
 - deal_id, deal_name, deal_stage, pipeline, amount
@@ -79,7 +112,7 @@ Columnas principales:
 - pain_scope: general, module_linked
 - segment: valores tipicos como 'Enterprise', 'Mid-Market', 'SMB', etc.
 
-## Ejemplos de preguntas y SQL
+## Ejemplos de preguntas y respuestas
 
 Pregunta: "Cuales son los top 10 pains mas frecuentes?"
 SQL:
@@ -90,15 +123,41 @@ GROUP BY insight_subtype_display
 ORDER BY frecuencia DESC
 LIMIT 10;
 
-Pregunta: "Que competidores aparecen en deals Enterprise?"
-SQL:
+Pregunta: "Que competidores mencionan mas y por que? Que opinan de ellos?"
+HYBRID:
+---CUANTITATIVO---
 SELECT competitor_name, competitor_relationship_display, COUNT(*) AS menciones
 FROM v_insights_dashboard
-WHERE insight_type = 'competitive_signal' AND segment = 'Enterprise'
-  AND competitor_name IS NOT NULL
+WHERE insight_type = 'competitive_signal' AND competitor_name IS NOT NULL
 GROUP BY competitor_name, competitor_relationship_display
 ORDER BY menciones DESC
-LIMIT 20;
+LIMIT 15;
+---CUALITATIVO---
+SELECT competitor_name, competitor_relationship_display, summary, verbatim_quote, company_name, deal_name
+FROM v_insights_dashboard
+WHERE insight_type = 'competitive_signal' AND competitor_name IS NOT NULL
+  AND (summary IS NOT NULL OR verbatim_quote IS NOT NULL)
+ORDER BY competitor_name, call_date DESC
+LIMIT 25;
+
+Pregunta: "Que features faltantes son dealbreaker y que dicen los prospectos?"
+HYBRID:
+---CUANTITATIVO---
+SELECT feature_display, COUNT(*) AS menciones, COUNT(DISTINCT deal_id) AS deals,
+       SUM(DISTINCT amount) AS revenue
+FROM v_insights_dashboard
+WHERE insight_type = 'product_gap' AND gap_priority = 'dealbreaker'
+  AND feature_display IS NOT NULL
+GROUP BY feature_display
+ORDER BY menciones DESC
+LIMIT 10;
+---CUALITATIVO---
+SELECT feature_display, gap_description, summary, verbatim_quote, company_name
+FROM v_insights_dashboard
+WHERE insight_type = 'product_gap' AND gap_priority = 'dealbreaker'
+  AND (summary IS NOT NULL OR verbatim_quote IS NOT NULL)
+ORDER BY feature_display
+LIMIT 25;
 
 Pregunta: "Cuanto revenue esta en riesgo por deal friction?"
 SQL:
@@ -110,6 +169,33 @@ WHERE insight_type = 'deal_friction' AND deal_id IS NOT NULL
 GROUP BY insight_subtype_display
 ORDER BY revenue_en_riesgo DESC NULLS LAST
 LIMIT 15;
+
+Pregunta: "Cuales son los principales dolores en Enterprise y que dicen?"
+HYBRID:
+---CUANTITATIVO---
+SELECT insight_subtype_display AS pain, pain_theme, COUNT(*) AS frecuencia
+FROM v_insights_dashboard
+WHERE insight_type = 'pain' AND segment = 'Enterprise'
+GROUP BY insight_subtype_display, pain_theme
+ORDER BY frecuencia DESC
+LIMIT 10;
+---CUALITATIVO---
+SELECT insight_subtype_display AS pain, summary, verbatim_quote, company_name, deal_name
+FROM v_insights_dashboard
+WHERE insight_type = 'pain' AND segment = 'Enterprise'
+  AND (summary IS NOT NULL OR verbatim_quote IS NOT NULL)
+ORDER BY insight_subtype_display
+LIMIT 25;
+
+Pregunta: "Que competidores aparecen en deals Enterprise?"
+SQL:
+SELECT competitor_name, competitor_relationship_display, COUNT(*) AS menciones
+FROM v_insights_dashboard
+WHERE insight_type = 'competitive_signal' AND segment = 'Enterprise'
+  AND competitor_name IS NOT NULL
+GROUP BY competitor_name, competitor_relationship_display
+ORDER BY menciones DESC
+LIMIT 20;
 
 Pregunta: "Que features faltantes son dealbreaker?"
 SQL:
@@ -124,11 +210,13 @@ LIMIT 15;
 
 ## Reglas estrictas
 1. Solo genera sentencias SELECT o WITH ... SELECT. NUNCA generes INSERT, UPDATE, DELETE, DROP, ALTER, TRUNCATE, CREATE, GRANT, COPY ni ningun otro comando que modifique datos.
-2. Siempre incluye LIMIT (maximo 50 filas).
+2. Siempre incluye LIMIT (maximo 50 filas por query).
 3. Usa las columnas _display para valores legibles (insight_subtype_display, module_display, etc.).
 4. Responde siempre en espanol.
 5. Si la pregunta no se puede responder con los datos disponibles, dilo claramente usando modo CHAT.
 6. Para calcular revenue, usa SUM(DISTINCT amount) cuando agrupes por deal_id, o haz un subquery/CTE para evitar duplicados.
+7. En modo HYBRID, la query CUALITATIVA siempre debe incluir summary y/o verbatim_quote.
+8. En modo HYBRID, ambas queries deben ser SELECT validos e independientes.
 """
 
 SUMMARIZE_SYSTEM_PROMPT = """\
@@ -143,6 +231,31 @@ Reglas:
 - Si los resultados estan vacios, dilo claramente.
 - No muestres SQL ni codigo, solo el resumen en lenguaje natural.
 - Usa formato markdown simple (negritas, listas) para legibilidad.
+"""
+
+SYNTHESIZE_HYBRID_PROMPT = """\
+Eres un analista de datos ejecutivo. Recibes una pregunta de negocio junto con \
+dos tipos de datos:
+
+1. DATOS CUANTITATIVOS: numeros, conteos, rankings, revenue
+2. CONTEXTO CUALITATIVO: resumenes de insights y citas textuales de llamadas de ventas
+
+Tu trabajo es sintetizar AMBOS en una respuesta ejecutiva rica que combine los \
+numeros duros con el contexto y las voces de los prospectos/clientes.
+
+Reglas:
+- Responde en espanol.
+- Estructura sugerida:
+  1. Hallazgos cuantitativos clave (los numeros mas importantes)
+  2. Contexto cualitativo (que dicen, por que, como lo describen)
+  3. Patrones o conclusiones accionables
+- Usa citas textuales (verbatim_quote) entre comillas para dar evidencia directa.
+- Cuando cites, menciona la empresa o deal si esta disponible para dar contexto.
+- Se conciso pero informativo: maximo 5-6 parrafos.
+- Identifica patrones cualitativos: que opiniones se repiten, que sentimientos predominan.
+- No muestres SQL ni codigo.
+- Usa formato markdown (negritas, listas, blockquotes) para legibilidad.
+- Si hay datos cuantitativos pero no cualitativos, resume solo lo cuantitativo.
 """
 
 # ---------------------------------------------------------------------------
@@ -210,9 +323,16 @@ def _get_openai_client() -> OpenAI:
 def _parse_response(raw: str) -> tuple[str, str]:
     """Parse a GPT response into (mode, content).
 
-    Returns ("sql", sql_text) or ("chat", chat_text).
+    Returns ("sql", sql_text), ("chat", chat_text), or ("hybrid", hybrid_text).
     """
     stripped = raw.strip()
+
+    if stripped.upper().startswith("HYBRID:"):
+        hybrid_text = stripped[7:].strip()
+        # Strip markdown code fences if present
+        hybrid_text = re.sub(r"```(?:sql)?\s*\n?", "", hybrid_text)
+        hybrid_text = hybrid_text.replace("```", "")
+        return "hybrid", hybrid_text
 
     if stripped.upper().startswith("SQL:"):
         sql_text = stripped[4:].strip()
@@ -237,6 +357,23 @@ def _parse_response(raw: str) -> tuple[str, str]:
     return "chat", stripped
 
 
+def _split_hybrid_queries(content: str) -> tuple[str, str]:
+    """Split HYBRID content into (quantitative_sql, qualitative_sql)."""
+    parts = re.split(
+        r"---\s*CUANTITATIVO\s*---\s*|---\s*CUALITATIVO\s*---\s*",
+        content,
+        flags=re.IGNORECASE,
+    )
+    # Filter out empty parts
+    parts = [p.strip() for p in parts if p.strip()]
+    if len(parts) >= 2:
+        return parts[0], parts[1]
+    elif len(parts) == 1:
+        return parts[0], parts[0]
+    else:
+        return content, content
+
+
 # ---------------------------------------------------------------------------
 # GPT calls
 # ---------------------------------------------------------------------------
@@ -251,7 +388,7 @@ def generate_response(client: OpenAI, question: str, history: list[dict]) -> tup
         model=_get_chat_model(),
         messages=messages,
         temperature=0,
-        max_tokens=1024,
+        max_tokens=1500,
     )
     raw = response.choices[0].message.content.strip()
     return _parse_response(raw)
@@ -294,6 +431,57 @@ def summarize_results(
     return response.choices[0].message.content.strip()
 
 
+def summarize_hybrid_results(
+    client: OpenAI,
+    question: str,
+    quant_columns: list[str],
+    quant_rows: list[tuple],
+    qual_columns: list[str],
+    qual_rows: list[tuple],
+) -> str:
+    """Synthesize quantitative + qualitative results into a rich executive answer."""
+    # Format quantitative results
+    if quant_rows:
+        q_header = " | ".join(quant_columns)
+        q_lines = [q_header, "-" * len(q_header)]
+        for row in quant_rows[:50]:
+            q_lines.append(" | ".join(str(v) for v in row))
+        quant_text = "\n".join(q_lines)
+    else:
+        quant_text = "(Sin resultados cuantitativos)"
+
+    # Format qualitative results as structured entries
+    if qual_rows:
+        qual_entries = []
+        for row in qual_rows[:25]:
+            entry_parts = []
+            for col, val in zip(qual_columns, row):
+                if val is not None and str(val).strip():
+                    entry_parts.append(f"  {col}: {val}")
+            if entry_parts:
+                qual_entries.append("\n".join(entry_parts))
+        qual_text = "\n---\n".join(qual_entries) if qual_entries else "(Sin contexto cualitativo)"
+    else:
+        qual_text = "(Sin contexto cualitativo)"
+
+    user_msg = (
+        f"Pregunta del usuario: {question}\n\n"
+        f"== DATOS CUANTITATIVOS ==\n{quant_text}\n\n"
+        f"== CONTEXTO CUALITATIVO (resumenes y citas de llamadas de ventas) ==\n{qual_text}"
+    )
+
+    response = client.chat.completions.create(
+        model=_get_chat_model(),
+        messages=[
+            {"role": "system", "content": SYNTHESIZE_HYBRID_PROMPT},
+            {"role": "user", "content": user_msg},
+        ],
+        temperature=0.3,
+        max_tokens=2048,
+    )
+    return response.choices[0].message.content.strip()
+
+
 # ---------------------------------------------------------------------------
 # Database execution
 # ---------------------------------------------------------------------------
@@ -327,6 +515,112 @@ def execute_query(sql: str) -> tuple[list[str], list[tuple]]:
 
 
 # ---------------------------------------------------------------------------
+# Hybrid mode handler
+# ---------------------------------------------------------------------------
+
+def _handle_hybrid(client: OpenAI, question: str, content: str) -> None:
+    """Handle HYBRID mode: execute quantitative + qualitative queries and synthesize."""
+    quant_sql, qual_sql = _split_hybrid_queries(content)
+
+    # Validate both queries
+    valid1, err1 = validate_sql(quant_sql)
+    valid2, err2 = validate_sql(qual_sql)
+
+    if not valid1 and not valid2:
+        response_text = f"No puedo ejecutar las consultas generadas: {err1}"
+        st.markdown(response_text)
+        st.session_state.sql_chat_messages.append(
+            {"role": "assistant", "content": response_text}
+        )
+        _trim_history()
+        return
+
+    # Execute quantitative query
+    quant_cols, quant_rows = [], []
+    if valid1:
+        try:
+            quant_cols, quant_rows = execute_query(quant_sql)
+        except Exception as e:
+            st.caption(f"Query cuantitativa con error: {e}")
+
+    # Execute qualitative query
+    qual_cols, qual_rows = [], []
+    if valid2:
+        try:
+            qual_cols, qual_rows = execute_query(qual_sql)
+        except Exception as e:
+            st.caption(f"Query cualitativa con error: {e}")
+
+    # If both returned nothing, show message
+    if not quant_rows and not qual_rows:
+        response_text = "Las consultas no devolvieron resultados. Intenta reformular tu pregunta."
+        st.markdown(response_text)
+        st.session_state.sql_chat_messages.append(
+            {"role": "assistant", "content": response_text}
+        )
+        _trim_history()
+        return
+
+    # Synthesize results
+    try:
+        summary = summarize_hybrid_results(
+            client, question,
+            quant_cols, quant_rows,
+            qual_cols, qual_rows,
+        )
+    except Exception:
+        summary = (
+            "No pude generar la sintesis, pero los datos se consultaron correctamente. "
+            "Revisa los datos crudos abajo."
+        )
+
+    # Display
+    st.markdown(summary)
+
+    with st.expander("Ver SQL — cuantitativo"):
+        st.code(quant_sql, language="sql")
+    with st.expander("Ver SQL — cualitativo"):
+        st.code(qual_sql, language="sql")
+
+    quant_data = None
+    if quant_cols and quant_rows:
+        import pandas as pd
+        quant_data = {"columns": quant_cols, "rows": [list(r) for r in quant_rows]}
+        with st.expander("Ver datos cuantitativos"):
+            st.dataframe(
+                pd.DataFrame(quant_rows, columns=quant_cols),
+                use_container_width=True,
+            )
+
+    qual_data = None
+    if qual_cols and qual_rows:
+        import pandas as pd
+        qual_data = {"columns": qual_cols, "rows": [list(r) for r in qual_rows]}
+        with st.expander("Ver datos cualitativos"):
+            st.dataframe(
+                pd.DataFrame(qual_rows, columns=qual_cols),
+                use_container_width=True,
+            )
+
+    # Update state
+    st.session_state.sql_chat_messages.append({
+        "role": "assistant",
+        "content": summary,
+        "quant_sql": quant_sql,
+        "qual_sql": qual_sql,
+        "quant_data": quant_data,
+        "qual_data": qual_data,
+    })
+    st.session_state.sql_chat_openai_history.append(
+        {"role": "user", "content": question}
+    )
+    st.session_state.sql_chat_openai_history.append(
+        {"role": "assistant", "content": f"Respuesta hibrida cuanti+cuali.\nResumen: {summary}"}
+    )
+    _trim_history()
+
+
+# ---------------------------------------------------------------------------
 # Streamlit page
 # ---------------------------------------------------------------------------
 
@@ -338,7 +632,7 @@ def page_sql_chat(df) -> None:
     st.header("Chat con IA")
     st.caption(
         "Hace preguntas en lenguaje natural sobre insights, deals y competidores. "
-        "Las respuestas se basan en datos reales de la base de datos."
+        "Las respuestas combinan datos cuantitativos con contexto cualitativo de las llamadas."
     )
 
     # --- Session state init ---
@@ -357,14 +651,39 @@ def page_sql_chat(df) -> None:
     for msg in st.session_state.sql_chat_messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
+            # SQL mode history
             if msg.get("sql"):
                 with st.expander("Ver SQL"):
                     st.code(msg["sql"], language="sql")
+            # HYBRID mode history
+            if msg.get("quant_sql"):
+                with st.expander("Ver SQL — cuantitativo"):
+                    st.code(msg["quant_sql"], language="sql")
+            if msg.get("qual_sql"):
+                with st.expander("Ver SQL — cualitativo"):
+                    st.code(msg["qual_sql"], language="sql")
+            # Raw data (SQL mode)
             if msg.get("raw_data"):
                 with st.expander("Ver datos crudos"):
                     import pandas as pd
                     st.dataframe(
                         pd.DataFrame(msg["raw_data"]["rows"], columns=msg["raw_data"]["columns"]),
+                        use_container_width=True,
+                    )
+            # Quantitative data (HYBRID mode)
+            if msg.get("quant_data"):
+                with st.expander("Ver datos cuantitativos"):
+                    import pandas as pd
+                    st.dataframe(
+                        pd.DataFrame(msg["quant_data"]["rows"], columns=msg["quant_data"]["columns"]),
+                        use_container_width=True,
+                    )
+            # Qualitative data (HYBRID mode)
+            if msg.get("qual_data"):
+                with st.expander("Ver datos cualitativos"):
+                    import pandas as pd
+                    st.dataframe(
+                        pd.DataFrame(msg["qual_data"]["rows"], columns=msg["qual_data"]["columns"]),
                         use_container_width=True,
                     )
 
@@ -384,7 +703,7 @@ def page_sql_chat(df) -> None:
             with st.spinner("Pensando..."):
                 client = _get_openai_client()
 
-                # 1. Generate response (SQL or CHAT)
+                # 1. Generate response (SQL, HYBRID, or CHAT)
                 try:
                     mode, content = generate_response(
                         client, question, st.session_state.sql_chat_openai_history,
@@ -412,7 +731,12 @@ def page_sql_chat(df) -> None:
                     _trim_history()
                     return
 
-                # --- SQL mode: validate → execute → summarize ---
+                # --- HYBRID mode: quantitative + qualitative ---
+                if mode == "hybrid":
+                    _handle_hybrid(client, question, content)
+                    return
+
+                # --- SQL mode: validate -> execute -> summarize ---
                 sql = content
 
                 # 2. Validate SQL
