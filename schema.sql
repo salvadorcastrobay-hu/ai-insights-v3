@@ -146,6 +146,7 @@ CREATE OR REPLACE VIEW v_transcripts AS
 SELECT
     t.recording_id AS transcript_id,
     t.transcript_text,
+    t.fathom_summary,
     m.matched_deal_id AS deal_id,
     d.deal_name,
     c.name AS company_name,
