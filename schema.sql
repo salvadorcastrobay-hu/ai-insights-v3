@@ -281,3 +281,46 @@ LEFT JOIN tax_faq_subtypes fq ON i.insight_subtype = fq.code AND i.insight_type 
 LEFT JOIN tax_competitive_relationships cr ON i.insight_subtype = cr.code AND i.insight_type = 'competitive_signal'
 LEFT JOIN tax_competitive_relationships crel ON i.competitor_relationship = crel.code
 LEFT JOIN tax_feature_names fn ON i.feature_name = fn.code;
+
+-- 6. Transcript Chunks for RAG (pgvector)
+
+CREATE EXTENSION IF NOT EXISTS vector;
+
+CREATE TABLE IF NOT EXISTS transcript_chunks (
+    id                UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    transcript_id     TEXT NOT NULL,
+    chunk_index       INTEGER NOT NULL,
+    source_type       TEXT NOT NULL CHECK (source_type IN ('transcript', 'fathom_summary')),
+    chunk_text        TEXT NOT NULL,
+    token_count       INTEGER,
+    embedding         vector(3072),
+    -- CRM metadata for filtered search
+    deal_id           TEXT,
+    deal_name         TEXT,
+    company_name      TEXT,
+    region            TEXT,
+    country           TEXT,
+    segment           TEXT,
+    industry          TEXT,
+    company_size      TEXT,
+    deal_stage        TEXT,
+    deal_owner        TEXT,
+    call_date         DATE,
+    amount            NUMERIC,
+    created_at        TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(transcript_id, chunk_index, source_type)
+);
+
+CREATE INDEX IF NOT EXISTS idx_chunks_embedding_hnsw
+    ON transcript_chunks USING hnsw (embedding vector_cosine_ops)
+    WITH (m = 16, ef_construction = 128);
+
+CREATE INDEX IF NOT EXISTS idx_chunks_transcript ON transcript_chunks(transcript_id);
+CREATE INDEX IF NOT EXISTS idx_chunks_segment ON transcript_chunks(segment);
+CREATE INDEX IF NOT EXISTS idx_chunks_region ON transcript_chunks(region);
+CREATE INDEX IF NOT EXISTS idx_chunks_company ON transcript_chunks(company_name);
+CREATE INDEX IF NOT EXISTS idx_chunks_deal ON transcript_chunks(deal_id);
+CREATE INDEX IF NOT EXISTS idx_chunks_date ON transcript_chunks(call_date);
+CREATE INDEX IF NOT EXISTS idx_chunks_source ON transcript_chunks(source_type);
+CREATE INDEX IF NOT EXISTS idx_chunks_country ON transcript_chunks(country);
+CREATE INDEX IF NOT EXISTS idx_chunks_deal_stage ON transcript_chunks(deal_stage);

@@ -16,7 +16,10 @@ Usage:
     python main.py qa --sample 30                     # QA evaluate 30 transcripts
     python main.py qa --report                        # View last QA report
     python main.py qa --apply                         # Apply QA refinements
-    python main.py backfill-summaries                 # Backfill Fathom summaries
+    python main.py embed                                # Embed transcripts for RAG search
+    python main.py embed --since 2024-06-01             # Incremental embedding
+    python main.py embed --force                        # Re-embed everything
+    python main.py backfill-summaries                   # Backfill Fathom summaries
 """
 
 from __future__ import annotations
@@ -32,6 +35,7 @@ from pipeline import run_pipeline, get_batch_status
 from ingest import run_ingestion
 from fathom_client import fetch_summary
 from qa_evaluator import run_qa, print_report, apply_refinements
+from embed_transcripts import run_embedding_pipeline
 
 logging.basicConfig(
     level=logging.INFO,
@@ -151,6 +155,15 @@ def cmd_status(args: argparse.Namespace) -> None:
         print(f"Failed:    {status['failed']}")
 
 
+def cmd_embed(args: argparse.Namespace) -> None:
+    """Embed transcripts and Fathom summaries for RAG semantic search."""
+    logger.info("Starting embedding pipeline...")
+    stats = run_embedding_pipeline(since=args.since, force=args.force)
+    logger.info(f"Embedding complete: {stats.get('chunks_embedded', 0)} chunks embedded")
+    if stats.get("skipped"):
+        logger.info(f"  Skipped (already embedded): {stats['skipped']} transcripts")
+
+
 def cmd_backfill_summaries(args: argparse.Namespace) -> None:
     """Backfill fathom_summary for existing transcripts that don't have one."""
     import time
@@ -254,6 +267,11 @@ Examples:
     # status
     subparsers.add_parser("status", help="Check batch status")
 
+    # embed
+    p_embed = subparsers.add_parser("embed", help="Embed transcripts for RAG semantic search")
+    p_embed.add_argument("--since", type=str, default=None, help="Only embed transcripts after this date (YYYY-MM-DD)")
+    p_embed.add_argument("--force", action="store_true", help="Re-embed everything (ignore already embedded)")
+
     # backfill-summaries
     subparsers.add_parser("backfill-summaries", help="Backfill Fathom summaries for existing transcripts")
 
@@ -269,6 +287,7 @@ Examples:
         "run": cmd_run,
         "qa": cmd_qa,
         "status": cmd_status,
+        "embed": cmd_embed,
         "backfill-summaries": cmd_backfill_summaries,
     }
     commands[args.command](args)
