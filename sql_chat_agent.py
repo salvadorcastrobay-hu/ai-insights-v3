@@ -26,7 +26,7 @@ from openai import OpenAI
 # ---------------------------------------------------------------------------
 
 EMBEDDING_MODEL = "text-embedding-3-large"
-EMBEDDING_DIMENSIONS = 3072
+EMBEDDING_DIMENSIONS = 2000
 SEARCH_RESULTS_LIMIT = 12
 
 # ---------------------------------------------------------------------------

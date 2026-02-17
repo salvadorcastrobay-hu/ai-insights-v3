@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 EMBEDDING_MODEL = "text-embedding-3-large"
-EMBEDDING_DIMENSIONS = 3072
+EMBEDDING_DIMENSIONS = 2000
 CHUNK_SIZE = 800       # tokens per chunk
 CHUNK_OVERLAP = 150    # overlap between consecutive chunks
 BATCH_SIZE = 100       # max embeddings per OpenAI API call
@@ -67,11 +67,17 @@ def get_db_connection():
         database_url = re.sub(r"[?&]sslmode=[^&]*", "", database_url)
         sep = "&" if "?" in database_url else "?"
         database_url = f"{database_url}{sep}sslmode=require"
-        return psycopg2.connect(database_url)
+        conn = psycopg2.connect(database_url)
+    else:
+        # Fallback: build from config params
+        params = config.get_db_connection_params()
+        conn = psycopg2.connect(**params, sslmode="require")
 
-    # Fallback: build from config params
-    params = config.get_db_connection_params()
-    return psycopg2.connect(**params, sslmode="require")
+    # Disable statement timeout for long-running embedding queries
+    with conn.cursor() as cur:
+        cur.execute("SET statement_timeout = 0;")
+    conn.commit()
+    return conn
 
 
 def ensure_schema(conn) -> None:
@@ -86,7 +92,7 @@ def ensure_schema(conn) -> None:
                 source_type       TEXT NOT NULL CHECK (source_type IN ('transcript', 'fathom_summary')),
                 chunk_text        TEXT NOT NULL,
                 token_count       INTEGER,
-                embedding         vector(3072),
+                embedding         vector(2000),
                 -- CRM metadata for filtered search
                 deal_id           TEXT,
                 deal_name         TEXT,

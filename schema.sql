@@ -293,7 +293,7 @@ CREATE TABLE IF NOT EXISTS transcript_chunks (
     source_type       TEXT NOT NULL CHECK (source_type IN ('transcript', 'fathom_summary')),
     chunk_text        TEXT NOT NULL,
     token_count       INTEGER,
-    embedding         vector(3072),
+    embedding         vector(2000),
     -- CRM metadata for filtered search
     deal_id           TEXT,
     deal_name         TEXT,
