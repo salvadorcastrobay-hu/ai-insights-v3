@@ -672,24 +672,38 @@ def _embed_query(client: OpenAI, text: str) -> list[float]:
     return response.data[0].embedding
 
 
-def search_transcript_chunks(
-    client: OpenAI,
-    search_query: str,
+def _translate_query(client: OpenAI, query: str) -> str | None:
+    """Translate a search query to the other language (ES<->EN) for bilingual search."""
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{
+                "role": "system",
+                "content": (
+                    "Translate the following search query to the other language. "
+                    "If it's in Spanish, translate to English. If it's in English, translate to Spanish. "
+                    "Return ONLY the translated query, nothing else. Keep it concise and natural."
+                ),
+            }, {
+                "role": "user",
+                "content": query,
+            }],
+            temperature=0,
+            max_tokens=200,
+        )
+        return response.choices[0].message.content.strip()
+    except Exception:
+        return None
+
+
+def _search_single_query(
+    embedding_str: str,
     filters: str = "",
     limit: int = SEARCH_RESULTS_LIMIT,
 ) -> list[dict]:
-    """Embed query and search transcript_chunks by cosine similarity.
-
-    Returns list of dicts with keys: chunk_text, source_type, company_name,
-    deal_name, call_date, segment, region, country, deal_owner, similarity.
-    """
-    # Generate query embedding
-    query_embedding = _embed_query(client, search_query)
-    embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
-
-    # Build query with optional filters
+    """Run a single vector similarity search against transcript_chunks."""
     query = """
-        SELECT chunk_text, source_type, company_name, deal_name,
+        SELECT id::text, chunk_text, source_type, company_name, deal_name,
                call_date::text AS call_date, segment, region, country,
                deal_owner, deal_stage, amount,
                1 - (embedding <=> %s::vector) AS similarity
@@ -702,7 +716,6 @@ def search_transcript_chunks(
         valid, err = _validate_filters(filters)
         if valid:
             query += f" AND ({filters})"
-        # If filters are invalid, skip them silently and search without filters
 
     query += """
         ORDER BY embedding <=> %s::vector
@@ -720,6 +733,54 @@ def search_transcript_chunks(
         return [dict(zip(columns, row)) for row in rows]
     finally:
         conn.close()
+
+
+def search_transcript_chunks(
+    client: OpenAI,
+    search_query: str,
+    filters: str = "",
+    limit: int = SEARCH_RESULTS_LIMIT,
+) -> list[dict]:
+    """Bilingual semantic search: embed query in original language + translated,
+    run both searches, merge results by best similarity (dedup by chunk id).
+
+    Returns list of dicts with keys: chunk_text, source_type, company_name,
+    deal_name, call_date, segment, region, country, deal_owner, similarity.
+    """
+    # 1. Embed original query
+    query_embedding = _embed_query(client, search_query)
+    embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
+
+    # 2. Translate and embed in other language
+    translated = _translate_query(client, search_query)
+    translated_embedding_str = None
+    if translated and translated.lower() != search_query.lower():
+        translated_embedding = _embed_query(client, translated)
+        translated_embedding_str = "[" + ",".join(str(x) for x in translated_embedding) + "]"
+
+    # 3. Search with original query
+    results_original = _search_single_query(embedding_str, filters, limit)
+
+    # 4. Search with translated query (if available)
+    results_translated = []
+    if translated_embedding_str:
+        results_translated = _search_single_query(translated_embedding_str, filters, limit)
+
+    # 5. Merge: keep best similarity per chunk id
+    best_by_id: dict[str, dict] = {}
+    for result in results_original + results_translated:
+        chunk_id = result["id"]
+        if chunk_id not in best_by_id or result["similarity"] > best_by_id[chunk_id]["similarity"]:
+            best_by_id[chunk_id] = result
+
+    # Sort by similarity descending and take top `limit`
+    merged = sorted(best_by_id.values(), key=lambda x: x["similarity"], reverse=True)[:limit]
+
+    # Remove internal id field
+    for r in merged:
+        r.pop("id", None)
+
+    return merged
 
 
 # ---------------------------------------------------------------------------
