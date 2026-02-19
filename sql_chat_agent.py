@@ -25,9 +25,7 @@ from openai import OpenAI
 # Constants
 # ---------------------------------------------------------------------------
 
-EMBEDDING_MODEL = "text-embedding-3-large"
-EMBEDDING_DIMENSIONS = 2000
-SEARCH_RESULTS_LIMIT = 12
+SEARCH_RESULTS_LIMIT = 15
 
 # ---------------------------------------------------------------------------
 # System prompt
@@ -53,10 +51,10 @@ SELECT ... (agregaciones)
 ---CUALITATIVO---
 SELECT ... (summary, verbatim_quote, LIMIT 25)
 
-**Modo SEARCH** — busqueda semantica en las transcripciones completas de llamadas. \
+**Modo SEARCH** — busqueda semantica en los resumenes de llamadas de ventas (Fathom summaries). \
 Ideal para preguntas sobre lo que se dijo en las llamadas, opiniones detalladas, \
 temas que no estan en los insights estructurados, o cuando se necesita contexto \
-profundo de conversaciones especificas:
+de conversaciones especificas:
 SEARCH:
 ---FILTROS---
 (condiciones SQL opcionales para filtrar por metadata: segment, region, country, \
@@ -72,20 +70,27 @@ Tu respuesta conversacional aqui.
 
 ## Cuando usar cada modo
 
-**SQL**: Solo numeros — "cuantos", "top 10", "total revenue", "ranking"
+**SQL**: Solo numeros — "cuantos", "top 10", "total revenue", "ranking", "lista de deals", \
+"cuanto factura", "pipeline por etapa". Siempre que la respuesta sean datos tabulares puros.
 
 **HYBRID**: Numeros + contexto de insights — "que opinan", "por que", "ejemplos", \
-cuando la respuesta esta en los campos summary/verbatim_quote de los insights ya extraidos.
+"cuales son los principales pains y que dicen". Usa este modo cuando la respuesta combina \
+conteos/rankings con los campos summary/verbatim_quote de los insights YA EXTRAIDOS en \
+v_insights_dashboard. Ideal para preguntas como "cuales son los top 5 product gaps y \
+que dicen los prospectos al respecto".
 
-**SEARCH**: Busqueda profunda en transcripciones — preguntas sobre:
-- Lo que dijo un prospecto especifico: "que dijo Coca-Cola sobre..."
-- Temas no capturados como insight: "alguien menciono integracion con SAP?"
-- Opiniones detalladas sobre un tema: "como describen su proceso de onboarding actual?"
-- Contexto de conversaciones especificas: "de que se hablo en la llamada con Bimbo?"
-- Preguntas que mezclan segmentacion CRM + texto libre: "que dicen los prospectos \
-Enterprise de LATAM sobre su herramienta actual?"
+**SEARCH**: Busqueda profunda en transcripciones — usa este modo cuando:
+- Se pregunta por lo que se DIJO en las llamadas: "que dijo Coca-Cola sobre..."
+- Se busca un tema no capturado en insights: "alguien menciono SAP?"
+- Se piden opiniones detalladas o contexto conversacional
+- Se pregunta "de que se hablo" en una llamada especifica
+- Se pide analisis de sentimiento o percepciones no estructuradas
+- Se mezcla segmentacion CRM + texto libre: "que dicen los Enterprise sobre su herramienta actual?"
+- EN CASO DE DUDA entre HYBRID y SEARCH, prefiere SEARCH — tiene acceso al texto completo \
+de las conversaciones, que es mas rico que los insights resumidos.
 
-**CHAT**: Todo lo demas.
+**CHAT**: Saludos, preguntas sobre la herramienta, aclaraciones, preguntas generales \
+que no requieren datos.
 
 ## Schema de la base de datos
 
@@ -108,13 +113,12 @@ Columnas principales:
 - **verbatim_quote** (TEXT — cita textual exacta de la transcripcion)
 - confidence (0-1)
 
-### Tabla: transcript_chunks (para modo SEARCH — busqueda semantica)
-Columnas para filtros:
-- transcript_id, deal_id, deal_name, company_name
-- region, country, segment, industry, company_size
-- deal_stage, deal_owner, call_date, amount
-- source_type: 'transcript' | 'fathom_summary'
-(La columna chunk_text y embedding se usan internamente, no las incluyas en filtros)
+### Tabla: raw_transcripts (para modo SEARCH — busqueda por palabras clave)
+Columnas disponibles para filtros:
+- title (contiene nombre de la empresa y reunion)
+- call_date (fecha de la llamada)
+- team (equipo que hizo la llamada)
+(La columna fathom_summary se busca automaticamente con las palabras clave)
 
 ### Tabla: raw_transcripts
 - recording_id (TEXT PK), fathom_summary, transcript_text, title, call_date, team
@@ -164,14 +168,12 @@ LIMIT 25;
 Pregunta: "Que dijo el prospecto de Coca-Cola sobre su proceso de onboarding?"
 SEARCH:
 ---FILTROS---
-company_name ILIKE '%coca%cola%'
+title ILIKE '%coca%cola%'
 ---BUSQUEDA---
 proceso de onboarding actual, como manejan el onboarding de empleados
 
 Pregunta: "Que dicen los prospectos Enterprise de LATAM sobre su herramienta actual?"
 SEARCH:
----FILTROS---
-segment = 'Enterprise' AND region = 'LATAM'
 ---BUSQUEDA---
 herramienta actual que usan, plataforma actual, sistema que tienen hoy
 ---SQL---
@@ -218,8 +220,6 @@ LIMIT 15;
 
 Pregunta: "Como manejan el tema de comunicacion interna los prospectos de mas de 50K?"
 SEARCH:
----FILTROS---
-amount >= 50000
 ---BUSQUEDA---
 comunicacion interna, como se comunican los empleados, canales de comunicacion, chat interno
 ---SQL---
@@ -240,11 +240,10 @@ LIMIT 10;
 6. Para revenue, usa SUM(DISTINCT amount) o subquery para evitar duplicados.
 7. En modo HYBRID, la query CUALITATIVA debe incluir summary y/o verbatim_quote.
 8. En modo SEARCH, la seccion ---BUSQUEDA--- es obligatoria. ---FILTROS--- y ---SQL--- son opcionales.
-9. En modo SEARCH, los filtros deben usar columnas de transcript_chunks: \
-segment, region, country, company_name, deal_name, deal_owner, deal_stage, \
-industry, company_size, call_date, amount, source_type.
-10. En modo SEARCH, la busqueda debe ser descriptiva (varias formas de decir lo mismo) \
-para maximizar la cobertura semantica.
+9. En modo SEARCH, los filtros deben usar columnas de raw_transcripts: \
+title, call_date, team. Ejemplo de filtro: title ILIKE '%Coca%Cola%'.
+10. En modo SEARCH, la busqueda debe incluir palabras clave variadas y sinonimos \
+(en espanol e ingles) para maximizar la cobertura de resultados.
 """
 
 SUMMARIZE_SYSTEM_PROMPT = """\
@@ -288,8 +287,8 @@ Reglas:
 
 SYNTHESIZE_SEARCH_PROMPT = """\
 Eres un analista de datos ejecutivo. Recibes una pregunta de negocio junto con \
-fragmentos de transcripciones de llamadas de ventas recuperados por busqueda semantica, \
-y opcionalmente datos cuantitativos de una query SQL.
+fragmentos de resumenes de llamadas de ventas (generados por Fathom AI) recuperados \
+por busqueda semantica, y opcionalmente datos cuantitativos de una query SQL.
 
 Tu trabajo es sintetizar la informacion en una respuesta ejecutiva rica, extrayendo \
 los insights mas relevantes de las conversaciones reales.
@@ -298,16 +297,15 @@ Reglas:
 - Responde en espanol.
 - Estructura sugerida:
   1. Resumen ejecutivo de los hallazgos (2-3 oraciones clave)
-  2. Lo que dicen los prospectos (citas textuales relevantes entre comillas)
+  2. Lo que dicen los prospectos (citas o parafraseos relevantes entre comillas)
   3. Patrones identificados (que se repite, que sentimientos predominan)
   4. Si hay datos cuantitativos, integralos con el contexto cualitativo
-- Cita textualmente fragmentos relevantes de las transcripciones entre comillas.
+- Cita o parafrasea fragmentos relevantes entre comillas.
 - Menciona la empresa, segmento o region cuando este disponible para dar contexto.
 - Se conciso pero informativo: maximo 6-7 parrafos.
 - Si los fragmentos no son relevantes a la pregunta, dilo honestamente.
 - No muestres SQL, codigo ni metadata tecnica.
 - Usa formato markdown (negritas, listas, blockquotes) para legibilidad.
-- Indica si los fragmentos vienen de la transcripcion completa o del resumen de Fathom.
 """
 
 # ---------------------------------------------------------------------------
@@ -386,7 +384,7 @@ def _get_openai_client() -> OpenAI:
 # ---------------------------------------------------------------------------
 
 def _get_db_connection():
-    """Get a read-only PostgreSQL connection."""
+    """Get a read-only PostgreSQL connection with retry on transient errors."""
     database_url = _get_secret_optional("DATABASE_URL")
     if not database_url:
         raise RuntimeError(
@@ -396,9 +394,18 @@ def _get_db_connection():
     database_url = re.sub(r"[?&]sslmode=[^&]*", "", database_url)
     sep = "&" if "?" in database_url else "?"
     database_url = f"{database_url}{sep}sslmode=require"
-    conn = psycopg2.connect(database_url)
-    conn.set_session(readonly=True, autocommit=True)
-    return conn
+    import time
+    last_err = None
+    for attempt in range(3):
+        try:
+            conn = psycopg2.connect(database_url)
+            conn.set_session(readonly=True, autocommit=True)
+            return conn
+        except psycopg2.OperationalError as e:
+            last_err = e
+            if attempt < 2:
+                time.sleep(1)
+    raise last_err
 
 
 # ---------------------------------------------------------------------------
@@ -464,6 +471,7 @@ def _parse_search_content(content: str) -> dict:
     """Parse SEARCH mode content into filters, search query, and optional SQL.
 
     Returns dict with keys: "filters", "search_query", "sql" (optional).
+    Robust: if no section markers found, treats entire content as the search query.
     """
     result = {"filters": "", "search_query": "", "sql": ""}
 
@@ -472,6 +480,11 @@ def _parse_search_content(content: str) -> dict:
         r"---\s*(FILTROS|BUSQUEDA|SQL)\s*---",
         content, flags=re.IGNORECASE,
     )
+
+    # If no markers were found (only 1 part), use content as search query
+    if len(sections) == 1:
+        result["search_query"] = content.strip()
+        return result
 
     # sections alternates: [text_before, marker, text, marker, text, ...]
     current_key = None
@@ -503,7 +516,7 @@ def generate_response(client: OpenAI, question: str, history: list[dict]) -> tup
         model=_get_chat_model(),
         messages=messages,
         temperature=0,
-        max_tokens=1500,
+        max_tokens=2000,
     )
     raw = response.choices[0].message.content.strip()
     return _parse_response(raw)
@@ -662,77 +675,33 @@ def execute_query(sql: str) -> tuple[list[str], list[tuple]]:
         conn.close()
 
 
-def _embed_query(client: OpenAI, text: str) -> list[float]:
-    """Embed a search query using text-embedding-3-large."""
-    response = client.embeddings.create(
-        model=EMBEDDING_MODEL,
-        input=text,
-        dimensions=EMBEDDING_DIMENSIONS,
-    )
-    return response.data[0].embedding
-
-
-def _translate_query(client: OpenAI, query: str) -> str | None:
-    """Translate a search query to the other language (ES<->EN) for bilingual search."""
+def _generate_search_keywords(client: OpenAI, search_query: str) -> list[str]:
+    """Use GPT to generate bilingual search keywords from a natural language query."""
     try:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[{
                 "role": "system",
                 "content": (
-                    "Translate the following search query to the other language. "
-                    "If it's in Spanish, translate to English. If it's in English, translate to Spanish. "
-                    "Return ONLY the translated query, nothing else. Keep it concise and natural."
+                    "Given a search query about sales call transcripts, generate 4-6 "
+                    "search keywords to find relevant content. Include both Spanish and "
+                    "English versions of the most important terms.\n"
+                    "Return ONLY a comma-separated list of single keywords, nothing else.\n"
+                    "Example: 'onboarding, incorporacion, induccion, new hire'"
                 ),
             }, {
                 "role": "user",
-                "content": query,
+                "content": search_query,
             }],
             temperature=0,
-            max_tokens=200,
+            max_tokens=100,
         )
-        return response.choices[0].message.content.strip()
+        raw = response.choices[0].message.content.strip()
+        keywords = [k.strip().strip("'\"") for k in raw.split(",") if k.strip()]
+        return keywords[:6]  # Cap at 6 keywords
     except Exception:
-        return None
-
-
-def _search_single_query(
-    embedding_str: str,
-    filters: str = "",
-    limit: int = SEARCH_RESULTS_LIMIT,
-) -> list[dict]:
-    """Run a single vector similarity search against transcript_chunks."""
-    query = """
-        SELECT id::text, chunk_text, source_type, company_name, deal_name,
-               call_date::text AS call_date, segment, region, country,
-               deal_owner, deal_stage, amount,
-               1 - (embedding <=> %s::vector) AS similarity
-        FROM transcript_chunks
-        WHERE embedding IS NOT NULL
-    """
-    params: list = [embedding_str]
-
-    if filters and filters.strip():
-        valid, err = _validate_filters(filters)
-        if valid:
-            query += f" AND ({filters})"
-
-    query += """
-        ORDER BY embedding <=> %s::vector
-        LIMIT %s
-    """
-    params.extend([embedding_str, limit])
-
-    conn = _get_db_connection()
-    try:
-        with conn.cursor() as cur:
-            cur.execute("SET statement_timeout = '15s';")
-            cur.execute(query, params)
-            columns = [desc[0] for desc in cur.description]
-            rows = cur.fetchall()
-        return [dict(zip(columns, row)) for row in rows]
-    finally:
-        conn.close()
+        # Fallback: split original query into words > 2 chars
+        return [w for w in search_query.split() if len(w) > 2][:4]
 
 
 def search_transcript_chunks(
@@ -741,46 +710,91 @@ def search_transcript_chunks(
     filters: str = "",
     limit: int = SEARCH_RESULTS_LIMIT,
 ) -> list[dict]:
-    """Bilingual semantic search: embed query in original language + translated,
-    run both searches, merge results by best similarity (dedup by chunk id).
+    """Keyword-based search on raw_transcripts.fathom_summary.
+
+    Uses GPT to generate bilingual keywords, then searches with ILIKE on
+    raw_transcripts (~5K rows, lightweight — no vector columns).
+    Returns results ordered by recency (most recent calls first).
 
     Returns list of dicts with keys: chunk_text, source_type, company_name,
-    deal_name, call_date, segment, region, country, deal_owner, similarity.
+    call_date, segment, similarity.
     """
-    # 1. Embed original query
-    query_embedding = _embed_query(client, search_query)
-    embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
+    # 1. Generate bilingual search keywords
+    keywords = _generate_search_keywords(client, search_query)
+    if not keywords:
+        return []
 
-    # 2. Translate and embed in other language
-    translated = _translate_query(client, search_query)
-    translated_embedding_str = None
-    if translated and translated.lower() != search_query.lower():
-        translated_embedding = _embed_query(client, translated)
-        translated_embedding_str = "[" + ",".join(str(x) for x in translated_embedding) + "]"
+    # 2. Build parameterized ILIKE patterns
+    patterns = [f"%{kw}%" for kw in keywords]
 
-    # 3. Search with original query
-    results_original = _search_single_query(embedding_str, filters, limit)
+    # WHERE: at least one keyword matches
+    or_clauses = " OR ".join(f"fathom_summary ILIKE %s" for _ in patterns)
 
-    # 4. Search with translated query (if available)
-    results_translated = []
-    if translated_embedding_str:
-        results_translated = _search_single_query(translated_embedding_str, filters, limit)
+    # Step 1: Find matching recording_ids (fast — no TOAST decompression)
+    id_query = f"""
+        SELECT recording_id, title, call_date::text AS call_date, team
+        FROM raw_transcripts
+        WHERE fathom_summary IS NOT NULL
+          AND ({or_clauses})
+    """
+    id_params: list = list(patterns)
 
-    # 5. Merge: keep best similarity per chunk id
-    best_by_id: dict[str, dict] = {}
-    for result in results_original + results_translated:
-        chunk_id = result["id"]
-        if chunk_id not in best_by_id or result["similarity"] > best_by_id[chunk_id]["similarity"]:
-            best_by_id[chunk_id] = result
+    if filters and filters.strip():
+        valid, err = _validate_filters(filters)
+        if valid:
+            id_query += f" AND ({filters})"
 
-    # Sort by similarity descending and take top `limit`
-    merged = sorted(best_by_id.values(), key=lambda x: x["similarity"], reverse=True)[:limit]
+    id_query += """
+        ORDER BY call_date DESC NULLS LAST
+        LIMIT %s
+    """
+    id_params.append(int(limit))
 
-    # Remove internal id field
-    for r in merged:
-        r.pop("id", None)
+    conn = _get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SET statement_timeout = '15s';")
+            cur.execute(id_query, id_params)
+            id_rows = cur.fetchall()
 
-    return merged
+        if not id_rows:
+            return []
+
+        # Step 2: Fetch text for matching IDs (small batch, fast)
+        recording_ids = [r[0] for r in id_rows]
+        placeholders = ",".join(["%s"] * len(recording_ids))
+        with conn.cursor() as cur:
+            cur.execute("SET statement_timeout = '15s';")
+            cur.execute(
+                f"SELECT recording_id, LEFT(fathom_summary, 2000) "
+                f"FROM raw_transcripts WHERE recording_id IN ({placeholders})",
+                recording_ids,
+            )
+            text_rows = cur.fetchall()
+        text_map = {r[0]: r[1] for r in text_rows}
+
+        # Normalize results to expected format
+        results = []
+        for row in id_rows:
+            rid, title, call_date, team = row
+            chunk_text = text_map.get(rid, "")
+            # Count how many keywords match for scoring
+            text_lower = (chunk_text or "").lower()
+            matches = sum(1 for kw in keywords if kw.lower() in text_lower)
+            similarity = round(matches / len(keywords), 3) if keywords else 0
+            results.append({
+                "chunk_text": chunk_text,
+                "source_type": "fathom_summary",
+                "company_name": title or "",
+                "call_date": call_date,
+                "segment": team or "",
+                "similarity": similarity,
+            })
+        # Re-sort by relevance score first, then date
+        results.sort(key=lambda x: (-x["similarity"], x.get("call_date") or ""))
+        return results
+    finally:
+        conn.close()
 
 
 # ---------------------------------------------------------------------------
@@ -1082,38 +1096,41 @@ def page_sql_chat(df) -> None:
                     st.session_state.sql_chat_messages.append({"role": "assistant", "content": response_text})
                     return
 
-                # --- CHAT ---
-                if mode == "chat":
-                    st.markdown(content)
-                    st.session_state.sql_chat_messages.append({"role": "assistant", "content": content})
-                    st.session_state.sql_chat_openai_history.append({"role": "user", "content": question})
-                    st.session_state.sql_chat_openai_history.append({"role": "assistant", "content": content})
-                    _trim_history()
-                    return
+            # --- CHAT ---
+            if mode == "chat":
+                st.markdown(content)
+                st.session_state.sql_chat_messages.append({"role": "assistant", "content": content})
+                st.session_state.sql_chat_openai_history.append({"role": "user", "content": question})
+                st.session_state.sql_chat_openai_history.append({"role": "assistant", "content": content})
+                _trim_history()
+                return
 
-                # --- HYBRID ---
-                if mode == "hybrid":
+            # --- HYBRID ---
+            if mode == "hybrid":
+                with st.spinner("Consultando datos cuantitativos y cualitativos..."):
                     _handle_hybrid(client, question, content)
-                    return
+                return
 
-                # --- SEARCH ---
-                if mode == "search":
+            # --- SEARCH ---
+            if mode == "search":
+                with st.spinner("Buscando en transcripciones..."):
                     _handle_search(client, question, content)
-                    return
+                return
 
-                # --- SQL ---
-                sql = content
+            # --- SQL ---
+            sql = content
 
-                valid, err = validate_sql(sql)
-                if not valid:
-                    response_text = f"No puedo ejecutar esa consulta: {err}"
-                    st.markdown(response_text)
-                    st.session_state.sql_chat_messages.append({"role": "assistant", "content": response_text})
-                    st.session_state.sql_chat_openai_history.append({"role": "user", "content": question})
-                    st.session_state.sql_chat_openai_history.append({"role": "assistant", "content": response_text})
-                    _trim_history()
-                    return
+            valid, err = validate_sql(sql)
+            if not valid:
+                response_text = f"No puedo ejecutar esa consulta: {err}"
+                st.markdown(response_text)
+                st.session_state.sql_chat_messages.append({"role": "assistant", "content": response_text})
+                st.session_state.sql_chat_openai_history.append({"role": "user", "content": question})
+                st.session_state.sql_chat_openai_history.append({"role": "assistant", "content": response_text})
+                _trim_history()
+                return
 
+            with st.spinner("Ejecutando consulta SQL..."):
                 columns, rows = [], []
                 exec_error = None
                 try:
