@@ -110,12 +110,8 @@ def ensure_schema(conn) -> None:
                 UNIQUE(transcript_id, chunk_index, source_type)
             );
         """)
-        # HNSW index — best accuracy for dataset sizes < 100K vectors
-        cur.execute("""
-            CREATE INDEX IF NOT EXISTS idx_chunks_embedding_hnsw
-            ON transcript_chunks USING hnsw (embedding vector_cosine_ops)
-            WITH (m = 16, ef_construction = 128);
-        """)
+        # NOTE: HNSW index is created AFTER bulk insert via create_hnsw_index()
+        # to avoid slow incremental index updates during embedding pipeline.
         # Metadata indexes for filtered search
         cur.execute("CREATE INDEX IF NOT EXISTS idx_chunks_transcript ON transcript_chunks(transcript_id);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_chunks_segment ON transcript_chunks(segment);")
@@ -128,6 +124,20 @@ def ensure_schema(conn) -> None:
         cur.execute("CREATE INDEX IF NOT EXISTS idx_chunks_deal_stage ON transcript_chunks(deal_stage);")
     conn.commit()
     logger.info("Schema verificado / creado.")
+
+
+def create_hnsw_index(conn) -> None:
+    """Create HNSW index on transcript_chunks. Called after bulk inserts."""
+    logger.info("Creando indice HNSW (esto puede tardar unos minutos)...")
+    with conn.cursor() as cur:
+        cur.execute("DROP INDEX IF EXISTS idx_chunks_embedding_hnsw;")
+        cur.execute("""
+            CREATE INDEX idx_chunks_embedding_hnsw
+            ON transcript_chunks USING hnsw (embedding vector_cosine_ops)
+            WITH (m = 16, ef_construction = 128);
+        """)
+    conn.commit()
+    logger.info("Indice HNSW creado.")
 
 
 def fetch_transcripts(conn, since: str | None = None) -> list[dict]:
@@ -434,7 +444,7 @@ def run_embedding_pipeline(since: str | None = None, force: bool = False) -> dic
         conn.close()
         return {"transcripts": len(transcripts), "chunks_embedded": 0, "skipped": skipped_transcripts}
 
-    # 5. Embed and store in batches
+    # 5. Embed and store in batches (with auto-reconnect)
     total_embedded = 0
     for batch_start in range(0, len(pending), BATCH_SIZE):
         batch = pending[batch_start : batch_start + BATCH_SIZE]
@@ -457,7 +467,24 @@ def run_embedding_pipeline(since: str | None = None, force: bool = False) -> dic
             # Remove the embedding_text (not stored in DB)
             chunk.pop("embedding_text", None)
 
-        store_chunks(conn, batch)
+        # Store with auto-reconnect on connection failure
+        for attempt in range(3):
+            try:
+                store_chunks(conn, batch)
+                break
+            except (psycopg2.OperationalError, psycopg2.InterfaceError, psycopg2.DatabaseError) as e:
+                logger.warning(f"Conexion perdida (intento {attempt + 1}/3): {e}")
+                time.sleep(5)
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+                conn = get_db_connection()
+                logger.info("Reconectado a la base de datos.")
+        else:
+            logger.error(f"No se pudo reconectar. Saltando batch {batch_start}.")
+            continue
+
         total_embedded += len(batch)
 
         logger.info(f"  {total_embedded}/{len(pending)} chunks embebidos...")
@@ -465,6 +492,19 @@ def run_embedding_pipeline(since: str | None = None, force: bool = False) -> dic
         # Small delay to be nice to the API
         if batch_start + BATCH_SIZE < len(pending):
             time.sleep(0.5)
+
+    # 6. Create HNSW index after all inserts (much faster than incremental)
+    if total_embedded > 0:
+        try:
+            create_hnsw_index(conn)
+        except (psycopg2.OperationalError, psycopg2.InterfaceError, psycopg2.DatabaseError):
+            # Reconnect and retry if connection was lost
+            try:
+                conn.close()
+            except Exception:
+                pass
+            conn = get_db_connection()
+            create_hnsw_index(conn)
 
     conn.close()
 
