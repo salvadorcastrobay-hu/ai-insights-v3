@@ -1,6 +1,10 @@
 import streamlit as st
 import plotly.express as px
-from shared import chart_tooltip
+try:
+    from shared import chart_tooltip
+except ImportError:
+    def chart_tooltip(*_args, **_kwargs):
+        return None
 
 df = st.session_state.get("filtered_df")
 if df is None or df.empty:

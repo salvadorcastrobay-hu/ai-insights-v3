@@ -8,7 +8,11 @@ import uuid
 import pandas as pd
 import plotly.express as px
 import streamlit as st
-from shared import chart_tooltip
+try:
+    from shared import chart_tooltip
+except ImportError:
+    def chart_tooltip(*_args, **_kwargs):
+        return None
 
 
 STORE_PATH = Path(__file__).resolve().parent.parent / "custom_dashboards.json"
