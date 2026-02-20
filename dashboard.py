@@ -7,8 +7,7 @@ Deploy: Streamlit Community Cloud (free)
 
 from __future__ import annotations
 
-import time
-
+import pandas as pd
 import streamlit as st
 import streamlit_authenticator as stauth
 from shared import load_auth_config, save_auth_config, load_data, render_sidebar
@@ -70,6 +69,8 @@ pages = {
     ],
     "Herramientas": [
         st.Page("views/sql_chat.py", title="Chat con IA", icon="🤖"),
+        st.Page("views/custom_dashboards.py", title="Dashboards Personalizados", icon="📈"),
+        st.Page("views/glossary.py", title="Glosario y Cómo funciona", icon="📘"),
     ],
 }
 
@@ -77,16 +78,26 @@ nav = st.navigation(pages)
 
 # ── Load data & sidebar filters ──
 
-t0 = time.time()
-with st.spinner("Cargando datos..."):
-    df = load_data()
-if time.time() - t0 > 5:
-    st.balloons()
-st.session_state["df"] = df
+pages_with_data = {
+    "Executive Summary",
+    "Product Intelligence",
+    "Competitive Intelligence",
+    "Sales Enablement",
+    "Regional / GTM",
+    "Pains",
+    "Product Gaps",
+    "FAQs",
+    "Dashboards Personalizados",
+}
+needs_data = nav.title in pages_with_data
 
-if nav.title != "Chat con IA":
+if needs_data:
+    with st.spinner("Cargando datos..."):
+        df = load_data()
+    st.session_state["df"] = df
     filtered_df = render_sidebar(df)
 else:
+    df = st.session_state.get("df", pd.DataFrame())
     filtered_df = df
 
 st.session_state["filtered_df"] = filtered_df
@@ -98,7 +109,7 @@ nav.run()
 # ── Footer ──
 
 st.sidebar.markdown("---")
-if not df.empty and nav.title != "Chat con IA":
+if needs_data and not df.empty:
     st.sidebar.caption(f"{len(filtered_df)}/{len(df)} insights mostrados")
 with st.sidebar:
     st.write(f"**{st.session_state.get('name')}**")
