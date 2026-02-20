@@ -1,7 +1,7 @@
 import streamlit as st
 import plotly.express as px
 import pandas as pd
-from shared import format_currency
+from shared import format_currency, chart_tooltip
 
 df = st.session_state.get("filtered_df")
 if df is None or df.empty:
@@ -17,17 +17,33 @@ if friction.empty:
     st.info("No hay fricciones de deal en los datos filtrados.")
 else:
     col1, col2, col3 = st.columns(3)
-    col1.metric("Total Fricciones", f"{len(friction):,}")
-    col2.metric("Deals Afectados", friction["deal_id"].dropna().nunique())
+    col1.metric(
+        "Total Fricciones",
+        f"{len(friction):,}",
+        help="Cantidad total de fricciones detectadas.",
+    )
+    col2.metric(
+        "Deals Afectados",
+        friction["deal_id"].dropna().nunique(),
+        help="Deals únicos con al menos una fricción identificada.",
+    )
     fric_rev = friction.drop_duplicates("deal_id")["amount"].sum()
-    col3.metric("Revenue en Riesgo", format_currency(fric_rev))
+    col3.metric(
+        "Revenue en Riesgo",
+        format_currency(fric_rev),
+        help="Suma de monto de deals afectados por fricciones.",
+    )
 
     # Ranking of friction subtypes
     subtype_counts = friction["insight_subtype_display"].value_counts().reset_index()
     subtype_counts.columns = ["Tipo de Friccion", "Frecuencia"]
     fig = px.bar(subtype_counts, x="Frecuencia", y="Tipo de Friccion", orientation="h", title="Tipos de Friccion")
     fig.update_layout(yaxis=dict(autorange="reversed"))
-    st.plotly_chart(fig, use_container_width=True)
+    chart_tooltip(
+        "Ranking de fricciones más frecuentes.",
+        "Muestra qué bloqueos de venta aparecen con mayor repetición.",
+    )
+    st.plotly_chart(fig, width="stretch")
 
     col_left, col_right = st.columns(2)
     with col_left:
@@ -41,7 +57,11 @@ else:
                     orientation="h", title="Friccion por Segmento",
                 )
                 fig.update_layout(yaxis=dict(autorange="reversed"))
-                st.plotly_chart(fig, use_container_width=True)
+                chart_tooltip(
+                    "Fricciones cruzadas por segmento comercial.",
+                    "Permite ver si cada segmento enfrenta bloqueos distintos.",
+                )
+                st.plotly_chart(fig, width="stretch")
 
     with col_right:
         # Friction por deal_stage — heatmap
@@ -56,7 +76,11 @@ else:
                         title="Friccion x Etapa del Deal",
                         labels=dict(x="Deal Stage", y="Friccion", color="Cantidad"),
                     )
-                    st.plotly_chart(fig, use_container_width=True)
+                    chart_tooltip(
+                        "Cruce entre tipo de fricción y etapa del deal.",
+                        "Ayuda a detectar en qué fase del pipeline se traba cada fricción.",
+                    )
+                    st.plotly_chart(fig, width="stretch")
 
 # === Section B: Performance por AE ===
 st.subheader("B. Performance por AE")
@@ -79,8 +103,11 @@ if "deal_owner" in df.columns:
             .rename(columns={"insight_subtype_display": "top_friction"})
         )
         # Top competitor per AE
+        ae_comp_base = ae_data[ae_data["insight_type"] == "competitive_signal"].copy()
+        if "is_own_brand_competitor" in ae_comp_base.columns:
+            ae_comp_base = ae_comp_base[~ae_comp_base["is_own_brand_competitor"].fillna(False)]
         ae_comp = (
-            ae_data[ae_data["insight_type"] == "competitive_signal"]
+            ae_comp_base
             .dropna(subset=["competitor_name"])
             .groupby("deal_owner")["competitor_name"]
             .agg(lambda x: x.value_counts().index[0] if len(x) > 0 else "")
@@ -92,7 +119,11 @@ if "deal_owner" in df.columns:
         ae_table["avg_amount"] = ae_table["avg_amount"].apply(lambda x: format_currency(x) if pd.notna(x) else "$0")
         ae_table.columns = ["AE", "Insights", "Deals", "Avg Amount", "Top Friccion", "Top Competidor"]
         ae_table = ae_table.sort_values("Insights", ascending=False)
-        st.dataframe(ae_table, use_container_width=True)
+        chart_tooltip(
+            "Tabla comparativa de performance por AE: volumen, deals y principales señales.",
+            "Sirve para coaching comercial y asignación de soporte.",
+        )
+        st.dataframe(ae_table, width="stretch")
 
         # Bar chart: frictions per AE (top 10)
         ae_fric_data = ae_data[ae_data["insight_type"] == "deal_friction"]
@@ -108,7 +139,11 @@ if "deal_owner" in df.columns:
                 orientation="h", title="Fricciones por AE (Top 10)",
             )
             fig.update_layout(yaxis=dict(autorange="reversed"))
-            st.plotly_chart(fig, use_container_width=True)
+            chart_tooltip(
+                "Distribución de fricciones por AE para los AEs con mayor volumen.",
+                "Permite entender qué bloqueos predominan en cada cartera.",
+            )
+            st.plotly_chart(fig, width="stretch")
 else:
     st.info("No hay datos de deal_owner disponibles.")
 
@@ -122,9 +157,17 @@ else:
     topic_counts.columns = ["Topic", "Frecuencia"]
     fig = px.bar(topic_counts, x="Frecuencia", y="Topic", orientation="h", title="FAQs por Topic")
     fig.update_layout(yaxis=dict(autorange="reversed"))
-    st.plotly_chart(fig, use_container_width=True)
+    chart_tooltip(
+        "Ranking de temas de FAQ más consultados en ventas.",
+        "Se usa para priorizar materiales de enablement y battle cards.",
+    )
+    st.plotly_chart(fig, width="stretch")
 
     st.subheader("Preguntas y Respuestas")
+    chart_tooltip(
+        "Detalle textual de preguntas y respuestas detectadas en llamadas.",
+        "Útil para crear argumentos y respuestas tipo por tema.",
+    )
     display_cols = ["company_name", "insight_subtype_display", "summary", "verbatim_quote"]
     available_cols = [c for c in display_cols if c in faqs.columns]
-    st.dataframe(faqs[available_cols], use_container_width=True)
+    st.dataframe(faqs[available_cols], width="stretch")

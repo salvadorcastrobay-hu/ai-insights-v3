@@ -1,7 +1,7 @@
 import streamlit as st
 import plotly.express as px
 import pandas as pd
-from shared import format_currency
+from shared import format_currency, chart_tooltip
 
 df = st.session_state.get("filtered_df")
 if df is None or df.empty:
@@ -10,17 +10,36 @@ if df is None or df.empty:
 
 st.header("Regional / GTM")
 
-# Treemap by country
+# Top countries with insight-type breakdown
 if "country" in df.columns:
-    country_data = df["country"].dropna().value_counts().reset_index()
-    country_data.columns = ["Pais", "Insights"]
+    country_data = df.dropna(subset=["country"]).copy()
     if not country_data.empty:
-        fig = px.treemap(
-            country_data, path=["Pais"], values="Insights",
-            title="Insights por Pais", color="Insights",
-            color_continuous_scale="Blues",
+        top_countries = country_data["country"].value_counts().head(15).index
+        country_breakdown = (
+            country_data[country_data["country"].isin(top_countries)]
+            .groupby(["country", "insight_type_display"])
+            .size()
+            .reset_index(name="count")
         )
-        st.plotly_chart(fig, use_container_width=True)
+        fig = px.bar(
+            country_breakdown,
+            x="count",
+            y="country",
+            color="insight_type_display",
+            orientation="h",
+            barmode="stack",
+            title="Top 15 Paises por Insights (breakdown por tipo)",
+            labels={
+                "country": "Pais",
+                "count": "Insights",
+                "insight_type_display": "Tipo de insight",
+            },
+        )
+        fig.update_layout(yaxis=dict(categoryorder="total ascending"))
+        chart_tooltip(
+            "Top 15 países por cantidad de insights, con desglose por tipo de insight.",
+        )
+        st.plotly_chart(fig, width="stretch")
 
 # Top pains por region
 pains = df[df["insight_type"] == "pain"]
@@ -43,7 +62,11 @@ if not pains.empty and "region" in pains.columns:
                 barmode="group",
             )
             fig.update_layout(yaxis=dict(autorange="reversed"))
-            st.plotly_chart(fig, use_container_width=True)
+            chart_tooltip(
+                "Top 5 pains por cada región.",
+                "Permite comparar diferencias de dolor entre mercados.",
+            )
+            st.plotly_chart(fig, width="stretch")
 
 # Modules by region — heatmap
 mod_region = df.dropna(subset=["module_display", "region"])
@@ -61,12 +84,22 @@ if not mod_region.empty:
             title="Modulos Demandados por Region (Top 15)",
             labels=dict(x="Region", y="Modulo", color="Menciones"),
         )
-        st.plotly_chart(fig, use_container_width=True)
+        chart_tooltip(
+            "Módulos más mencionados por región.",
+            "Sirve para detectar prioridades de producto o GTM según geografía.",
+        )
+        st.plotly_chart(fig, width="stretch")
 
 # Competitors by country — table
-comp = df[df["insight_type"] == "competitive_signal"]
+comp = df[df["insight_type"] == "competitive_signal"].copy()
+if "is_own_brand_competitor" in comp.columns:
+    comp = comp[~comp["is_own_brand_competitor"].fillna(False)]
 if not comp.empty and "country" in comp.columns:
     st.subheader("Competidores por Pais")
+    chart_tooltip(
+        "Tabla de competidores por país con menciones y relación principal.",
+        "Da contexto competitivo local para mensajes comerciales por mercado.",
+    )
     comp_country = (
         comp.dropna(subset=["country", "competitor_name"])
         .groupby(["country", "competitor_name"])
@@ -78,11 +111,15 @@ if not comp.empty and "country" in comp.columns:
         .sort_values(["country", "menciones"], ascending=[True, False])
     )
     comp_country.columns = ["Pais", "Competidor", "Menciones", "Relacion Principal"]
-    st.dataframe(comp_country, use_container_width=True)
+    st.dataframe(comp_country, width="stretch")
 
 # Pipeline coverage: segment x region
 if "segment" in df.columns and "region" in df.columns:
     st.subheader("Pipeline Coverage — Segmento x Region")
+    chart_tooltip(
+        "Cobertura de pipeline por segmento y región (revenue y cantidad de deals).",
+        "Permite detectar desbalance de cobertura comercial entre mercados.",
+    )
     pipeline_data = df.dropna(subset=["segment", "region"]).drop_duplicates("deal_id")
     if not pipeline_data.empty:
         coverage = (
@@ -97,7 +134,7 @@ if "segment" in df.columns and "region" in df.columns:
         deals_pivot = coverage.pivot(index="segment", columns="region", values="deals").fillna(0)
 
         st.write("**Revenue por Segmento x Region**")
-        st.dataframe(rev_pivot.map(format_currency), use_container_width=True)
+        st.dataframe(rev_pivot.map(format_currency), width="stretch")
 
         st.write("**Deals por Segmento x Region**")
-        st.dataframe(deals_pivot.astype(int), use_container_width=True)
+        st.dataframe(deals_pivot.astype(int), width="stretch")
