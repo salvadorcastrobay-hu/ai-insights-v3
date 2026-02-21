@@ -1,0 +1,8 @@
+[project]
+name = "ai-insights-v3"
+version = "3.0.0"
+description = "Humand Sales Insights - Transcript Analysis Pipeline"
+requires-python = ">=3.9"
+
+[tool.setuptools.packages.find]
+include = ["src*"]
