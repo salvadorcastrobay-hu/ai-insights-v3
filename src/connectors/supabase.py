@@ -17,6 +17,7 @@ from src import config
 from src.skills.taxonomy import (
     HR_CATEGORIES, MODULES, PAIN_SUBTYPES, DEAL_FRICTION_SUBTYPES,
     FAQ_SUBTYPES, COMPETITIVE_RELATIONSHIPS, COMPETITORS, SEED_FEATURE_NAMES,
+    PRODUCT_GAP_SUBTYPES, COMPETITOR_CATEGORIES,
 )
 
 logger = logging.getLogger(__name__)
@@ -97,6 +98,14 @@ def seed_taxonomy(client: Client) -> dict[str, int]:
     _upsert_batch(client, "tax_pain_subtypes", rows, "code")
     counts["pain_subtypes"] = len(rows)
 
+    # Product Gap Subtypes (NEW)
+    rows = [
+        {"code": code, "display_name": v["display_name"], "description": v.get("description")}
+        for code, v in PRODUCT_GAP_SUBTYPES.items()
+    ]
+    _upsert_batch(client, "tax_product_gap_subtypes", rows, "code")
+    counts["product_gap_subtypes"] = len(rows)
+
     # Deal Friction Subtypes
     rows = [
         {"code": code, "display_name": v["display_name"], "description": v.get("description")}
@@ -121,10 +130,18 @@ def seed_taxonomy(client: Client) -> dict[str, int]:
     _upsert_batch(client, "tax_competitive_relationships", rows, "code")
     counts["competitive_relationships"] = len(rows)
 
-    # Competitors
+    # Competitor Categories (NEW — seed BEFORE competitors for FK)
     rows = [
-        {"name": name, "region": region}
-        for name, region in COMPETITORS.items()
+        {"code": code, "display_name": v["display_name"], "description": v.get("description")}
+        for code, v in COMPETITOR_CATEGORIES.items()
+    ]
+    _upsert_batch(client, "tax_competitor_categories", rows, "code")
+    counts["competitor_categories"] = len(rows)
+
+    # Competitors (restructured: info dict with region + category)
+    rows = [
+        {"name": name, "region": info["region"], "category": info.get("category")}
+        for name, info in COMPETITORS.items()
     ]
     _upsert_batch(client, "tax_competitors", rows, "name")
     counts["competitors"] = len(rows)

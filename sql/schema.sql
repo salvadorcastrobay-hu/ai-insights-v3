@@ -1,6 +1,6 @@
 -- ============================================================
--- Schema: Humand Sales Insights v2
--- Ejecutar con: python main.py setup
+-- Schema: Humand Sales Insights v3.1
+-- Ejecutar con: python -m src.cli setup
 -- ============================================================
 
 -- 1. Reference Tables (Taxonomy)
@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS tax_modules (
     code         TEXT PRIMARY KEY,
     display_name TEXT NOT NULL,
     hr_category  TEXT NOT NULL REFERENCES tax_hr_categories(code),
-    status       TEXT NOT NULL CHECK (status IN ('existing', 'missing')),
+    status       TEXT NOT NULL CHECK (status IN ('existing', 'missing', 'roadmap')),
     sort_order   INTEGER DEFAULT 0
 );
 
@@ -46,9 +46,22 @@ CREATE TABLE IF NOT EXISTS tax_competitive_relationships (
     description  TEXT
 );
 
+CREATE TABLE IF NOT EXISTS tax_product_gap_subtypes (
+    code         TEXT PRIMARY KEY,
+    display_name TEXT NOT NULL,
+    description  TEXT
+);
+
+CREATE TABLE IF NOT EXISTS tax_competitor_categories (
+    code         TEXT PRIMARY KEY,
+    display_name TEXT NOT NULL,
+    description  TEXT
+);
+
 CREATE TABLE IF NOT EXISTS tax_competitors (
-    name   TEXT PRIMARY KEY,
-    region TEXT NOT NULL
+    name     TEXT PRIMARY KEY,
+    region   TEXT NOT NULL,
+    category TEXT REFERENCES tax_competitor_categories(code)
 );
 
 CREATE TABLE IF NOT EXISTS tax_feature_names (
@@ -260,7 +273,7 @@ SELECT
         WHEN 'deal_friction' THEN 'Friccion del Deal'
         WHEN 'faq' THEN 'Pregunta Frecuente'
     END AS insight_type_display,
-    COALESCE(ps.display_name, df.display_name, fq.display_name, cr.display_name, i.insight_subtype)
+    COALESCE(ps.display_name, pgst.display_name, df.display_name, fq.display_name, cr.display_name, i.insight_subtype)
         AS insight_subtype_display,
     m.display_name  AS module_display,
     m.status        AS module_status,
@@ -276,6 +289,7 @@ LEFT JOIN raw_deals d ON i.deal_id = d.deal_id
 LEFT JOIN tax_modules m ON i.module = m.code
 LEFT JOIN tax_hr_categories hc ON m.hr_category = hc.code
 LEFT JOIN tax_pain_subtypes ps ON i.insight_subtype = ps.code AND i.insight_type = 'pain'
+LEFT JOIN tax_product_gap_subtypes pgst ON i.insight_subtype = pgst.code AND i.insight_type = 'product_gap'
 LEFT JOIN tax_deal_friction_subtypes df ON i.insight_subtype = df.code AND i.insight_type = 'deal_friction'
 LEFT JOIN tax_faq_subtypes fq ON i.insight_subtype = fq.code AND i.insight_type = 'faq'
 LEFT JOIN tax_competitive_relationships cr ON i.insight_subtype = cr.code AND i.insight_type = 'competitive_signal'

@@ -10,7 +10,7 @@ import json
 from src.skills.taxonomy import (
     MODULES, PAIN_SUBTYPES, DEAL_FRICTION_SUBTYPES,
     FAQ_SUBTYPES, COMPETITIVE_RELATIONSHIPS, COMPETITORS,
-    SEED_FEATURE_NAMES,
+    SEED_FEATURE_NAMES, PRODUCT_GAP_SUBTYPES, COMPETITOR_CATEGORIES,
 )
 
 
@@ -132,16 +132,20 @@ def build_taxonomy_summary() -> str:
     for code, m in MODULES.items():
         lines.append(f"- `{code}`: {m['display_name']} ({m['status']})")
 
-    # Pain subtypes
-    lines.append("\n### Pain Subtypes")
-    lines.append("**Generales:**")
+    # Pain subtypes (grouped by theme)
+    lines.append("\n### Pain Subtypes (31)")
+    by_theme: dict[str, list[tuple[str, dict]]] = {}
     for code, p in PAIN_SUBTYPES.items():
-        if p["module"] is None:
+        by_theme.setdefault(p["theme"], []).append((code, p))
+    for theme, pains in by_theme.items():
+        lines.append(f"**{theme}:**")
+        for code, p in pains:
             lines.append(f"- `{code}`: {p['display_name']}")
-    lines.append("**Vinculados a modulo:**")
-    for code, p in PAIN_SUBTYPES.items():
-        if p["module"] is not None:
-            lines.append(f"- `{code}`: {p['display_name']} (modulo: {p['module']})")
+
+    # Product gap subtypes
+    lines.append("\n### Product Gap Subtypes (5)")
+    for code, pg in PRODUCT_GAP_SUBTYPES.items():
+        lines.append(f"- `{code}`: {pg['display_name']}")
 
     # Deal friction
     lines.append("\n### Deal Friction Subtypes")
@@ -158,9 +162,15 @@ def build_taxonomy_summary() -> str:
     for code, c in COMPETITIVE_RELATIONSHIPS.items():
         lines.append(f"- `{code}`: {c['display_name']}")
 
-    # Competitors (just names)
+    # Competitors (grouped by category)
     lines.append("\n### Competidores Conocidos")
-    lines.append(", ".join(sorted(COMPETITORS.keys())))
+    by_category: dict[str, list[str]] = {}
+    for name, info in COMPETITORS.items():
+        by_category.setdefault(info["category"], []).append(name)
+    for cat_code, cat_info in COMPETITOR_CATEGORIES.items():
+        entries = by_category.get(cat_code, [])
+        if entries:
+            lines.append(f"**{cat_info['display_name']}:** {', '.join(sorted(entries))}")
 
     # Features
     lines.append("\n### Feature Names (seed)")

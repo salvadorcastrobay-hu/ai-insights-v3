@@ -37,7 +37,7 @@ OPENAI_CHAT_AGENT_MODEL = os.getenv("OPENAI_CHAT_AGENT_MODEL", "gpt-4o")
 TRANSCRIPT_VIEW_NAME = os.getenv("TRANSCRIPT_VIEW_NAME", "v_transcripts")
 BATCH_POLL_INTERVAL = int(os.getenv("BATCH_POLL_INTERVAL", "60"))
 MAX_TOKENS_PER_CHUNK = int(os.getenv("MAX_TOKENS_PER_CHUNK", "12000"))
-PROMPT_VERSION_BASE = os.getenv("PROMPT_VERSION", "v2.0")
+PROMPT_VERSION_BASE = os.getenv("PROMPT_VERSION", "v3.0")
 
 # Paths
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(__file__))

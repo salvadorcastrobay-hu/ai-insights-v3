@@ -23,9 +23,10 @@ from src.skills.taxonomy import (
     get_valid_module_codes,
     get_valid_feature_codes,
     get_competitor_names,
+    get_valid_product_gap_codes,
     normalize_competitor,
-    PAIN_SUBTYPES,
     MODULES,
+    PRODUCT_GAP_SUBTYPES,
     SEED_FEATURE_NAMES,
 )
 
@@ -38,6 +39,7 @@ _valid_faqs = get_valid_faq_codes()
 _valid_relationships = get_valid_competitive_relationship_codes()
 _valid_modules = get_valid_module_codes()
 _valid_features = get_valid_feature_codes()
+_valid_product_gap_subtypes = get_valid_product_gap_codes()
 _known_competitors = get_competitor_names()
 
 # Track new features discovered in this run
@@ -116,11 +118,6 @@ def _normalize_insight(
         if subtype not in _valid_pains:
             logger.warning(f"Unknown pain subtype: {subtype}")
             return None
-        # Auto-assign module from taxonomy if not provided
-        if not module:
-            pain_data = PAIN_SUBTYPES.get(subtype)
-            if pain_data and pain_data.get("module"):
-                module = pain_data["module"]
 
     elif itype == "deal_friction":
         if subtype not in _valid_frictions:
@@ -147,6 +144,10 @@ def _normalize_insight(
         if not module:
             logger.warning(f"product_gap without module: {insight.summary[:60]}")
             return None
+        # Validate subtype against product_gap subtypes; default to missing_capability
+        if subtype not in _valid_product_gap_subtypes:
+            logger.info(f"Unknown product_gap subtype '{subtype}', defaulting to missing_capability")
+            subtype = "missing_capability"
         # Normalize feature_name to slug format
         if insight.feature_name:
             insight.feature_name = _to_slug(insight.feature_name)

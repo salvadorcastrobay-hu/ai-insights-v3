@@ -102,7 +102,7 @@ Columnas principales:
 - call_date (date)
 - insight_type: 'pain' | 'product_gap' | 'competitive_signal' | 'deal_friction' | 'faq'
 - insight_subtype (codigo taxonomico), insight_subtype_display (nombre legible)
-- module (codigo), module_display (nombre legible), module_status ('existing'|'missing')
+- module (codigo), module_display (nombre legible), module_status ('existing'|'missing'|'roadmap')
 - hr_category, hr_category_display
 - pain_theme, pain_scope ('general'|'module_linked')
 - competitor_name, competitor_relationship
@@ -134,7 +134,7 @@ Columnas disponibles para filtros:
 ## Valores clave de enums
 - insight_type: pain, product_gap, competitive_signal, deal_friction, faq
 - gap_priority: must_have, nice_to_have, dealbreaker
-- competitor_relationship: currently_using, evaluating, migrating_from, comparing, mentioned, previously_used
+- competitor_relationship: currently_using, evaluating, migrating_from, previously_used, mentioned, rejected
 - segment: 'Enterprise', 'Mid-Market', 'SMB', etc.
 
 ## Ejemplos

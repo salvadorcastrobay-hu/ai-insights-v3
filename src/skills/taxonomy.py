@@ -1,5 +1,5 @@
 """
-Taxonomy completa para Humand Sales Insights v2.
+Taxonomy completa para Humand Sales Insights v3.1.
 Fuente unica de verdad para categorias, modulos, pains, features, competidores.
 
 This is a pure skill module: no I/O, no external dependencies.
@@ -8,30 +8,30 @@ This is a pure skill module: no I/O, no external dependencies.
 from __future__ import annotations
 
 # ──────────────────────────────────────────────
-# HR Categories
+# HR Categories (7)
 # ──────────────────────────────────────────────
 HR_CATEGORIES = {
     "internal_communication":    {"display_name": "Comunicacion Interna",          "sort_order": 1},
     "hr_administration":         {"display_name": "Administracion de RRHH",        "sort_order": 2},
     "talent_acquisition":        {"display_name": "Atraccion de Talento",          "sort_order": 3},
     "talent_development":        {"display_name": "Desarrollo de Talento",         "sort_order": 4},
-    "employee_experience":       {"display_name": "Experiencia del Empleado",      "sort_order": 5},
+    "culture_and_engagement":    {"display_name": "Cultura y Engagement",          "sort_order": 5},
     "compensation_and_benefits": {"display_name": "Compensaciones y Beneficios",   "sort_order": 6},
     "operations_and_workplace":  {"display_name": "Operaciones y Lugar de Trabajo","sort_order": 7},
 }
 
 # ──────────────────────────────────────────────
-# Modules (39)
+# Modules (37)
 # ──────────────────────────────────────────────
 MODULES = {
-    # internal_communication
+    # internal_communication (6)
     "chat":                     {"display_name": "Chat",                       "hr_category": "internal_communication", "status": "existing", "sort_order": 1},
     "internal_social_network":  {"display_name": "Red Social Interna",         "hr_category": "internal_communication", "status": "existing", "sort_order": 2},
     "magazine":                 {"display_name": "Revista Interna",            "hr_category": "internal_communication", "status": "existing", "sort_order": 3},
     "live_streaming":           {"display_name": "Streaming en Vivo",          "hr_category": "internal_communication", "status": "existing", "sort_order": 4},
     "knowledge_libraries":      {"display_name": "Biblioteca de Conocimiento", "hr_category": "internal_communication", "status": "existing", "sort_order": 5},
     "quick_links":              {"display_name": "Accesos Rapidos",            "hr_category": "internal_communication", "status": "existing", "sort_order": 6},
-    # hr_administration
+    # hr_administration (9)
     "digital_employee_file":    {"display_name": "Legajo Digital",             "hr_category": "hr_administration", "status": "existing", "sort_order": 7},
     "documents":                {"display_name": "Documentos",                 "hr_category": "hr_administration", "status": "existing", "sort_order": 8},
     "files":                    {"display_name": "Archivos",                   "hr_category": "hr_administration", "status": "existing", "sort_order": 9},
@@ -41,35 +41,33 @@ MODULES = {
     "digital_access":           {"display_name": "Accesos Digitales",          "hr_category": "hr_administration", "status": "existing", "sort_order": 13},
     "security_and_privacy":     {"display_name": "Seguridad y Privacidad",     "hr_category": "hr_administration", "status": "existing", "sort_order": 14},
     "payroll":                  {"display_name": "Nomina / Payroll",           "hr_category": "hr_administration", "status": "missing",  "sort_order": 15},
-    # talent_acquisition
+    # talent_acquisition (4)
     "internal_job_postings":    {"display_name": "Vacantes Internas",          "hr_category": "talent_acquisition", "status": "existing", "sort_order": 16},
     "referral_program":         {"display_name": "Programa de Referidos",      "hr_category": "talent_acquisition", "status": "existing", "sort_order": 17},
     "onboarding":               {"display_name": "Onboarding",                 "hr_category": "talent_acquisition", "status": "existing", "sort_order": 18},
-    "ats":                      {"display_name": "ATS",                        "hr_category": "talent_acquisition", "status": "missing",  "sort_order": 19},
-    "ai_recruiter":             {"display_name": "Reclutador con IA",          "hr_category": "talent_acquisition", "status": "missing",  "sort_order": 20},
-    "recruitment":              {"display_name": "Reclutamiento y Seleccion",  "hr_category": "talent_acquisition", "status": "missing",  "sort_order": 21},
-    # talent_development
-    "performance_review":       {"display_name": "Evaluacion de Desempeno",    "hr_category": "talent_development", "status": "existing", "sort_order": 22},
-    "goals_and_okrs":           {"display_name": "Objetivos y OKRs",           "hr_category": "talent_development", "status": "existing", "sort_order": 23},
-    "development_plan":         {"display_name": "Plan de Desarrollo",         "hr_category": "talent_development", "status": "existing", "sort_order": 24},
-    "learning":                 {"display_name": "Capacitacion / LMS",         "hr_category": "talent_development", "status": "existing", "sort_order": 25},
-    "succession_planning":      {"display_name": "Planes de Sucesion",         "hr_category": "talent_development", "status": "missing",  "sort_order": 26},
-    "prebuilt_courses":         {"display_name": "Cursos Listos",              "hr_category": "talent_development", "status": "missing",  "sort_order": 27},
-    # employee_experience
-    "people_experience":        {"display_name": "Experiencia de Empleado",    "hr_category": "employee_experience", "status": "existing", "sort_order": 28},
-    "surveys":                  {"display_name": "Encuestas",                  "hr_category": "employee_experience", "status": "existing", "sort_order": 29},
-    "kudos":                    {"display_name": "Reconocimientos",            "hr_category": "employee_experience", "status": "existing", "sort_order": 30},
-    "birthdays_and_anniversaries": {"display_name": "Cumpleanos y Aniversarios","hr_category": "employee_experience","status": "existing", "sort_order": 31},
-    "events":                   {"display_name": "Eventos",                    "hr_category": "employee_experience", "status": "existing", "sort_order": 32},
-    # compensation_and_benefits
-    "perks_and_benefits":       {"display_name": "Beneficios y Perks",         "hr_category": "compensation_and_benefits", "status": "existing", "sort_order": 33},
-    "marketplace":              {"display_name": "Marketplace",                "hr_category": "compensation_and_benefits", "status": "existing", "sort_order": 34},
-    "benefits_platform":        {"display_name": "Plataforma de Beneficios",   "hr_category": "compensation_and_benefits", "status": "missing",  "sort_order": 35},
-    # operations_and_workplace
-    "time_off":                 {"display_name": "Vacaciones y Licencias",     "hr_category": "operations_and_workplace", "status": "existing", "sort_order": 36},
-    "time_tracking":            {"display_name": "Control Horario",            "hr_category": "operations_and_workplace", "status": "existing", "sort_order": 37},
-    "space_reservation":        {"display_name": "Reserva de Espacios",        "hr_category": "operations_and_workplace", "status": "existing", "sort_order": 38},
-    "service_management":       {"display_name": "Mesa de Servicios",          "hr_category": "operations_and_workplace", "status": "existing", "sort_order": 39},
+    "recruitment":              {"display_name": "Reclutamiento y Seleccion",  "hr_category": "talent_acquisition", "status": "roadmap",  "sort_order": 19},
+    # talent_development (6)
+    "performance_review":       {"display_name": "Evaluacion de Desempeno",    "hr_category": "talent_development", "status": "existing", "sort_order": 20},
+    "goals_and_okrs":           {"display_name": "Objetivos y OKRs",           "hr_category": "talent_development", "status": "existing", "sort_order": 21},
+    "development_plan":         {"display_name": "Plan de Desarrollo",         "hr_category": "talent_development", "status": "existing", "sort_order": 22},
+    "learning":                 {"display_name": "Capacitacion / LMS",         "hr_category": "talent_development", "status": "existing", "sort_order": 23},
+    "succession_planning":      {"display_name": "Planes de Sucesion",         "hr_category": "talent_development", "status": "missing",  "sort_order": 24},
+    "prebuilt_courses":         {"display_name": "Cursos Listos",              "hr_category": "talent_development", "status": "missing",  "sort_order": 25},
+    # culture_and_engagement (5)
+    "people_experience":        {"display_name": "Encuestas de Clima",         "hr_category": "culture_and_engagement", "status": "existing", "sort_order": 26},
+    "surveys":                  {"display_name": "Encuestas Generales",        "hr_category": "culture_and_engagement", "status": "existing", "sort_order": 27},
+    "kudos":                    {"display_name": "Reconocimientos",            "hr_category": "culture_and_engagement", "status": "existing", "sort_order": 28},
+    "birthdays_and_anniversaries": {"display_name": "Cumpleanos y Aniversarios","hr_category": "culture_and_engagement","status": "existing", "sort_order": 29},
+    "events":                   {"display_name": "Eventos",                    "hr_category": "culture_and_engagement", "status": "existing", "sort_order": 30},
+    # compensation_and_benefits (3)
+    "perks_and_benefits":       {"display_name": "Beneficios Corporativos",    "hr_category": "compensation_and_benefits", "status": "existing", "sort_order": 31},
+    "marketplace":              {"display_name": "Marketplace P2P",            "hr_category": "compensation_and_benefits", "status": "existing", "sort_order": 32},
+    "benefits_administration":  {"display_name": "Administracion de Beneficios Flex", "hr_category": "compensation_and_benefits", "status": "missing",  "sort_order": 33},
+    # operations_and_workplace (4)
+    "time_off":                 {"display_name": "Vacaciones y Licencias",     "hr_category": "operations_and_workplace", "status": "existing", "sort_order": 34},
+    "time_tracking":            {"display_name": "Control Horario",            "hr_category": "operations_and_workplace", "status": "existing", "sort_order": 35},
+    "space_reservation":        {"display_name": "Reserva de Espacios",        "hr_category": "operations_and_workplace", "status": "existing", "sort_order": 36},
+    "service_management":       {"display_name": "Mesa de Servicios",          "hr_category": "operations_and_workplace", "status": "existing", "sort_order": 37},
 }
 
 # ──────────────────────────────────────────────
@@ -84,135 +82,84 @@ INSIGHT_TYPES = {
 }
 
 # ──────────────────────────────────────────────
-# Pain Subtypes (87 total: 43 general + 44 module-linked)
+# Pain Subtypes (31) — v3.1 redesigned
+# All general (no module field), grouped by theme with discriminators
 # ──────────────────────────────────────────────
-# module=None means general pain
 
 PAIN_SUBTYPES = {
-    # ── General: technology (8) ──
-    "fragmented_tools":        {"display_name": "Herramientas fragmentadas",  "theme": "technology",  "module": None, "description": "Multiples herramientas desconectadas"},
-    "low_adoption":            {"display_name": "Baja adopcion",              "theme": "technology",  "module": None, "description": "Herramientas actuales con baja adopcion"},
-    "no_mobile_access":        {"display_name": "Sin acceso movil",           "theme": "technology",  "module": None, "description": "Sin acceso movil a herramientas HR"},
-    "outdated_technology":     {"display_name": "Tecnologia obsoleta",        "theme": "technology",  "module": None, "description": "Sistema legacy o desactualizado"},
-    "integration_issues":      {"display_name": "Problemas de integracion",   "theme": "technology",  "module": None, "description": "No se integra con sistemas existentes"},
-    "vendor_fatigue":          {"display_name": "Fatiga de proveedores",      "theme": "technology",  "module": None, "description": "Demasiados proveedores de software"},
-    "poor_ux":                 {"display_name": "UX deficiente",              "theme": "technology",  "module": None, "description": "Interfaz poco intuitiva"},
-    "it_dependency":           {"display_name": "Dependencia de IT",          "theme": "technology",  "module": None, "description": "Cada cambio requiere intervencion de IT"},
-    # ── General: processes (6) ──
-    "manual_processes":        {"display_name": "Procesos manuales",          "theme": "processes",   "module": None, "description": "Procesos en papel o Excel"},
-    "process_bottlenecks":     {"display_name": "Cuellos de botella",         "theme": "processes",   "module": None, "description": "Flujos de aprobacion lentos"},
-    "manager_burden":          {"display_name": "Sobrecarga de managers",     "theme": "processes",   "module": None, "description": "Managers gastan tiempo en admin HR"},
-    "employee_self_service":   {"display_name": "Sin autogestion",            "theme": "processes",   "module": None, "description": "Empleados no pueden gestionar tramites"},
-    "hr_admin_overload":       {"display_name": "HR saturado en operacion",   "theme": "processes",   "module": None, "description": "HR sin tiempo para estrategia"},
-    "paper_waste":             {"display_name": "Desperdicio de papel",       "theme": "processes",   "module": None, "description": "Costos de impresion y almacenamiento"},
-    # ── General: communication (6) ──
-    "communication_gaps":      {"display_name": "Brechas de comunicacion",    "theme": "communication","module": None, "description": "Informacion no llega a todos"},
-    "deskless_exclusion":      {"display_name": "Exclusion de deskless",      "theme": "communication","module": None, "description": "Trabajadores sin escritorio excluidos"},
-    "email_unreachable":       {"display_name": "Sin email corporativo",      "theme": "communication","module": None, "description": "Empleados sin email ni acceso a intranet"},
-    "information_asymmetry":   {"display_name": "Asimetria de informacion",   "theme": "communication","module": None, "description": "Oficina informada, operarios no"},
-    "internal_comm_overload":  {"display_name": "Sobrecarga de canales",      "theme": "communication","module": None, "description": "Demasiados canales de comunicacion"},
-    "multi_site_silos":        {"display_name": "Silos entre sedes",          "theme": "communication","module": None, "description": "Cada sede es un silo de informacion"},
-    # ── General: talent (2) ──
-    "turnover_retention":      {"display_name": "Alta rotacion",              "theme": "talent",      "module": None, "description": "Rotacion alta especialmente en frontline"},
-    "employer_brand":          {"display_name": "Marca empleadora debil",     "theme": "talent",      "module": None, "description": "Dificultad para atraer talento"},
-    # ── General: engagement (4) ──
-    "cultural_disconnection":  {"display_name": "Desconexion cultural",       "theme": "engagement",  "module": None, "description": "Empleados desconectados de la cultura"},
-    "language_barriers":       {"display_name": "Barreras de idioma",         "theme": "engagement",  "module": None, "description": "Workforce multiidioma sin soporte"},
-    "no_sense_of_belonging":   {"display_name": "Sin sentido de pertenencia", "theme": "engagement",  "module": None, "description": "Empleados no sienten pertenencia"},
-    "remote_hybrid_challenges":{"display_name": "Desafios remoto/hibrido",   "theme": "engagement",  "module": None, "description": "Gestion de workforce remoto/hibrido"},
-    # ── General: data (5) ──
-    "poor_visibility":         {"display_name": "Falta de visibilidad",       "theme": "data",        "module": None, "description": "Sin datos sobre la fuerza laboral"},
-    "reporting_limitations":   {"display_name": "Reportes limitados",         "theme": "data",        "module": None, "description": "No puede generar reportes necesarios"},
-    "data_silos":              {"display_name": "Silos de datos",             "theme": "data",        "module": None, "description": "Datos en sistemas sin vision unificada"},
-    "manual_reporting":        {"display_name": "Reportes manuales",          "theme": "data",        "module": None, "description": "Reportes en Excel, toma horas"},
-    "no_real_time_data":       {"display_name": "Sin datos en tiempo real",   "theme": "data",        "module": None, "description": "Sin visibilidad real-time"},
-    # ── General: compliance (12) ──
-    "scaling_pain":            {"display_name": "No escala",                  "theme": "compliance",  "module": None, "description": "Solucion no escala con crecimiento"},
-    "compliance_risk":         {"display_name": "Riesgo de compliance",       "theme": "compliance",  "module": None, "description": "Riesgo de incumplimiento regulatorio"},
-    "labor_law_complexity":    {"display_name": "Complejidad legal laboral",  "theme": "compliance",  "module": None, "description": "Leyes laborales por pais"},
-    "government_reporting":    {"display_name": "Reportes al gobierno",       "theme": "compliance",  "module": None, "description": "Reportes obligatorios"},
-    "multi_country_complexity":{"display_name": "Complejidad multi-pais",     "theme": "compliance",  "module": None, "description": "Regulaciones distintas entre paises"},
-    "data_privacy":            {"display_name": "Privacidad de datos",        "theme": "compliance",  "module": None, "description": "Preocupaciones LGPD/GDPR"},
-    "audit_readiness":         {"display_name": "Auditoria sin preparar",     "theme": "compliance",  "module": None, "description": "No preparado para auditorias"},
-    "cost_burden":             {"display_name": "Costo excesivo",             "theme": "compliance",  "module": None, "description": "Costo total de herramientas alto"},
-    "security_concerns":       {"display_name": "Seguridad de datos",         "theme": "compliance",  "module": None, "description": "Seguridad de datos de empleados"},
-    "union_relations":         {"display_name": "Relaciones sindicales",      "theme": "compliance",  "module": None, "description": "Complejidad con sindicatos"},
-    "seasonal_workforce":      {"display_name": "Workforce estacional",       "theme": "compliance",  "module": None, "description": "Gestion de trabajadores estacionales"},
-    "contractor_management":   {"display_name": "Gestion de contratistas",    "theme": "compliance",  "module": None, "description": "Administracion de tercerizados"},
-
-    # ── Module-linked: internal_communication (6) ──
-    "informal_channel_use":    {"display_name": "Canales informales",         "theme": "communication","module": "chat",                    "description": "WhatsApp/canales personales para trabajo"},
-    "top_down_only":           {"display_name": "Solo top-down",              "theme": "communication","module": "internal_social_network", "description": "Sin canal para que empleados se expresen"},
-    "fragmented_news":         {"display_name": "Noticias dispersas",         "theme": "communication","module": "magazine",                "description": "Noticias internas dispersas sin canal central"},
-    "crisis_communication":    {"display_name": "Sin canal de crisis",        "theme": "communication","module": "live_streaming",           "description": "Sin mecanismo para comunicar en emergencias"},
-    "scattered_knowledge":     {"display_name": "Conocimiento disperso",      "theme": "communication","module": "knowledge_libraries",     "description": "Conocimiento sin repositorio central"},
-    "resource_findability":    {"display_name": "Recursos inaccesibles",      "theme": "communication","module": "quick_links",             "description": "Empleados no encuentran recursos"},
-    # ── Module-linked: hr_administration (9) ──
-    "paper_based_records":     {"display_name": "Legajos en papel",           "theme": "processes",   "module": "digital_employee_file",   "description": "Archivos fisicos sin digitalizar"},
-    "document_chaos":          {"display_name": "Caos documental",            "theme": "processes",   "module": "documents",               "description": "Documentos sin control de version"},
-    "file_disorganization":    {"display_name": "Archivos desorganizados",    "theme": "processes",   "module": "files",                   "description": "Archivos sin estructura ni permisos"},
-    "policy_unacknowledged":   {"display_name": "Politicas sin acuse",        "theme": "processes",   "module": "company_policies",        "description": "No se puede probar aceptacion de politicas"},
-    "manual_approvals":        {"display_name": "Aprobaciones manuales",      "theme": "processes",   "module": "forms_and_workflows",     "description": "Aprobaciones sin flujo digital"},
-    "org_opacity":             {"display_name": "Estructura opaca",           "theme": "processes",   "module": "org_chart",               "description": "No se sabe quien es quien"},
-    "access_friction":         {"display_name": "Accesos sin gestion",        "theme": "processes",   "module": "digital_access",          "description": "Gestion manual de permisos"},
-    "data_exposure_risk":      {"display_name": "Riesgo de exposicion",       "theme": "processes",   "module": "security_and_privacy",    "description": "Datos sensibles sin controles"},
-    "payroll_complexity":      {"display_name": "Complejidad de nomina",      "theme": "processes",   "module": "payroll",                 "description": "Errores o procesos manuales en nomina"},
-    # ── Module-linked: talent_acquisition (6) ──
-    "no_internal_mobility":    {"display_name": "Sin movilidad interna",      "theme": "talent",      "module": "internal_job_postings",   "description": "Empleados no ven vacantes internas"},
-    "untapped_referrals":      {"display_name": "Referidos desaprovechados",  "theme": "talent",      "module": "referral_program",        "description": "Sin mecanismo de referidos"},
-    "onboarding_delays":       {"display_name": "Onboarding deficiente",      "theme": "talent",      "module": "onboarding",              "description": "Proceso lento o no estandarizado"},
-    "manual_candidate_tracking":{"display_name":"Tracking manual candidatos", "theme": "talent",      "module": "ats",                     "description": "Seguimiento manual de candidatos"},
-    "screening_overload":      {"display_name": "Sobrecarga de screening",    "theme": "talent",      "module": "ai_recruiter",            "description": "Filtrado manual consume mucho tiempo"},
-    "recruitment_disorganization":{"display_name":"Seleccion desorganizada",  "theme": "talent",      "module": "recruitment",             "description": "Proceso de seleccion desestructurado"},
-    # ── Module-linked: talent_development (8) ──
-    "no_performance_tracking": {"display_name": "Sin evaluacion desempeno",   "theme": "talent",      "module": "performance_review",      "description": "Sin evaluacion formal de desempeno"},
-    "skill_gap_blind":         {"display_name": "Skills gaps invisibles",     "theme": "talent",      "module": "performance_review",      "description": "No se pueden identificar gaps de skills"},
-    "misaligned_goals":        {"display_name": "Objetivos desalineados",     "theme": "talent",      "module": "goals_and_okrs",          "description": "Objetivos sin seguimiento"},
-    "no_career_path":          {"display_name": "Sin plan de carrera",        "theme": "talent",      "module": "development_plan",        "description": "Empleados no ven oportunidades"},
-    "training_gaps":           {"display_name": "Brechas de capacitacion",    "theme": "talent",      "module": "learning",                "description": "No puede capacitar de forma efectiva"},
-    "training_compliance":     {"display_name": "Sin tracking formativo",     "theme": "talent",      "module": "learning",                "description": "Capacitaciones obligatorias sin tracking"},
-    "succession_risk":         {"display_name": "Riesgo de sucesion",         "theme": "talent",      "module": "succession_planning",     "description": "Personas clave sin sucesor"},
-    "no_training_content":     {"display_name": "Sin contenido formativo",    "theme": "talent",      "module": "prebuilt_courses",        "description": "Sin cursos listos para capacitar"},
-    # ── Module-linked: employee_experience (6) ──
-    "poor_employee_journey":   {"display_name": "Journey fragmentado",        "theme": "engagement",  "module": "people_experience",       "description": "Experiencia del empleado fragmentada"},
-    "engagement_blind_spot":   {"display_name": "Engagement sin medir",       "theme": "engagement",  "module": "surveys",                 "description": "No hay forma de medir clima"},
-    "feedback_absence":        {"display_name": "Sin feedback continuo",      "theme": "engagement",  "module": "surveys",                 "description": "Sin mecanismo de feedback continuo"},
-    "recognition_deficit":     {"display_name": "Falta de reconocimiento",    "theme": "engagement",  "module": "kudos",                   "description": "Sin mecanismo para reconocer logros"},
-    "milestones_ignored":      {"display_name": "Hitos sin celebrar",         "theme": "engagement",  "module": "birthdays_and_anniversaries","description": "No se celebran cumpleanos ni aniversarios"},
-    "event_disorganization":   {"display_name": "Eventos desorganizados",     "theme": "engagement",  "module": "events",                  "description": "Sin gestion centralizada de eventos"},
-    # ── Module-linked: compensation_and_benefits (3) ──
-    "manual_benefits_enrollment":{"display_name":"Alta manual beneficios",    "theme": "compensation","module": "perks_and_benefits",      "description": "Inscripcion manual a beneficios"},
-    "perks_invisible":         {"display_name": "Perks sin visibilidad",      "theme": "compensation","module": "marketplace",             "description": "Empleados desconocen beneficios"},
-    "benefits_fragmentation":  {"display_name": "Beneficios dispersos",       "theme": "compensation","module": "benefits_platform",       "description": "Beneficios en multiples sistemas"},
-    # ── Module-linked: operations_and_workplace (6) ──
-    "absence_management":      {"display_name": "Ausencias sin control",      "theme": "operations",  "module": "time_off",                "description": "Sin visibilidad de ausencias"},
-    "time_attendance_chaos":   {"display_name": "Asistencia sin control",     "theme": "operations",  "module": "time_tracking",           "description": "Problemas con fichaje o asistencia"},
-    "shift_scheduling":        {"display_name": "Turnos sin planificar",      "theme": "operations",  "module": "time_tracking",           "description": "Complejidad planificando turnos"},
-    "overtime_compliance":     {"display_name": "Horas extra sin control",    "theme": "operations",  "module": "time_tracking",           "description": "Horas extra sin control"},
-    "space_conflicts":         {"display_name": "Conflictos de espacios",     "theme": "operations",  "module": "space_reservation",       "description": "Sin sistema de reserva de espacios"},
-    "no_service_desk":         {"display_name": "Sin mesa de servicios",      "theme": "operations",  "module": "service_management",      "description": "Sin mesa de servicios digital"},
+    # ── Theme: technology (5) ──
+    "fragmented_tools":        {"display_name": "Herramientas fragmentadas",  "theme": "technology",          "module": None, "description": "Multiples herramientas desconectadas, la experiencia de loguearse en 5 sistemas"},
+    "low_adoption":            {"display_name": "Baja adopcion",              "theme": "technology",          "module": None, "description": "La herramienta existe pero la gente no la usa, problema de change management"},
+    "no_mobile_access":        {"display_name": "Sin acceso movil",           "theme": "technology",          "module": None, "description": "No pueden acceder desde dispositivos moviles"},
+    "outdated_system":         {"display_name": "Sistema obsoleto",           "theme": "technology",          "module": None, "description": "Tecnologia legacy, vieja, sin soporte, deuda tecnologica"},
+    "it_dependency":           {"display_name": "Dependencia de IT",          "theme": "technology",          "module": None, "description": "Cada cambio requiere intervencion de IT"},
+    # ── Theme: processes (5) ──
+    "manual_processes":        {"display_name": "Procesos manuales",          "theme": "processes",           "module": None, "description": "Trabajo en papel, Excel, sin digitalizar"},
+    "process_bottlenecks":     {"display_name": "Cuellos de botella",         "theme": "processes",           "module": None, "description": "Flujos de aprobacion lentos, trabados, ineficientes"},
+    "lack_of_standardization": {"display_name": "Sin estandarizacion",        "theme": "processes",           "module": None, "description": "Cada area o gerente lo hace distinto, sin proceso unificado"},
+    "lack_of_self_service":    {"display_name": "Sin autogestion",            "theme": "processes",           "module": None, "description": "Empleados no pueden resolver tramites solos, dependen de HR"},
+    "hr_operational_overload": {"display_name": "HR saturado en operacion",   "theme": "processes",           "module": None, "description": "Equipo HR saturado, sin tiempo para estrategia"},
+    # ── Theme: communication (5) ──
+    "unreachable_employees":   {"display_name": "Empleados inalcanzables",    "theme": "communication",       "module": None, "description": "Trabajadores sin email, sin PC, deskless, sin infraestructura digital"},
+    "fragmented_channels":     {"display_name": "Canales fragmentados",       "theme": "communication",       "module": None, "description": "Demasiados canales oficiales, nadie sabe donde mirar"},
+    "informal_channels":       {"display_name": "Canales informales",         "theme": "communication",       "module": None, "description": "Usan WhatsApp, Telegram u otras herramientas personales para trabajo"},
+    "information_gaps":        {"display_name": "Informacion que no llega",   "theme": "communication",       "module": None, "description": "Brecha entre quienes tienen informacion y quienes no"},
+    "multi_site_disconnect":   {"display_name": "Desconexion entre sedes",    "theme": "communication",       "module": None, "description": "Cada sede opera como silo aislado, distancia geografica"},
+    # ── Theme: talent (5) ──
+    "high_turnover":           {"display_name": "Alta rotacion",              "theme": "talent",              "module": None, "description": "Rotacion alta, especialmente en frontline"},
+    "weak_employer_brand":     {"display_name": "Marca empleadora debil",     "theme": "talent",              "module": None, "description": "Dificil atraer talento, no se posicionan como empleador atractivo"},
+    "skill_visibility_gap":    {"display_name": "Skills invisibles",          "theme": "talent",              "module": None, "description": "No saben que competencias tiene su gente"},
+    "no_career_path":          {"display_name": "Sin plan de carrera",        "theme": "talent",              "module": None, "description": "Empleados no ven futuro ni crecimiento"},
+    "ineffective_recruitment": {"display_name": "Reclutamiento ineficiente",  "theme": "talent",              "module": None, "description": "Proceso de seleccion lento, manual, desorganizado"},
+    # ── Theme: engagement (4) ──
+    "cultural_disconnection":  {"display_name": "Desconexion cultural",       "theme": "engagement",          "module": None, "description": "No sienten la cultura, falta pertenencia"},
+    "no_recognition":          {"display_name": "Falta de reconocimiento",    "theme": "engagement",          "module": None, "description": "Sin mecanismo para reconocer logros ni celebrar"},
+    "no_climate_measurement":  {"display_name": "Sin medicion de clima",      "theme": "engagement",          "module": None, "description": "No miden engagement, no saben como se sienten los empleados"},
+    "remote_hybrid_challenges":{"display_name": "Desafios remoto/hibrido",    "theme": "engagement",          "module": None, "description": "Gestion de workforce distribuido, remoto o hibrido"},
+    # ── Theme: data_and_analytics (3) ──
+    "no_workforce_visibility": {"display_name": "Sin visibilidad de workforce","theme": "data_and_analytics", "module": None, "description": "No tienen datos consolidados sobre su gente"},
+    "reporting_pain":          {"display_name": "Dolor de reportes",          "theme": "data_and_analytics",  "module": None, "description": "No pueden generar los reportes que necesitan, o es muy costoso"},
+    "data_silos":              {"display_name": "Silos de datos",             "theme": "data_and_analytics",  "module": None, "description": "Datos repartidos en multiples sistemas sin vision unificada"},
+    # ── Theme: compliance_and_scale (4) ──
+    "compliance_risk":         {"display_name": "Riesgo regulatorio",         "theme": "compliance_and_scale","module": None, "description": "Riesgo de incumplir leyes laborales en un pais"},
+    "multi_country_complexity":{"display_name": "Complejidad multi-pais",     "theme": "compliance_and_scale","module": None, "description": "Regulaciones, culturas y requisitos distintos entre paises"},
+    "scaling_challenges":      {"display_name": "No escala",                  "theme": "compliance_and_scale","module": None, "description": "La plataforma o sistema actual no soporta el crecimiento"},
+    "insecure_employee_data":  {"display_name": "Datos de empleados inseguros","theme": "compliance_and_scale","module": None, "description": "Preocupacion por seguridad de datos de empleados en sistemas actuales"},
 }
 
 # ──────────────────────────────────────────────
-# Deal Friction Subtypes
+# Product Gap Subtypes (5) — NEW in v3.1
+# ──────────────────────────────────────────────
+PRODUCT_GAP_SUBTYPES = {
+    "missing_capability":     {"display_name": "Funcionalidad inexistente",   "description": "El modulo o feature no existe en absoluto"},
+    "insufficient_depth":     {"display_name": "Funcionalidad insuficiente",  "description": "Existe pero es demasiado basico, le faltan capacidades"},
+    "missing_integration":    {"display_name": "Integracion faltante",        "description": "Necesitan conectar con un sistema externo no soportado"},
+    "ux_limitation":          {"display_name": "Limitacion de UX",            "description": "La funcionalidad existe pero es dificil de usar"},
+    "scalability_limitation": {"display_name": "Limitacion de escala",        "description": "No funciona al volumen o complejidad que necesitan"},
+}
+
+# ──────────────────────────────────────────────
+# Deal Friction Subtypes (14)
 # ──────────────────────────────────────────────
 DEAL_FRICTION_SUBTYPES = {
-    "budget":               {"display_name": "Restriccion presupuestaria",  "description": "Limitaciones de presupuesto"},
-    "timing":               {"display_name": "Timing desalineado",          "description": "No es el momento"},
-    "decision_maker":       {"display_name": "Falta decisor",               "description": "Falta stakeholder clave"},
-    "legal":                {"display_name": "Revision legal/compliance",   "description": "DPA, revision legal, procurement"},
-    "technical":            {"display_name": "Complejidad tecnica",         "description": "SSO, APIs, requisitos de IT"},
-    "change_management":    {"display_name": "Resistencia al cambio",       "description": "Preocupacion por adopcion"},
-    "champion_risk":        {"display_name": "Champion en riesgo",          "description": "Champion debil o cambiando"},
-    "incumbent_lock_in":    {"display_name": "Contrato existente",          "description": "Atado a vendor actual"},
-    "scope_mismatch":       {"display_name": "Alcance insuficiente",        "description": "No cubre todos los requerimientos"},
-    "security_review":      {"display_name": "Revision de seguridad",       "description": "Evaluacion infosec requerida"},
+    "budget":               {"display_name": "Restriccion presupuestaria",  "description": "No hay presupuesto o es insuficiente"},
+    "roi_justification":    {"display_name": "Justificacion de ROI",        "description": "Hay presupuesto pero necesitan armar el business case"},
+    "timing":               {"display_name": "Timing desalineado",          "description": "No es el momento por razones de calendario"},
+    "decision_maker":       {"display_name": "Falta decisor",               "description": "El decisor no esta involucrado"},
+    "internal_alignment":   {"display_name": "Desalineacion interna",       "description": "Los stakeholders no se ponen de acuerdo"},
+    "legal":                {"display_name": "Revision legal/compliance",   "description": "Necesitan pasar por legal, DPA, procurement"},
+    "technical":            {"display_name": "Complejidad tecnica",         "description": "Requisitos de SSO, APIs, infraestructura, IT"},
+    "change_management":    {"display_name": "Resistencia al cambio",       "description": "Preocupacion por adopcion o resistencia de usuarios"},
+    "champion_risk":        {"display_name": "Champion en riesgo",          "description": "El sponsor interno es debil, se va o no tiene influencia"},
+    "incumbent_lock_in":    {"display_name": "Contrato existente",          "description": "Atados a contrato vigente con otro proveedor"},
+    "scope_mismatch":       {"display_name": "Alcance insuficiente",        "description": "La solucion no cubre todos los requerimientos como paquete"},
+    "security_review":      {"display_name": "Revision de seguridad",       "description": "InfoSec debe validar antes de aprobar"},
     "regional_requirements":{"display_name": "Requisitos regionales",       "description": "Necesidades de pais no cubiertas"},
-    "competing_priorities": {"display_name": "Prioridades competidoras",    "description": "Otros proyectos compiten"},
+    "competing_priorities": {"display_name": "Prioridades competidoras",    "description": "Otros proyectos compiten por budget o atencion"},
 }
 
 # ──────────────────────────────────────────────
-# FAQ Subtypes
+# FAQ Subtypes (18)
 # ──────────────────────────────────────────────
 FAQ_SUBTYPES = {
     "pricing":            {"display_name": "Precios",                 "description": "Modelo de pricing, costo por usuario"},
@@ -230,93 +177,202 @@ FAQ_SUBTYPES = {
     "compliance":         {"display_name": "Compliance regulatorio",  "description": "GDPR, LGPD, leyes locales"},
     "roi":                {"display_name": "ROI y business case",     "description": "Retorno de inversion, casos de exito"},
     "content_management": {"display_name": "Gestion de contenido",    "description": "Permisos, publicacion, programacion"},
+    "contract_terms":     {"display_name": "Terminos contractuales",  "description": "Duracion, flexibilidad, clausulas de salida"},
+    "references":         {"display_name": "Referencias y casos",     "description": "Clientes de referencia, casos de exito, testimonios"},
+    "data_ownership":     {"display_name": "Propiedad de datos",      "description": "Quien es dueno de los datos, portabilidad, exportacion"},
 }
 
 # ──────────────────────────────────────────────
-# Competitive Relationships
+# Competitive Relationships (6)
 # ──────────────────────────────────────────────
 COMPETITIVE_RELATIONSHIPS = {
-    "currently_using": {"display_name": "Usa actualmente",  "description": "El prospecto usa este competidor hoy"},
-    "evaluating":      {"display_name": "Evaluando",        "description": "Evaluando en paralelo"},
-    "migrating_from":  {"display_name": "Migrando desde",   "description": "Dejando este competidor"},
-    "comparing":       {"display_name": "Comparando",       "description": "Compara features/precio"},
-    "mentioned":       {"display_name": "Mencionado",       "description": "Mencion sin senal fuerte"},
-    "previously_used": {"display_name": "Uso antes",        "description": "Lo uso en el pasado"},
+    "currently_using": {"display_name": "Usa actualmente",    "description": "El prospecto usa este competidor hoy"},
+    "evaluating":      {"display_name": "Evaluando / Comparando", "description": "Proceso activo de evaluacion o comparacion"},
+    "migrating_from":  {"display_name": "Migrando desde",    "description": "Estan en proceso de dejar este competidor"},
+    "previously_used": {"display_name": "Uso antes",         "description": "Lo usaron en el pasado y ya dejaron"},
+    "mentioned":       {"display_name": "Mencionado",        "description": "Mencion sin senal fuerte de uso ni evaluacion"},
+    "rejected":        {"display_name": "Descartado",        "description": "Lo evaluaron y decidieron no usarlo"},
 }
 
 # ──────────────────────────────────────────────
-# Competitors
+# Competitor Categories (7) — NEW in v3.1
+# ──────────────────────────────────────────────
+COMPETITOR_CATEGORIES = {
+    "hris_payroll":          {"display_name": "HRIS con nomina",                   "description": "Plataformas HR con modulo de nomina"},
+    "internal_comms":        {"display_name": "Comunicacion interna",              "description": "Intranets, apps de empleados, redes sociales internas"},
+    "talent_management":     {"display_name": "Performance, engagement, learning", "description": "Gestion de talento, evaluaciones, engagement, LMS"},
+    "general_collaboration": {"display_name": "Colaboracion general",              "description": "Herramientas de productividad y colaboracion de uso general"},
+    "erp_hcm":              {"display_name": "Suites enterprise (ERP/HCM)",        "description": "Suites empresariales de gran escala con HCM"},
+    "deskless_operations":  {"display_name": "Soluciones deskless",                "description": "Plataformas para trabajadores sin escritorio"},
+    "point_solution":       {"display_name": "Soluciones puntuales",               "description": "Soluciones especializadas en nicho especifico"},
+}
+
+# ──────────────────────────────────────────────
+# Competitors (85) — restructured with category
 # ──────────────────────────────────────────────
 COMPETITORS = {
-    # LATAM
-    "Buk": "latam", "Factorial": "latam", "Pandape": "latam", "Rankmi": "latam",
-    "GoIntegro": "latam", "Visma": "latam", "Workplace (Meta)": "latam",
-    "Microsoft Viva Engage": "latam", "HiBob": "latam", "Lapzo": "latam",
-    "Workvivo": "latam", "Indigital": "latam", "Esigtek": "latam",
-    "Defontana": "latam", "Novasoft": "latam", "PeopleForce": "latam",
-    "Sesame HR": "latam", "Talento Zeus": "latam", "Worky": "latam",
-    "Tress": "latam", "Fortia": "latam", "Meta4 (Cegid)": "latam",
-    "Digitalware": "latam", "Heinsohn": "latam", "SAP SuccessFactors": "latam",
-    "Workday": "latam", "Crehana": "latam", "UBits": "latam",
-    "Talento Cloud": "latam", "Connecto": "latam", "Solides": "latam",
-    "Dialog": "latam", "Convenia": "latam", "Beehome": "latam",
-    "Alest": "latam", "Comunitive": "latam", "Hywork": "latam",
-    # EMEA
-    "Beekeeper": "emea", "Flip": "emea", "Staffbase": "emea", "Sage": "emea",
-    "Bizneo": "emea", "Sesame": "emea", "Blink": "emea", "Sociabble": "emea",
-    "Zucchetti": "emea", "Yoobic": "emea", "Personio": "emea",
-    # North America
-    "Simpplr": "north_america", "Firstup": "north_america",
-    "Igloo Software": "north_america", "LumApps": "north_america",
-    "Unily": "north_america", "Haiilo": "north_america",
-    "Interact": "north_america", "Jostle": "north_america",
-    "Poppulo": "north_america", "Connecteam": "north_america",
-    "Assembly": "north_america", "BambooHR": "north_america",
-    "Paylocity": "north_america", "Rippling": "north_america",
-    "Culture Amp": "north_america", "Qualtrics": "north_america",
-    "Lattice": "north_america", "15Five": "north_america",
-    "WorkTango": "north_america", "Glint": "north_america",
-    "Microsoft Teams": "north_america", "Slack": "north_america",
-    "Google Workspace": "north_america", "SharePoint": "north_america",
-    "Speakapp": "north_america", "Workable": "north_america",
-    # APAC
-    "Workjam": "apac", "Lark": "apac", "Simplrr": "apac", "Weconnect": "apac",
+    # hris_payroll (26)
+    "Buk":              {"region": "latam",         "category": "hris_payroll"},
+    "Factorial":        {"region": "latam",         "category": "hris_payroll"},
+    "Pandape":          {"region": "latam",         "category": "hris_payroll"},
+    "Visma":            {"region": "latam",         "category": "hris_payroll"},
+    "Sesame HR":        {"region": "global",        "category": "hris_payroll"},
+    "Worky":            {"region": "latam",         "category": "hris_payroll"},
+    "Tress":            {"region": "latam",         "category": "hris_payroll"},
+    "Fortia":           {"region": "latam",         "category": "hris_payroll"},
+    "Novasoft":         {"region": "latam",         "category": "hris_payroll"},
+    "Defontana":        {"region": "latam",         "category": "hris_payroll"},
+    "Digitalware":      {"region": "latam",         "category": "hris_payroll"},
+    "Heinsohn":         {"region": "latam",         "category": "hris_payroll"},
+    "Talento Zeus":     {"region": "latam",         "category": "hris_payroll"},
+    "Talento Cloud":    {"region": "latam",         "category": "hris_payroll"},
+    "Solides":          {"region": "latam",         "category": "hris_payroll"},
+    "Convenia":         {"region": "latam",         "category": "hris_payroll"},
+    "HiBob":            {"region": "global",        "category": "hris_payroll"},
+    "Bizneo":           {"region": "emea",          "category": "hris_payroll"},
+    "Personio":         {"region": "emea",          "category": "hris_payroll"},
+    "Sage":             {"region": "emea",          "category": "hris_payroll"},
+    "Zucchetti":        {"region": "emea",          "category": "hris_payroll"},
+    "BambooHR":         {"region": "north_america", "category": "hris_payroll"},
+    "Paylocity":        {"region": "north_america", "category": "hris_payroll"},
+    "Rippling":         {"region": "north_america", "category": "hris_payroll"},
+    "Gupy":             {"region": "latam",         "category": "hris_payroll"},
+    "Deer":             {"region": "latam",         "category": "hris_payroll"},
+    # internal_comms (24)
+    "Workplace (Meta)":        {"region": "global",        "category": "internal_comms"},
+    "Microsoft Viva Engage":   {"region": "global",        "category": "internal_comms"},
+    "Workvivo":                {"region": "global",        "category": "internal_comms"},
+    "Indigital":               {"region": "latam",         "category": "internal_comms"},
+    "Dialog":                  {"region": "latam",         "category": "internal_comms"},
+    "Connecto":                {"region": "latam",         "category": "internal_comms"},
+    "Beehome":                 {"region": "latam",         "category": "internal_comms"},
+    "Comunitive":              {"region": "latam",         "category": "internal_comms"},
+    "Hywork":                  {"region": "latam",         "category": "internal_comms"},
+    "Beekeeper":               {"region": "emea",          "category": "internal_comms"},
+    "Flip":                    {"region": "emea",          "category": "internal_comms"},
+    "Staffbase":               {"region": "emea",          "category": "internal_comms"},
+    "Blink":                   {"region": "emea",          "category": "internal_comms"},
+    "Sociabble":               {"region": "emea",          "category": "internal_comms"},
+    "Speakapp":                {"region": "emea",          "category": "internal_comms"},
+    "Haiilo":                  {"region": "north_america", "category": "internal_comms"},
+    "Simpplr":                 {"region": "north_america", "category": "internal_comms"},
+    "Firstup":                 {"region": "north_america", "category": "internal_comms"},
+    "Poppulo":                 {"region": "north_america", "category": "internal_comms"},
+    "Interact":                {"region": "north_america", "category": "internal_comms"},
+    "Jostle":                  {"region": "north_america", "category": "internal_comms"},
+    "Unily":                   {"region": "north_america", "category": "internal_comms"},
+    "LumApps":                 {"region": "north_america", "category": "internal_comms"},
+    "Igloo Software":          {"region": "north_america", "category": "internal_comms"},
+    # talent_management (13)
+    "Rankmi":          {"region": "latam",         "category": "talent_management"},
+    "GoIntegro":       {"region": "latam",         "category": "talent_management"},
+    "Lapzo":           {"region": "latam",         "category": "talent_management"},
+    "Crehana":         {"region": "latam",         "category": "talent_management"},
+    "UBits":           {"region": "latam",         "category": "talent_management"},
+    "Betterfly":       {"region": "latam",         "category": "talent_management"},
+    "Culture Amp":     {"region": "north_america", "category": "talent_management"},
+    "Lattice":         {"region": "north_america", "category": "talent_management"},
+    "15Five":          {"region": "north_america", "category": "talent_management"},
+    "WorkTango":       {"region": "north_america", "category": "talent_management"},
+    "Glint":           {"region": "north_america", "category": "talent_management"},
+    "Qualtrics":       {"region": "north_america", "category": "talent_management"},
+    "PeopleForce":     {"region": "emea",          "category": "talent_management"},
+    # general_collaboration (5)
+    "Microsoft Teams":   {"region": "global", "category": "general_collaboration"},
+    "Slack":             {"region": "global", "category": "general_collaboration"},
+    "Google Workspace":  {"region": "global", "category": "general_collaboration"},
+    "SharePoint":        {"region": "global", "category": "general_collaboration"},
+    "Lark":              {"region": "apac",   "category": "general_collaboration"},
+    # erp_hcm (7)
+    "SAP SuccessFactors": {"region": "global",        "category": "erp_hcm"},
+    "Workday":            {"region": "global",        "category": "erp_hcm"},
+    "Meta4 (Cegid)":      {"region": "latam",         "category": "erp_hcm"},
+    "Totvs":              {"region": "latam",         "category": "erp_hcm"},
+    "ADP":                {"region": "global",        "category": "erp_hcm"},
+    "UKG":                {"region": "north_america", "category": "erp_hcm"},
+    "Dayforce":           {"region": "north_america", "category": "erp_hcm"},
+    # deskless_operations (3)
+    "Connecteam":  {"region": "global",        "category": "deskless_operations"},
+    "Yoobic":      {"region": "emea",          "category": "deskless_operations"},
+    "Workjam":     {"region": "north_america", "category": "deskless_operations"},
+    # point_solution (6)
+    "Esigtek":    {"region": "latam",         "category": "point_solution"},
+    "Alest":      {"region": "latam",         "category": "point_solution"},
+    "Workable":   {"region": "north_america", "category": "point_solution"},
+    "Assembly":   {"region": "north_america", "category": "point_solution"},
+    "Simplrr":    {"region": "apac",          "category": "point_solution"},
+    "Weconnect":  {"region": "apac",          "category": "point_solution"},
 }
 
 # ──────────────────────────────────────────────
-# Feature Names (seed list for product_gap)
+# Feature Names (seed list for product_gap) — 52
 # ──────────────────────────────────────────────
 SEED_FEATURE_NAMES = {
-    "payroll_integration":      {"display_name": "Integracion de nomina",      "suggested_module": "payroll"},
-    "ats_module":               {"display_name": "Modulo de ATS",              "suggested_module": "ats"},
-    "ai_recruiter":             {"display_name": "Reclutador con IA",          "suggested_module": "ai_recruiter"},
-    "succession_planning":      {"display_name": "Planes de sucesion",         "suggested_module": "succession_planning"},
-    "native_benefits_platform": {"display_name": "Plataforma de beneficios",   "suggested_module": "benefits_platform"},
-    "prebuilt_courses":         {"display_name": "Cursos listos",              "suggested_module": "prebuilt_courses"},
-    "recruitment_module":       {"display_name": "Modulo de seleccion",        "suggested_module": "recruitment"},
-    "advanced_analytics":       {"display_name": "Analytics avanzado",         "suggested_module": None},
-    "bi_dashboard":             {"display_name": "Dashboard BI",               "suggested_module": None},
-    "sso_integration":          {"display_name": "Integracion SSO",            "suggested_module": "security_and_privacy"},
-    "api_access":               {"display_name": "Acceso API",                 "suggested_module": "digital_access"},
-    "offline_mode":             {"display_name": "Modo offline",               "suggested_module": None},
-    "multi_language_content":   {"display_name": "Contenido multi-idioma",     "suggested_module": None},
-    "shift_scheduling":         {"display_name": "Planificacion de turnos",    "suggested_module": "time_tracking"},
-    "geofencing":               {"display_name": "Geofencing",                 "suggested_module": "time_tracking"},
-    "expense_management":       {"display_name": "Gestion de gastos",          "suggested_module": None},
-    "compensation_management":  {"display_name": "Gestion de compensaciones",  "suggested_module": None},
-    "nine_box_grid":            {"display_name": "Nine box grid",              "suggested_module": "performance_review"},
-    "scorm_support":            {"display_name": "Soporte SCORM",              "suggested_module": "learning"},
-    "whatsapp_integration":     {"display_name": "Integracion WhatsApp",       "suggested_module": "chat"},
-    "sap_integration":          {"display_name": "Integracion SAP",            "suggested_module": None},
-    "workday_integration":      {"display_name": "Integracion Workday",        "suggested_module": None},
-    "custom_branding":          {"display_name": "Branding personalizado",     "suggested_module": None},
-    "push_notifications":       {"display_name": "Notificaciones push",        "suggested_module": None},
-    "video_conferencing":       {"display_name": "Videoconferencia",           "suggested_module": "live_streaming"},
-    "ai_chatbot":               {"display_name": "Chatbot con IA",             "suggested_module": "chat"},
-    "predictive_analytics":     {"display_name": "Analytics predictivo",       "suggested_module": None},
-    "employee_wellness":        {"display_name": "Bienestar del empleado",     "suggested_module": "people_experience"},
-    "exit_interviews":          {"display_name": "Entrevistas de salida",      "suggested_module": "surveys"},
-    "anonymous_feedback":       {"display_name": "Feedback anonimo",           "suggested_module": "surveys"},
+    # Payroll / Nomina
+    "payroll_integration":      {"display_name": "Integracion de nomina",          "suggested_module": "payroll"},
+    "multi_entity_payroll":     {"display_name": "Nomina multi-razon social",      "suggested_module": "payroll"},
+    "payslip_distribution":     {"display_name": "Distribucion de recibos de sueldo", "suggested_module": "documents"},
+    # Recruitment (consolidated)
+    "ats_tracking":             {"display_name": "Tracking de candidatos (ATS)",   "suggested_module": "recruitment"},
+    "ai_candidate_matching":    {"display_name": "Seleccion con IA",              "suggested_module": "recruitment"},
+    "recruitment_workflows":    {"display_name": "Flujos de requisicion y seleccion", "suggested_module": "recruitment"},
+    "talent_marketplace":       {"display_name": "Marketplace interno de talento", "suggested_module": "internal_job_postings"},
+    # Talent Development
+    "succession_planning_tool": {"display_name": "Herramienta de planes de sucesion", "suggested_module": "succession_planning"},
+    "prebuilt_course_catalog":  {"display_name": "Catalogo de cursos listos",      "suggested_module": "prebuilt_courses"},
+    "nine_box_grid":            {"display_name": "Nine box grid",                  "suggested_module": "performance_review"},
+    "scorm_support":            {"display_name": "Soporte SCORM",                  "suggested_module": "learning"},
+    "skill_matrix":             {"display_name": "Matriz de competencias",         "suggested_module": "performance_review"},
+    "career_path_builder":      {"display_name": "Constructor de planes de carrera", "suggested_module": "development_plan"},
+    "competencies_module":      {"display_name": "Modulo de competencias",         "suggested_module": "performance_review"},
+    # Clima y Engagement
+    "pulse_surveys":            {"display_name": "Encuestas de pulso",             "suggested_module": "people_experience"},
+    "enps_tracking":            {"display_name": "Medicion de eNPS",               "suggested_module": "people_experience"},
+    "exit_interviews":          {"display_name": "Entrevistas de salida",          "suggested_module": "people_experience"},
+    "anonymous_feedback":       {"display_name": "Feedback anonimo",               "suggested_module": "people_experience"},
+    "employee_wellness":        {"display_name": "Bienestar del empleado",         "suggested_module": "people_experience"},
+    "gamification":             {"display_name": "Gamificacion",                   "suggested_module": "kudos"},
+    # Compensation & Benefits
+    "flex_benefits":            {"display_name": "Beneficios flexibles / cafeteria", "suggested_module": "benefits_administration"},
+    "compensation_management":  {"display_name": "Gestion de compensaciones",      "suggested_module": None},
+    "expense_management":       {"display_name": "Gestion de gastos",              "suggested_module": None},
+    # Operations & Workplace
+    "shift_scheduling":         {"display_name": "Planificacion de turnos",        "suggested_module": "time_tracking"},
+    "geofencing":               {"display_name": "Geofencing",                     "suggested_module": "time_tracking"},
+    "biometric_integration":    {"display_name": "Integracion con relojes biometricos", "suggested_module": "time_tracking"},
+    "absence_calendar":         {"display_name": "Calendario de ausencias del equipo", "suggested_module": "time_off"},
+    "offboarding_workflows":    {"display_name": "Flujos de offboarding",          "suggested_module": "onboarding"},
+    # Communication
+    "whatsapp_integration":     {"display_name": "Integracion WhatsApp",           "suggested_module": "chat"},
+    "ai_chatbot":               {"display_name": "Chatbot con IA",                 "suggested_module": "chat"},
+    "video_conferencing":       {"display_name": "Videoconferencia nativa",        "suggested_module": "live_streaming"},
+    "push_notifications":       {"display_name": "Notificaciones push avanzadas",  "suggested_module": None},
+    "multi_language_content":   {"display_name": "Contenido multi-idioma",         "suggested_module": None},
+    "segmented_communications": {"display_name": "Comunicaciones segmentadas por grupo", "suggested_module": "internal_social_network"},
+    # Administration / Platform
+    "hris_core":                {"display_name": "Core HRIS",                      "suggested_module": "digital_employee_file"},
+    "digital_signature":        {"display_name": "Firma digital / electronica",    "suggested_module": "documents"},
+    "org_chart_management":     {"display_name": "Gestion visual de organigrama",  "suggested_module": "org_chart"},
+    "role_based_permissions":   {"display_name": "Permisos granulares por rol",    "suggested_module": "security_and_privacy"},
+    "multi_entity_support":     {"display_name": "Soporte multi-razon social",     "suggested_module": None},
+    "contractor_portal":        {"display_name": "Portal para contratistas",       "suggested_module": None},
+    "modular_contracting":      {"display_name": "Contratacion modular",           "suggested_module": None},
+    "custom_branding":          {"display_name": "Branding personalizado",         "suggested_module": None},
+    "employee_directory":       {"display_name": "Directorio de empleados",        "suggested_module": "org_chart"},
+    # Analytics & Data
+    "advanced_analytics":       {"display_name": "Analytics avanzado",             "suggested_module": None},
+    "bi_dashboard":             {"display_name": "Dashboard BI",                   "suggested_module": None},
+    "predictive_analytics":     {"display_name": "Analytics predictivo",           "suggested_module": None},
+    "custom_reports_builder":   {"display_name": "Constructor de reportes custom", "suggested_module": None},
+    "labor_cost_analytics":     {"display_name": "Analytics de costo laboral",     "suggested_module": None},
+    "workforce_planning":       {"display_name": "Planificacion de workforce",     "suggested_module": None},
+    # Integrations
+    "sso_integration":          {"display_name": "Integracion SSO",                "suggested_module": "security_and_privacy"},
+    "api_access":               {"display_name": "Acceso API",                     "suggested_module": "digital_access"},
+    "sap_integration":          {"display_name": "Integracion SAP",                "suggested_module": None},
+    "workday_integration":      {"display_name": "Integracion Workday",            "suggested_module": None},
+    "slack_teams_integration":  {"display_name": "Integracion Slack/Teams",        "suggested_module": "chat"},
+    "offline_mode":             {"display_name": "Modo offline",                   "suggested_module": None},
 }
 
 # ──────────────────────────────────────────────
@@ -326,7 +382,7 @@ MODULE_ALIASES = {
     # chat
     "chat interno": "chat", "mensajeria interna": "chat", "mensajes directos": "chat",
     "chat de empleados": "chat", "centro de mensajes": "chat",
-    "chat interno": "chat", "mensagens": "chat", "im": "chat", "dm": "chat",
+    "mensagens": "chat", "im": "chat", "dm": "chat",
     # internal_social_network
     "red social interna": "internal_social_network", "muro social": "internal_social_network",
     "comunidades internas": "internal_social_network", "feed social": "internal_social_network",
@@ -373,11 +429,9 @@ MODULE_ALIASES = {
     "onboarding": "onboarding", "induccion": "onboarding", "integracion inicial": "onboarding",
     "ruta de onboarding": "onboarding", "bienvenida": "onboarding",
     "integracao": "onboarding", "onboarding de colaboradores": "onboarding",
-    # ats
-    "ats": "ats", "tracking de candidatos": "ats", "applicant tracking": "ats",
-    # ai_recruiter
-    "reclutador con ia": "ai_recruiter", "reclutamiento ia": "ai_recruiter",
-    # recruitment
+    # recruitment (consolidated: ats + ai_recruiter → recruitment)
+    "ats": "recruitment", "tracking de candidatos": "recruitment", "applicant tracking": "recruitment",
+    "reclutador con ia": "recruitment", "reclutamiento ia": "recruitment",
     "reclutamiento y seleccion": "recruitment", "seleccion de personal": "recruitment",
     "reclutamiento": "recruitment",
     # performance_review
@@ -399,10 +453,10 @@ MODULE_ALIASES = {
     "cursos listos": "prebuilt_courses", "cursos propios": "prebuilt_courses",
     "contenido formativo": "prebuilt_courses",
     # people_experience
-    "experiencia de empleado": "people_experience", "employee experience": "people_experience",
+    "encuestas de clima": "people_experience", "clima organizacional": "people_experience",
+    "enps": "people_experience", "employee experience": "people_experience",
     # surveys
-    "encuestas": "surveys", "pulse surveys": "surveys", "encuestas de clima": "surveys",
-    "enps": "surveys",
+    "encuestas": "surveys", "encuestas generales": "surveys",
     # kudos
     "reconocimientos": "kudos", "kudos": "kudos", "programa de reconocimiento": "kudos",
     # birthdays_and_anniversaries
@@ -411,13 +465,14 @@ MODULE_ALIASES = {
     # events
     "eventos": "events", "gestion de eventos": "events",
     # perks_and_benefits
-    "beneficios y perks": "perks_and_benefits", "beneficios": "perks_and_benefits",
+    "beneficios corporativos": "perks_and_benefits", "beneficios": "perks_and_benefits",
     "perks": "perks_and_benefits",
     # marketplace
-    "marketplace": "marketplace", "tienda de beneficios": "marketplace",
-    "marketplace de descuentos": "marketplace",
-    # benefits_platform
-    "plataforma de beneficios": "benefits_platform",
+    "marketplace": "marketplace", "marketplace p2p": "marketplace",
+    # benefits_administration (redirected from benefits_platform)
+    "plataforma de beneficios": "benefits_administration",
+    "beneficios flexibles": "benefits_administration",
+    "administracion de beneficios": "benefits_administration",
     # time_off
     "vacaciones y licencias": "time_off", "vacaciones": "time_off", "permisos": "time_off",
     "novedades": "time_off", "solicitud de permiso": "time_off", "pto": "time_off",
@@ -460,9 +515,8 @@ def get_valid_feature_codes() -> set[str]:
 def get_competitor_names() -> set[str]:
     return set(COMPETITORS.keys())
 
-def get_module_for_pain(pain_code: str) -> str | None:
-    pain = PAIN_SUBTYPES.get(pain_code)
-    return pain["module"] if pain else None
+def get_valid_product_gap_codes() -> set[str]:
+    return set(PRODUCT_GAP_SUBTYPES.keys())
 
 def normalize_competitor(name: str) -> str | None:
     """Try to match a competitor name case-insensitively."""

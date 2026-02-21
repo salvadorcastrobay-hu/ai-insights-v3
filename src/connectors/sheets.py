@@ -43,7 +43,7 @@ logger = logging.getLogger(__name__)
 from src.connectors.supabase import get_client
 from src.skills.taxonomy import (
     HR_CATEGORIES, MODULES, PAIN_SUBTYPES, DEAL_FRICTION_SUBTYPES,
-    FAQ_SUBTYPES, COMPETITIVE_RELATIONSHIPS,
+    FAQ_SUBTYPES, COMPETITIVE_RELATIONSHIPS, PRODUCT_GAP_SUBTYPES,
 )
 
 # ── Display name lookups ──
@@ -64,6 +64,8 @@ for code, v in DEAL_FRICTION_SUBTYPES.items():
 for code, v in FAQ_SUBTYPES.items():
     SUBTYPE_DISPLAY[code] = v["display_name"]
 for code, v in COMPETITIVE_RELATIONSHIPS.items():
+    SUBTYPE_DISPLAY[code] = v["display_name"]
+for code, v in PRODUCT_GAP_SUBTYPES.items():
     SUBTYPE_DISPLAY[code] = v["display_name"]
 
 MODULE_DISPLAY = {code: v["display_name"] for code, v in MODULES.items()}

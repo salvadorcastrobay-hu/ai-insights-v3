@@ -59,7 +59,7 @@ class InsightItem(BaseModel):
     )
     competitor_relationship: Optional[str] = Field(
         default=None,
-        description="Relationship code: currently_using, evaluating, migrating_from, comparing, mentioned, previously_used"
+        description="Relationship code: currently_using, evaluating, migrating_from, previously_used, mentioned, rejected"
     )
 
     # Product Gap fields
