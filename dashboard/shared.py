@@ -196,6 +196,7 @@ def load_data() -> pd.DataFrame:
             client.table("v_insights_dashboard")
             .select(LOAD_DATA_SELECT)
             .eq("prompt_version", prompt_version)
+            .order("id")
             .range(offset, offset + page_size - 1)
             .execute()
         )
