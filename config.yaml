@@ -4,6 +4,24 @@ cookie:
   name: humand_insights_auth
 credentials:
   usernames:
+    agustina.ini:
+      email: agustina.ini@humand.co
+      failed_login_attempts: 0
+      first_name: Agus
+      last_name: Ini
+      logged_in: false
+      password: $2b$12$FOvij58iAnm16klIGLhaE.6ke1j4jTRykc8uQF6d7LlVut4aNqS3C
+      roles:
+      - viewer
+    aimee:
+      email: aimee@humand.co
+      failed_login_attempts: 0
+      first_name: Aimee
+      last_name: ''
+      logged_in: false
+      password: $2b$12$WzTJ1rtOEf.kVZTs9Z8SNOA.mtKpweoaJfTr8bBrD/LToRHHcdKKm
+      roles:
+      - viewer
     augusto.ferrer:
       email: augusto.ferrer@humand.co
       failed_login_attempts: 0
@@ -11,6 +29,15 @@ credentials:
       last_name: Ferrer
       logged_in: false
       password: $2b$12$NamiW6VbImi8tAG/vV26uOn06JAWMXBtAb3BRTmqEg.3Luu/.Z6a.
+      roles:
+      - viewer
+    carolina.arditi:
+      email: carolina.arditi@humand.co
+      failed_login_attempts: 0
+      first_name: Carolina
+      last_name: Arditi
+      logged_in: false
+      password: $2b$12$q9DSwxtu5Ht43cfUpK5deeNejNtOLiJyVFG4tNRlGwSFojnSMT25e
       roles:
       - viewer
     juan.diego.alcocer:
@@ -31,6 +58,15 @@ credentials:
       password: $2b$12$XZj.bOdEV3c7mk66ZRfeaO6AaMWU93l/vol7zGn/ieXUtnYjqkrw6
       roles:
       - admin
+    luciano.paradiso:
+      email: luciano.paradiso@humand.co
+      failed_login_attempts: 0
+      first_name: Lucho
+      last_name: Paradiso
+      logged_in: false
+      password: $2b$12$JWqlgLQeV3AZld1xUJY2EOMzyYb3L7/LvIVNIJIn34CtJGt.z7yZq
+      roles:
+      - viewer
     manuela.cavallo:
       email: manuela.cavallo@humand.co
       failed_login_attempts: 0
@@ -38,6 +74,15 @@ credentials:
       last_name: Cavallo
       logged_in: false
       password: $2b$12$JC7uxRhAda/Q.zF6SunNrOWlBdipJjufxh5T6shz1yvYbgVHvChVG
+      roles:
+      - viewer
+    marcos.palacio:
+      email: marcos.palacio@humand.co
+      failed_login_attempts: 0
+      first_name: Marcos
+      last_name: Palacio
+      logged_in: false
+      password: $2b$12$ltDv46FPA.9ubL/DoOzltukjEbzGFsJLNlujg0tzg7wO64ZRAQP0G
       roles:
       - viewer
     nico.cordes:
@@ -49,15 +94,6 @@ credentials:
       password: $2b$12$9zZKOOoyJg7Yl91.9cDZbedT9jHrCGfKhMOm4t0qAmdLrhbjOYId.
       roles:
       - viewer
-    soledad.barca:
-      email: soledad.barca@humand.co
-      failed_login_attempts: 0
-      first_name: Sole
-      last_name: Barca
-      logged_in: false
-      password: $2b$12$f7MjRwBhTCHKwNUf6.pLpeeuN5ZorT4ESnGnzY2vQPbCRDtIVg4DK
-      roles:
-      - viewer
     pedro:
       email: pedro@humand.co
       failed_login_attempts: 0
@@ -65,24 +101,6 @@ credentials:
       last_name: ''
       logged_in: false
       password: $2b$12$M3tEU2DIAip.uV6SAMz7PO0NK38dKlnELb1xFxQr9jJBN05cuZf8O
-      roles:
-      - viewer
-    salvador.castrobay:
-      email: salvador.castrobay@humand.co
-      failed_login_attempts: 0
-      first_name: Salvador
-      last_name: Castro Bay
-      logged_in: false
-      password: $2b$12$MgnOVLaK9uRYOKfbTXhb1eYpkIGvd28O40C7qem5Xu1N9fkjIRuA6
-      roles:
-      - admin
-    marcos.palacio:
-      email: marcos.palacio@humand.co
-      failed_login_attempts: 0
-      first_name: Marcos
-      last_name: Palacio
-      logged_in: false
-      password: $2b$12$ltDv46FPA.9ubL/DoOzltukjEbzGFsJLNlujg0tzg7wO64ZRAQP0G
       roles:
       - viewer
     raphael.montressor:
@@ -94,6 +112,24 @@ credentials:
       password: $2b$12$sEYDjzIjRmbpB7hTymTIBu/oPbkOjo4BXIjFXxlYr8ZoW2Nmvfype
       roles:
       - viewer
+    salvador.castrobay:
+      email: salvador.castrobay@humand.co
+      failed_login_attempts: 0
+      first_name: Salvador
+      last_name: Castro Bay
+      logged_in: false
+      password: $2b$12$MgnOVLaK9uRYOKfbTXhb1eYpkIGvd28O40C7qem5Xu1N9fkjIRuA6
+      roles:
+      - admin
+    soledad.barca:
+      email: soledad.barca@humand.co
+      failed_login_attempts: 0
+      first_name: Sole
+      last_name: Barca
+      logged_in: false
+      password: $2b$12$f7MjRwBhTCHKwNUf6.pLpeeuN5ZorT4ESnGnzY2vQPbCRDtIVg4DK
+      roles:
+      - viewer
     vanina.moreira:
       email: vanina.moreira@humand.co
       failed_login_attempts: 0
@@ -103,15 +139,6 @@ credentials:
       password: $2b$12$SN/NaA/SO2MxhdtLD5QY3.ky1YS4Soim1PqKwxArRWEtPt2Qzq7ti
       roles:
       - viewer
-    aimee:
-      email: aimee@humand.co
-      failed_login_attempts: 0
-      first_name: Aimee
-      last_name: ''
-      logged_in: false
-      password: $2b$12$WzTJ1rtOEf.kVZTs9Z8SNOA.mtKpweoaJfTr8bBrD/LToRHHcdKKm
-      roles:
-      - viewer
     vivi:
       email: vivi@humand.co
       failed_login_attempts: 0
@@ -119,33 +146,6 @@ credentials:
       last_name: ''
       logged_in: false
       password: $2b$12$ExvM1zGIXRnewTqtyxf6c.nVo9T1kfg4C2Ay1qhzmG3OE7Hr0yCyC
-      roles:
-      - viewer
-    luciano.paradiso:
-      email: luciano.paradiso@humand.co
-      failed_login_attempts: 0
-      first_name: Lucho
-      last_name: Paradiso
-      logged_in: false
-      password: $2b$12$JWqlgLQeV3AZld1xUJY2EOMzyYb3L7/LvIVNIJIn34CtJGt.z7yZq
-      roles:
-      - viewer
-    agustina.ini:
-      email: agustina.ini@humand.co
-      failed_login_attempts: 0
-      first_name: Agus
-      last_name: Ini
-      logged_in: false
-      password: $2b$12$FOvij58iAnm16klIGLhaE.6ke1j4jTRykc8uQF6d7LlVut4aNqS3C
-      roles:
-      - viewer
-    carolina.arditi:
-      email: carolina.arditi@humand.co
-      failed_login_attempts: 0
-      first_name: Carolina
-      last_name: Arditi
-      logged_in: false
-      password: $2b$12$q9DSwxtu5Ht43cfUpK5deeNejNtOLiJyVFG4tNRlGwSFojnSMT25e
       roles:
       - viewer
 pre-authorized:
