@@ -190,7 +190,7 @@ def load_data() -> pd.DataFrame:
     prompt_version = os.environ.get("PROMPT_VERSION", "v3.0")
     all_data = []
     offset = 0
-    page_size = 5000
+    page_size = 1000
     while True:
         response = (
             client.table("v_insights_dashboard")
