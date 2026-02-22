@@ -1,6 +1,7 @@
 import streamlit as st
 import plotly.express as px
 from shared import format_currency, chart_tooltip
+from computations import cached_value_counts, cached_unique_deals_revenue
 
 df = st.session_state.get("filtered_df")
 if df is None or df.empty:
@@ -27,7 +28,7 @@ col2.metric(
     comp["competitor_name"].dropna().nunique(),
     help="Cantidad de competidores distintos mencionados.",
 )
-total_rev = comp.drop_duplicates("deal_id")["amount"].sum()
+total_rev = cached_unique_deals_revenue(comp)
 col3.metric(
     "Revenue Asociado",
     format_currency(total_rev),
@@ -37,7 +38,7 @@ col3.metric(
 # Top 15 competitors + relationship breakdown
 col_left, col_right = st.columns(2)
 with col_left:
-    comp_counts = comp["competitor_name"].value_counts().head(15).reset_index()
+    comp_counts = cached_value_counts(comp, "competitor_name", n=15)
     comp_counts.columns = ["Competidor", "Menciones"]
     fig = px.bar(comp_counts, x="Menciones", y="Competidor", orientation="h", title="Top 15 Competidores")
     fig.update_layout(yaxis=dict(autorange="reversed"))
@@ -167,4 +168,5 @@ if not migrating.empty:
     st.dataframe(
         migrating[available_cols].sort_values("amount", ascending=False),
         width="stretch",
+        height=400,
     )

@@ -183,14 +183,14 @@ def ensure_dashboard_schema(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-@st.cache_data(show_spinner=False, max_entries=1, persist="disk")
+@st.cache_data(show_spinner=False, max_entries=1, persist="disk", ttl=3600)
 def load_data() -> pd.DataFrame:
     """Load insights from the dashboard view, filtered by prompt_version."""
     client = get_supabase()
     prompt_version = os.environ.get("PROMPT_VERSION", "v3.0")
     all_data = []
     offset = 0
-    page_size = 1000
+    page_size = 5000
     while True:
         response = (
             client.table("v_insights_dashboard")
@@ -224,70 +224,65 @@ def load_data() -> pd.DataFrame:
 
 # ── Sidebar filters ──
 
+@st.cache_data(show_spinner=False)
+def _compute_filter_options(df: pd.DataFrame) -> dict:
+    """Precompute sorted unique values for sidebar filters (cached)."""
+    options: dict = {}
+    options["types"] = sorted(df["insight_type_display"].dropna().unique())
+    options["regions"] = sorted(df["region"].dropna().unique())
+    options["segments"] = sorted(df["segment"].dropna().unique()) if "segment" in df.columns else []
+    options["countries"] = sorted(df["country"].dropna().unique()) if "country" in df.columns else []
+    options["industries"] = sorted(df["industry"].dropna().unique()) if "industry" in df.columns else []
+    options["owners"] = sorted(df["deal_owner"].dropna().unique()) if "deal_owner" in df.columns else []
+    options["modules"] = sorted(df["module_display"].dropna().unique())
+    options["categories"] = sorted(df["hr_category_display"].dropna().unique())
+    if "call_date" in df.columns:
+        valid_dates = df["call_date"].dropna()
+        if not valid_dates.empty:
+            options["min_date"] = valid_dates.min().date()
+            options["max_date"] = valid_dates.max().date()
+    return options
+
+
 def render_sidebar(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         return df
 
+    opts = _compute_filter_options(df)
+
     # Insight type filter
-    types = sorted(df["insight_type_display"].dropna().unique())
-    selected_types = st.sidebar.multiselect("Tipo de Insight", types, default=types)
+    selected_types = st.sidebar.multiselect("Tipo de Insight", opts["types"], default=opts["types"])
 
     # Region filter
-    regions = sorted(df["region"].dropna().unique())
-    selected_regions = st.sidebar.multiselect("Region", regions, default=regions)
+    selected_regions = st.sidebar.multiselect("Region", opts["regions"], default=opts["regions"])
 
     # Segment filter
-    if "segment" in df.columns:
-        segments = sorted(df["segment"].dropna().unique())
-        selected_segments = st.sidebar.multiselect("Segmento", segments)
-    else:
-        selected_segments = []
+    selected_segments = st.sidebar.multiselect("Segmento", opts["segments"]) if opts["segments"] else []
 
     # Country filter
-    if "country" in df.columns:
-        countries = sorted(df["country"].dropna().unique())
-        selected_countries = st.sidebar.multiselect("Pais", countries)
-    else:
-        selected_countries = []
+    selected_countries = st.sidebar.multiselect("Pais", opts["countries"]) if opts["countries"] else []
 
     # Industry filter
-    if "industry" in df.columns:
-        industries = sorted(df["industry"].dropna().unique())
-        selected_industries = st.sidebar.multiselect("Industria", industries)
-    else:
-        selected_industries = []
+    selected_industries = st.sidebar.multiselect("Industria", opts["industries"]) if opts["industries"] else []
 
     # Deal Owner (AE) filter
-    if "deal_owner" in df.columns:
-        owners = sorted(df["deal_owner"].dropna().unique())
-        selected_owners = st.sidebar.multiselect("Deal Owner (AE)", owners)
-    else:
-        selected_owners = []
+    selected_owners = st.sidebar.multiselect("Deal Owner (AE)", opts["owners"]) if opts["owners"] else []
 
     # Date range filter
-    if "call_date" in df.columns:
-        valid_dates = df["call_date"].dropna()
-        if not valid_dates.empty:
-            min_date = valid_dates.min().date()
-            max_date = valid_dates.max().date()
-            date_range = st.sidebar.date_input(
-                "Rango de fechas",
-                value=(min_date, max_date),
-                min_value=min_date,
-                max_value=max_date,
-            )
-        else:
-            date_range = None
-    else:
-        date_range = None
+    date_range = None
+    if "min_date" in opts:
+        date_range = st.sidebar.date_input(
+            "Rango de fechas",
+            value=(opts["min_date"], opts["max_date"]),
+            min_value=opts["min_date"],
+            max_value=opts["max_date"],
+        )
 
     # Module filter
-    modules = sorted(df["module_display"].dropna().unique())
-    selected_modules = st.sidebar.multiselect("Modulo", modules)
+    selected_modules = st.sidebar.multiselect("Modulo", opts["modules"])
 
     # HR Category filter
-    categories = sorted(df["hr_category_display"].dropna().unique())
-    selected_categories = st.sidebar.multiselect("Categoria HR", categories)
+    selected_categories = st.sidebar.multiselect("Categoria HR", opts["categories"])
 
     # Apply filters
     mask = df["insight_type_display"].isin(selected_types) & df["region"].isin(selected_regions)

@@ -2,6 +2,7 @@ import streamlit as st
 import plotly.express as px
 import pandas as pd
 from shared import format_currency, chart_tooltip
+from computations import cached_value_counts, cached_unique_deals_revenue
 
 df = st.session_state.get("filtered_df")
 if df is None or df.empty:
@@ -111,7 +112,7 @@ if not comp.empty and "country" in comp.columns:
         .sort_values(["country", "menciones"], ascending=[True, False])
     )
     comp_country.columns = ["Pais", "Competidor", "Menciones", "Relacion Principal"]
-    st.dataframe(comp_country, width="stretch")
+    st.dataframe(comp_country, width="stretch", height=400)
 
 # Pipeline coverage: segment x region
 if "segment" in df.columns and "region" in df.columns:
@@ -134,7 +135,7 @@ if "segment" in df.columns and "region" in df.columns:
         deals_pivot = coverage.pivot(index="segment", columns="region", values="deals").fillna(0)
 
         st.write("**Revenue por Segmento x Region**")
-        st.dataframe(rev_pivot.map(format_currency), width="stretch")
+        st.dataframe(rev_pivot.map(format_currency), width="stretch", height=300)
 
         st.write("**Deals por Segmento x Region**")
-        st.dataframe(deals_pivot.astype(int), width="stretch")
+        st.dataframe(deals_pivot.astype(int), width="stretch", height=300)

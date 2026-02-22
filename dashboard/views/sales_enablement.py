@@ -2,6 +2,7 @@ import streamlit as st
 import plotly.express as px
 import pandas as pd
 from shared import format_currency, chart_tooltip
+from computations import cached_value_counts, cached_unique_deals_revenue
 
 df = st.session_state.get("filtered_df")
 if df is None or df.empty:
@@ -27,7 +28,7 @@ else:
         friction["deal_id"].dropna().nunique(),
         help="Deals únicos con al menos una fricción identificada.",
     )
-    fric_rev = friction.drop_duplicates("deal_id")["amount"].sum()
+    fric_rev = cached_unique_deals_revenue(friction)
     col3.metric(
         "Revenue en Riesgo",
         format_currency(fric_rev),
@@ -35,7 +36,7 @@ else:
     )
 
     # Ranking of friction subtypes
-    subtype_counts = friction["insight_subtype_display"].value_counts().reset_index()
+    subtype_counts = cached_value_counts(friction, "insight_subtype_display", n=50)
     subtype_counts.columns = ["Tipo de Friccion", "Frecuencia"]
     fig = px.bar(subtype_counts, x="Frecuencia", y="Tipo de Friccion", orientation="h", title="Tipos de Friccion")
     fig.update_layout(yaxis=dict(autorange="reversed"))
@@ -123,7 +124,7 @@ if "deal_owner" in df.columns:
             "Tabla comparativa de performance por AE: volumen, deals y principales señales.",
             "Sirve para coaching comercial y asignación de soporte.",
         )
-        st.dataframe(ae_table, width="stretch")
+        st.dataframe(ae_table, width="stretch", height=400)
 
         # Bar chart: frictions per AE (top 10)
         ae_fric_data = ae_data[ae_data["insight_type"] == "deal_friction"]
@@ -153,7 +154,7 @@ faqs = df[df["insight_type"] == "faq"]
 if faqs.empty:
     st.info("No hay FAQs en los datos filtrados.")
 else:
-    topic_counts = faqs["insight_subtype_display"].value_counts().reset_index()
+    topic_counts = cached_value_counts(faqs, "insight_subtype_display", n=50)
     topic_counts.columns = ["Topic", "Frecuencia"]
     fig = px.bar(topic_counts, x="Frecuencia", y="Topic", orientation="h", title="FAQs por Topic")
     fig.update_layout(yaxis=dict(autorange="reversed"))
@@ -170,4 +171,4 @@ else:
     )
     display_cols = ["company_name", "insight_subtype_display", "summary", "verbatim_quote"]
     available_cols = [c for c in display_cols if c in faqs.columns]
-    st.dataframe(faqs[available_cols], width="stretch")
+    st.dataframe(faqs[available_cols], width="stretch", height=400)

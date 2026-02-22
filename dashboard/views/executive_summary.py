@@ -1,6 +1,7 @@
 import streamlit as st
 import plotly.express as px
 from shared import format_currency, chart_tooltip
+from computations import cached_value_counts, cached_dedup_groupby, cached_unique_deals_revenue
 
 df = st.session_state.get("filtered_df")
 if df is None or df.empty:
@@ -27,7 +28,7 @@ c3.metric(
     f"{deals_matched:,}",
     help="Cantidad de deals únicos con al menos un insight vinculado.",
 )
-total_revenue = df.drop_duplicates("deal_id")["amount"].sum()
+total_revenue = cached_unique_deals_revenue(df)
 c4.metric(
     "Revenue Total",
     format_currency(total_revenue),
@@ -45,7 +46,7 @@ c5.metric(
 # Row 2: Insights by type + Top 10 Pains
 col_left, col_right = st.columns(2)
 with col_left:
-    type_counts = df["insight_type_display"].value_counts().reset_index()
+    type_counts = cached_value_counts(df, "insight_type_display", n=20)
     type_counts.columns = ["Tipo", "Cantidad"]
     fig = px.bar(
         type_counts, x="Cantidad", y="Tipo", orientation="h",
@@ -61,7 +62,7 @@ with col_left:
 with col_right:
     pains = df[df["insight_type"] == "pain"]
     if not pains.empty:
-        top_pains = pains["insight_subtype_display"].value_counts().head(10).reset_index()
+        top_pains = cached_value_counts(pains, "insight_subtype_display", n=10)
         top_pains.columns = ["Pain", "Frecuencia"]
         fig = px.bar(
             top_pains, x="Frecuencia", y="Pain", orientation="h",
@@ -79,14 +80,11 @@ col_left, col_right = st.columns(2)
 with col_left:
     gaps = df[df["insight_type"] == "product_gap"]
     if not gaps.empty:
-        gap_counts = (
-            gaps.drop_duplicates(subset=["deal_id", "feature_display"])
-            .groupby("feature_display")
-            .agg(frecuencia=("feature_display", "size"))
-            .reset_index()
-            .sort_values("frecuencia", ascending=False)
-            .head(10)
+        gap_counts = cached_dedup_groupby(
+            gaps, dedup_cols=("deal_id", "feature_display"),
+            group_col="feature_display", agg_func="size", n=10,
         )
+        gap_counts.columns = ["feature_display", "frecuencia"]
         fig = px.bar(
             gap_counts,
             x="frecuencia",
@@ -104,14 +102,11 @@ with col_left:
 with col_right:
     gaps = df[df["insight_type"] == "product_gap"]
     if not gaps.empty:
-        gap_revenue = (
-            gaps.drop_duplicates(subset=["deal_id", "feature_display"])
-            .groupby("feature_display")["amount"]
-            .sum()
-            .reset_index()
-            .sort_values("amount", ascending=False)
-            .head(10)
+        gap_revenue = cached_dedup_groupby(
+            gaps, dedup_cols=("deal_id", "feature_display"),
+            group_col="feature_display", agg_col="amount", agg_func="sum", n=10,
         )
+        gap_revenue.columns = ["feature_display", "amount"]
         fig = px.bar(
             gap_revenue,
             x="amount",
@@ -131,7 +126,8 @@ comp = df[df["insight_type"] == "competitive_signal"].copy()
 if "is_own_brand_competitor" in comp.columns:
     comp = comp[~comp["is_own_brand_competitor"].fillna(False)]
 if not comp.empty:
-    comp_counts = comp["competitor_name"].dropna().value_counts().head(10).reset_index()
+    comp_no_na = comp.dropna(subset=["competitor_name"])
+    comp_counts = cached_value_counts(comp_no_na, "competitor_name", n=10)
     comp_counts.columns = ["Competidor", "Menciones"]
     fig = px.bar(
         comp_counts,

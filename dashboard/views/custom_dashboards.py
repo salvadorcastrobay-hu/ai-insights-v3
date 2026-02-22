@@ -682,7 +682,7 @@ with tabs[0]:
                     chart_tooltip(what_shows, how_to_read)
                     st.plotly_chart(fig, width="stretch")
                     with st.expander("Datos de vista previa"):
-                        st.dataframe(preview_df.head(200), width="stretch", hide_index=True)
+                        st.dataframe(preview_df.head(200), width="stretch", hide_index=True, height=300)
 
                 save_col1, save_col2 = st.columns([1, 2])
                 with save_col1:
@@ -723,7 +723,8 @@ with tabs[1]:
                 else:
                     st.error(err)
 
-        for idx, chart in enumerate(selected_dashboard.get("charts", []), start=1):
+        @st.fragment
+        def _render_saved_chart(idx: int, chart: dict, dashboard_id: str):
             chart_df = _get_df(chart.get("source_mode", "filtered"))
             fig, chart_data = _build_figure(chart_df, chart)
 
@@ -745,12 +746,12 @@ with tabs[1]:
                     st.plotly_chart(fig, width="stretch")
 
                 with st.expander("Datos del gráfico"):
-                    st.dataframe(chart_data.head(200), width="stretch", hide_index=True)
+                    st.dataframe(chart_data.head(200), width="stretch", hide_index=True, height=300)
 
                 if st.button("Eliminar gráfico", key=f"delete_chart_{chart.get('id')}", width="stretch"):
                     ok, err = _delete_chart(
                         owner=owner,
-                        dashboard_id=selected_dashboard.get("id", ""),
+                        dashboard_id=dashboard_id,
                         chart_id=chart.get("id", ""),
                     )
                     if ok:
@@ -758,3 +759,6 @@ with tabs[1]:
                         st.rerun()
                     else:
                         st.error(err)
+
+        for idx, chart in enumerate(selected_dashboard.get("charts", []), start=1):
+            _render_saved_chart(idx, chart, selected_dashboard.get("id", ""))

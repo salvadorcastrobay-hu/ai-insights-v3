@@ -72,4 +72,4 @@ chart_tooltip(
 )
 display_cols = ["company_name", "feature_display", "module_display", "gap_description", "gap_priority", "confidence"]
 available_cols = [c for c in display_cols if c in gaps.columns]
-st.dataframe(gaps[available_cols], width="stretch")
+st.dataframe(gaps[available_cols], width="stretch", height=400)

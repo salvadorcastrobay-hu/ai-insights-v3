@@ -1,6 +1,7 @@
 import streamlit as st
 import plotly.express as px
 from shared import humanize, chart_tooltip
+from computations import cached_value_counts, cached_dedup_groupby
 
 df = st.session_state.get("filtered_df")
 if df is None or df.empty:
@@ -17,7 +18,7 @@ if pains.empty:
 else:
     pains["pain_theme"] = pains["pain_theme"].map(humanize)
     # Top 15 pains
-    top_pains = pains["insight_subtype_display"].value_counts().head(15).reset_index()
+    top_pains = cached_value_counts(pains, "insight_subtype_display", n=15)
     top_pains.columns = ["Pain", "Frecuencia"]
     fig = px.bar(top_pains, x="Frecuencia", y="Pain", orientation="h", title="Top 15 Pains")
     fig.update_layout(yaxis=dict(autorange="reversed"))
@@ -29,7 +30,7 @@ else:
 
     col_left, col_right = st.columns(2)
     with col_left:
-        theme_counts = pains["pain_theme"].value_counts().reset_index()
+        theme_counts = cached_value_counts(pains, "pain_theme", n=50)
         theme_counts.columns = ["Theme", "Cantidad"]
         fig = px.bar(theme_counts, x="Theme", y="Cantidad", title="Pains por Theme", color="Theme")
         fig.update_layout(showlegend=False)
@@ -102,32 +103,37 @@ else:
         )
         st.plotly_chart(fig, width="stretch")
 
-    st.subheader("Detalle por Pain")
-    pain_options = top_pains["Pain"].tolist()
-    selected_pain = st.selectbox(
-        "Seleccioná un pain para ver el detalle",
-        pain_options,
-        key="product_intelligence_pain_detail",
-    )
-    pains_detail = pains[pains["insight_subtype_display"] == selected_pain]
-    pain_detail_cols = [
-        "company_name",
-        "industry",
-        "segment",
-        "country",
-        "module_display",
-        "summary",
-        "verbatim_quote",
-        "confidence",
-    ]
-    available_pain_detail_cols = [c for c in pain_detail_cols if c in pains_detail.columns]
-    chart_tooltip(
-        "Detalle textual del pain seleccionado con contexto de compañía/segmento/país.",
-    )
-    st.dataframe(
-        pains_detail[available_pain_detail_cols].sort_values("confidence", ascending=False),
-        width="stretch",
-    )
+    @st.fragment
+    def _pain_detail_fragment():
+        st.subheader("Detalle por Pain")
+        pain_options = top_pains["Pain"].tolist()
+        selected_pain = st.selectbox(
+            "Seleccioná un pain para ver el detalle",
+            pain_options,
+            key="product_intelligence_pain_detail",
+        )
+        pains_detail = pains[pains["insight_subtype_display"] == selected_pain]
+        pain_detail_cols = [
+            "company_name",
+            "industry",
+            "segment",
+            "country",
+            "module_display",
+            "summary",
+            "verbatim_quote",
+            "confidence",
+        ]
+        available_pain_detail_cols = [c for c in pain_detail_cols if c in pains_detail.columns]
+        chart_tooltip(
+            "Detalle textual del pain seleccionado con contexto de compañía/segmento/país.",
+        )
+        st.dataframe(
+            pains_detail[available_pain_detail_cols].sort_values("confidence", ascending=False),
+            width="stretch",
+            height=400,
+        )
+
+    _pain_detail_fragment()
 
 # === Section B: Feature Gaps ===
 st.subheader("B. Feature Gaps")
@@ -140,7 +146,7 @@ else:
     if "module_status" in gaps.columns:
         gaps["module_status"] = gaps["module_status"].map(humanize)
     # Top 20 features
-    feature_counts = gaps["feature_display"].value_counts().head(20).reset_index()
+    feature_counts = cached_value_counts(gaps, "feature_display", n=20)
     feature_counts.columns = ["Feature", "Frecuencia"]
     fig = px.bar(feature_counts, x="Frecuencia", y="Feature", orientation="h", title="Top 20 Features Faltantes")
     fig.update_layout(yaxis=dict(autorange="reversed"))
@@ -211,12 +217,9 @@ else:
                 st.plotly_chart(fig, width="stretch")
 
     # Revenue at stake
-    gap_rev = (
-        gaps.drop_duplicates(subset=["deal_id", "feature_display"])
-        .groupby("feature_display")["amount"].sum()
-        .reset_index()
-        .sort_values("amount", ascending=False)
-        .head(10)
+    gap_rev = cached_dedup_groupby(
+        gaps, dedup_cols=("deal_id", "feature_display"),
+        group_col="feature_display", agg_col="amount", agg_func="sum", n=10,
     )
     gap_rev.columns = ["Feature", "Revenue at Stake"]
     if gap_rev["Revenue at Stake"].sum() > 0:
@@ -247,30 +250,35 @@ else:
             )
             st.plotly_chart(fig, width="stretch")
 
-    st.subheader("Detalle por Feature Gap")
-    feature_options = feature_counts["Feature"].tolist()
-    selected_feature = st.selectbox(
-        "Seleccioná una feature para ver el detalle",
-        feature_options,
-        key="product_intelligence_feature_detail",
-    )
-    gap_detail = gaps[gaps["feature_display"] == selected_feature]
-    gap_detail_cols = [
-        "company_name",
-        "industry",
-        "segment",
-        "country",
-        "module_display",
-        "gap_priority",
-        "summary",
-        "verbatim_quote",
-        "confidence",
-    ]
-    available_gap_detail_cols = [c for c in gap_detail_cols if c in gap_detail.columns]
-    chart_tooltip(
-        "Detalle textual de la feature seleccionada con contexto de cliente y mercado.",
-    )
-    st.dataframe(
-        gap_detail[available_gap_detail_cols].sort_values("confidence", ascending=False),
-        width="stretch",
-    )
+    @st.fragment
+    def _feature_gap_detail_fragment():
+        st.subheader("Detalle por Feature Gap")
+        feature_options = feature_counts["Feature"].tolist()
+        selected_feature = st.selectbox(
+            "Seleccioná una feature para ver el detalle",
+            feature_options,
+            key="product_intelligence_feature_detail",
+        )
+        gap_detail = gaps[gaps["feature_display"] == selected_feature]
+        gap_detail_cols = [
+            "company_name",
+            "industry",
+            "segment",
+            "country",
+            "module_display",
+            "gap_priority",
+            "summary",
+            "verbatim_quote",
+            "confidence",
+        ]
+        available_gap_detail_cols = [c for c in gap_detail_cols if c in gap_detail.columns]
+        chart_tooltip(
+            "Detalle textual de la feature seleccionada con contexto de cliente y mercado.",
+        )
+        st.dataframe(
+            gap_detail[available_gap_detail_cols].sort_values("confidence", ascending=False),
+            width="stretch",
+            height=400,
+        )
+
+    _feature_gap_detail_fragment()
