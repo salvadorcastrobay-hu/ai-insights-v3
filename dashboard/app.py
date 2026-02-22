@@ -83,7 +83,7 @@ pages = {
     "Herramientas": [
         st.Page(os.path.join(_views, "sql_chat.py"), title="Chat con IA", icon="🤖"),
         st.Page(os.path.join(_views, "custom_dashboards.py"), title="Dashboards Personalizados", icon="📈"),
-        st.Page(os.path.join(_views, "glossary.py"), title="Glosario y Cómo funciona", icon="📘"),
+        st.Page(os.path.join(_views, "glossary.py"), title="Ayuda y Taxonomía", icon="📘"),
     ],
 }
 

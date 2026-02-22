@@ -90,7 +90,68 @@ que dicen los prospectos al respecto".
 de las conversaciones, que es mas rico que los insights resumidos.
 
 **CHAT**: Saludos, preguntas sobre la herramienta, aclaraciones, preguntas generales \
-que no requieren datos.
+que no requieren datos. Tambien preguntas sobre la taxonomia del sistema: tipos de insight, \
+subtipos, modulos de Humand, competidores trackeados, features, etc.
+
+## Conocimiento de taxonomia
+
+Humand usa una taxonomia estructurada para clasificar insights de llamadas de ventas. \
+Responde preguntas taxonomicas en modo CHAT con markdown estructurado.
+
+### Tipos de insight (5)
+- **pain**: Dolor / Problema — el prospecto describe un problema o necesidad actual
+- **product_gap**: Feature Faltante — se pide funcionalidad que no existe o no alcanza
+- **competitive_signal**: Senal Competitiva — se menciona un competidor en contexto comercial
+- **deal_friction**: Friccion del Deal — bloqueos que frenan el avance del deal
+- **faq**: Pregunta Frecuente — pregunta recurrente sobre producto/servicio
+
+### Pain Subtypes (31, agrupados en 7 temas)
+- **Tecnologia** (5): herramientas fragmentadas, baja adopcion, sin acceso movil, sistema obsoleto, dependencia de IT
+- **Procesos** (5): procesos manuales, cuellos de botella, sin estandarizacion, sin autogestion, HR saturado
+- **Comunicacion** (5): empleados inalcanzables, canales fragmentados, canales informales, info que no llega, desconexion entre sedes
+- **Talento** (5): alta rotacion, marca empleadora debil, skills invisibles, sin plan de carrera, reclutamiento ineficiente
+- **Engagement** (4): desconexion cultural, falta de reconocimiento, sin medicion de clima, desafios remoto/hibrido
+- **Datos y Analytics** (3): sin visibilidad de workforce, dolor de reportes, silos de datos
+- **Compliance y Escala** (4): riesgo regulatorio, complejidad multi-pais, no escala, datos inseguros
+
+### Product Gap Subtypes (5)
+missing_capability, insufficient_depth, missing_integration, ux_limitation, scalability_limitation
+
+### Deal Friction Subtypes (14)
+budget, roi_justification, timing, decision_maker, internal_alignment, legal, technical, \
+change_management, champion_risk, incumbent_lock_in, scope_mismatch, security_review, \
+regional_requirements, competing_priorities
+
+### FAQ Subtypes (18)
+pricing, implementation, integration, security, customization, mobile, support, migration, \
+scalability, analytics, languages, adoption, compliance, roi, content_management, contract_terms, \
+references, data_ownership
+
+### Categorias HR (7) y modulos (37)
+- **Comunicacion Interna** (6): Chat, Red Social Interna, Revista, Streaming, Biblioteca de Conocimiento, Accesos Rapidos
+- **Administracion de RRHH** (9): Legajo Digital, Documentos, Archivos, Politicas, Formularios y Flujos, Organigrama, Accesos Digitales, Seguridad y Privacidad, Nomina (faltante)
+- **Atraccion de Talento** (4): Vacantes Internas, Programa de Referidos, Onboarding, Reclutamiento (roadmap)
+- **Desarrollo de Talento** (6): Evaluacion de Desempeno, Objetivos y OKRs, Plan de Desarrollo, LMS, Planes de Sucesion (faltante), Cursos Listos (faltante)
+- **Cultura y Engagement** (5): Encuestas de Clima, Encuestas Generales, Reconocimientos, Cumpleanos/Aniversarios, Eventos
+- **Compensaciones y Beneficios** (3): Beneficios Corporativos, Marketplace P2P, Admin de Beneficios Flex (faltante)
+- **Operaciones y Lugar de Trabajo** (4): Vacaciones y Licencias, Control Horario, Reserva de Espacios, Mesa de Servicios
+
+### Relaciones competitivas (6)
+currently_using, evaluating, migrating_from, previously_used, mentioned, rejected
+
+### Competidores trackeados (85 en 7 categorias)
+- HRIS con nomina (26): Buk, Factorial, Pandape, Visma, Sesame HR, HiBob, BambooHR, Rippling, etc.
+- Comunicacion interna (24): Workplace (Meta), Workvivo, Staffbase, Simpplr, Beekeeper, etc.
+- Performance/engagement/learning (13): Rankmi, Culture Amp, Lattice, Crehana, etc.
+- Colaboracion general (5): Microsoft Teams, Slack, Google Workspace, SharePoint, Lark
+- Suites enterprise ERP/HCM (7): SAP SuccessFactors, Workday, ADP, UKG, Totvs, etc.
+- Soluciones deskless (3): Connecteam, Yoobic, Workjam
+- Soluciones puntuales (6): Esigtek, Alest, Workable, Assembly, etc.
+
+### Features de referencia (52)
+Incluyen: integracion de nomina, ATS, seleccion con IA, nine box grid, SCORM, encuestas de pulso, \
+beneficios flexibles, planificacion de turnos, geofencing, firma digital, SSO, acceso API, \
+integracion SAP/Workday/Slack/Teams, chatbot con IA, modo offline, entre otros.
 
 ## Schema de la base de datos
 

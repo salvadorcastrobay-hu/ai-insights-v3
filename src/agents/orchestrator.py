@@ -59,6 +59,7 @@ def run_pipeline(
     model: str | None = None,
     dry_run: bool = False,
     resume: bool = False,
+    force: bool = False,
 ) -> dict:
     """
     Run the full pipeline.
@@ -95,13 +96,16 @@ def run_pipeline(
     logger.info(f"Found {len(transcripts)} transcripts")
 
     # ── Step 3: Filter already processed ──
-    processed_ids = get_processed_transcript_ids(supabase)
-    logger.info(f"Found {len(processed_ids)} already-processed transcript IDs")
-    if not sample:
-        before = len(transcripts)
-        transcripts = [t for t in transcripts
-                       if (t.get("transcript_id") or t.get("id", "unknown")) not in processed_ids]
-        logger.info(f"Filtered: {before} -> {len(transcripts)} transcripts remaining")
+    if force:
+        logger.info("Force mode: skipping already-processed filter")
+    else:
+        processed_ids = get_processed_transcript_ids(supabase)
+        logger.info(f"Found {len(processed_ids)} already-processed transcript IDs")
+        if not sample:
+            before = len(transcripts)
+            transcripts = [t for t in transcripts
+                           if (t.get("transcript_id") or t.get("id", "unknown")) not in processed_ids]
+            logger.info(f"Filtered: {before} -> {len(transcripts)} transcripts remaining")
 
     # ── Step 4: Chunk transcripts ──
     all_chunks = []
@@ -213,6 +217,9 @@ def _process_direct(
     return stats
 
 
+MAX_REQUESTS_PER_BATCH = 2000  # Stay under OpenAI's 40M enqueued token limit
+
+
 def _process_batch(
     supabase: SupabaseClient,
     openai_client: OpenAI,
@@ -220,12 +227,49 @@ def _process_batch(
     model: str,
     stats: dict,
 ) -> dict:
-    """Process all chunks via Batch API."""
-    logger.info(f"Creating batch with {len(chunks)} requests ({model})...")
+    """Process all chunks via Batch API, splitting into sub-batches if needed."""
+    logger.info(f"Total requests: {len(chunks)} ({model})")
 
-    # Create JSONL
-    jsonl_path = create_batch_jsonl(chunks, model=model)
+    if len(chunks) <= MAX_REQUESTS_PER_BATCH:
+        jsonl_path = create_batch_jsonl(chunks, model=model)
+        return _submit_and_process_single_batch(
+            supabase, openai_client, chunks, jsonl_path, model, stats
+        )
 
+    # Split into sub-batches
+    num_batches = (len(chunks) + MAX_REQUESTS_PER_BATCH - 1) // MAX_REQUESTS_PER_BATCH
+    requests_per_batch = MAX_REQUESTS_PER_BATCH
+    logger.info(
+        f"Splitting into {num_batches} sub-batches of ~{requests_per_batch} requests each."
+    )
+
+    for batch_idx in range(num_batches):
+        start = batch_idx * requests_per_batch
+        end = min(start + requests_per_batch, len(chunks))
+        sub_chunks = chunks[start:end]
+        logger.info(f"\n--- Sub-batch {batch_idx + 1}/{num_batches}: {len(sub_chunks)} requests ---")
+
+        sub_jsonl = create_batch_jsonl(sub_chunks, model=model)
+        _submit_and_process_single_batch(
+            supabase, openai_client, sub_chunks, sub_jsonl, model, stats
+        )
+
+        if batch_idx + 1 < num_batches:
+            time.sleep(5)  # Brief pause between sub-batches
+
+    _log_summary(stats)
+    return stats
+
+
+def _submit_and_process_single_batch(
+    supabase: SupabaseClient,
+    openai_client: OpenAI,
+    chunks: list[dict],
+    jsonl_path: str,
+    model: str,
+    stats: dict,
+) -> dict:
+    """Submit a single batch JSONL, poll, and process results."""
     # Submit batch
     batch_id = submit_batch(openai_client, jsonl_path)
 
@@ -239,7 +283,6 @@ def _process_batch(
         "started_at": time.time(),
         "chunk_map_path": jsonl_path.replace(".jsonl", "_map.json"),
     }
-    # Save chunk metadata for parsing after batch completes
     with open(state["chunk_map_path"], "w") as f:
         json.dump(
             {cid: {"transcript_id": c["transcript_id"], "chunk_index": c["chunk_index"], "metadata": c["metadata"]}
@@ -258,7 +301,7 @@ def _process_batch(
             errors = download_batch_errors(openai_client, result["error_file_id"])
             for err in errors[:10]:
                 logger.error(f"  Batch error: {err}")
-        stats["errors"] = result.get("failed", 0)
+        stats["errors"] += result.get("failed", 0)
         save_state({**state, "batch_status": result["status"]})
         return stats
 

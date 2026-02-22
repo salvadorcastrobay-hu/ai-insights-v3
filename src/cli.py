@@ -95,6 +95,7 @@ def cmd_run(args: argparse.Namespace) -> None:
         model=args.model,
         dry_run=args.dry_run,
         resume=args.resume,
+        force=args.force,
     )
 
     if args.dry_run:
@@ -256,6 +257,7 @@ Examples:
     p_run.add_argument("--model", type=str, default=None, help=f"Model to use (default: {config.OPENAI_MODEL})")
     p_run.add_argument("--dry-run", action="store_true", help="Generate JSONL without submitting")
     p_run.add_argument("--resume", action="store_true", help="Resume from state.json")
+    p_run.add_argument("--force", action="store_true", help="Re-extract all transcripts (ignore already processed)")
 
     # qa
     p_qa = subparsers.add_parser("qa", help="QA evaluation of extracted insights")

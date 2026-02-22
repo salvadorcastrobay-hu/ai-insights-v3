@@ -185,8 +185,9 @@ def ensure_dashboard_schema(df: pd.DataFrame) -> pd.DataFrame:
 
 @st.cache_data(show_spinner=False, max_entries=1, persist="disk")
 def load_data() -> pd.DataFrame:
-    """Load insights from the dashboard view."""
+    """Load insights from the dashboard view, filtered by prompt_version."""
     client = get_supabase()
+    prompt_version = os.environ.get("PROMPT_VERSION", "v3.0")
     all_data = []
     offset = 0
     page_size = 1000
@@ -194,6 +195,7 @@ def load_data() -> pd.DataFrame:
         response = (
             client.table("v_insights_dashboard")
             .select(LOAD_DATA_SELECT)
+            .eq("prompt_version", prompt_version)
             .range(offset, offset + page_size - 1)
             .execute()
         )
@@ -332,11 +334,14 @@ DISPLAY_NAMES = {
     "module_linked": "Vinculado a Módulo",
     "existing": "Existente",
     "missing": "Faltante",
+    "roadmap": "Roadmap",
     "technology": "Tecnología",
     "processes": "Procesos",
     "communication": "Comunicación",
     "talent": "Talento",
     "engagement": "Engagement",
+    "data_and_analytics": "Datos y Analytics",
+    "compliance_and_scale": "Compliance y Escala",
     "data": "Datos",
     "compliance": "Compliance",
     "compensation": "Compensación",
