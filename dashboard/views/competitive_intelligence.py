@@ -46,7 +46,7 @@ with col_left:
         "Ranking de competidores más mencionados.",
         "Permite identificar los jugadores más presentes en conversaciones comerciales.",
     )
-    st.plotly_chart(fig, width="stretch")
+    st.plotly_chart(fig, use_container_width=True)
 
 with col_right:
     rel_data = comp.dropna(subset=["competitor_name", "competitor_relationship_display"])
@@ -81,7 +81,7 @@ with col_right:
     if fig is None:
         st.info("No hay datos suficientes para el breakdown competitivo.")
     else:
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, use_container_width=True)
 
 # Heatmap: competitor x country
 if "country" in comp.columns:
@@ -108,7 +108,7 @@ if "country" in comp.columns:
                 "Cruce de competidores y países por cantidad de menciones.",
                 "Sirve para detectar concentración competitiva por geografía.",
             )
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, use_container_width=True)
 
 # Competitors by segment — stacked bar
 col_left, col_right = st.columns(2)
@@ -131,7 +131,7 @@ with col_left:
                 "Presencia de competidores por segmento comercial.",
                 "Ayuda a entender dónde cada competidor tiene mayor presión competitiva.",
             )
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, use_container_width=True)
 
 with col_right:
     # Win/Loss signals: competitor x deal_stage
@@ -153,7 +153,7 @@ with col_right:
                 "Competidores por etapa del deal.",
                 "Permite ver en qué momento del pipeline aparece cada competidor.",
             )
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, use_container_width=True)
 
 # Migration opportunities
 migrating = comp[comp["competitor_relationship"] == "migrating_from"]
@@ -167,6 +167,6 @@ if not migrating.empty:
     available_cols = [c for c in display_cols if c in migrating.columns]
     st.dataframe(
         migrating[available_cols].sort_values("amount", ascending=False),
-        width="stretch",
+        use_container_width=True,
         height=400,
     )

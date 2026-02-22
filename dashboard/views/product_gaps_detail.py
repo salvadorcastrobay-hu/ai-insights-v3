@@ -40,7 +40,7 @@ chart_tooltip(
     "Ranking de features faltantes más mencionadas.",
     "Indica qué funcionalidades aparecen más como brecha de producto.",
 )
-st.plotly_chart(fig, width="stretch")
+st.plotly_chart(fig, use_container_width=True)
 
 col_left, col_right = st.columns(2)
 with col_left:
@@ -52,7 +52,7 @@ with col_left:
             "Distribución de gaps por prioridad.",
             "Ayuda a distinguir gaps bloqueantes de mejoras deseables.",
         )
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, use_container_width=True)
 
 with col_right:
     mod_counts = gaps["module_display"].value_counts().head(10).reset_index()
@@ -63,7 +63,7 @@ with col_right:
         "Módulos con mayor concentración de product gaps.",
         "Sirve para priorizar roadmap por área funcional.",
     )
-    st.plotly_chart(fig, width="stretch")
+    st.plotly_chart(fig, use_container_width=True)
 
 st.subheader("Detalle de Gaps")
 chart_tooltip(
@@ -72,4 +72,4 @@ chart_tooltip(
 )
 display_cols = ["company_name", "feature_display", "module_display", "gap_description", "gap_priority", "confidence"]
 available_cols = [c for c in display_cols if c in gaps.columns]
-st.dataframe(gaps[available_cols], width="stretch", height=400)
+st.dataframe(gaps[available_cols], use_container_width=True, height=400)

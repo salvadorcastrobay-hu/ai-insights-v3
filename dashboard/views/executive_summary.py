@@ -57,7 +57,7 @@ with col_left:
         "Distribución del volumen total de insights por tipo (pain, gap, fricción, FAQ, competencia).",
         "Barras más largas indican dónde se concentra la mayor parte de señales del mercado.",
     )
-    st.plotly_chart(fig, width="stretch")
+    st.plotly_chart(fig, use_container_width=True)
 
 with col_right:
     pains = df[df["insight_type"] == "pain"]
@@ -73,7 +73,7 @@ with col_right:
             "Ranking de los 10 pains más mencionados en las conversaciones.",
             "Sirve para priorizar problemas de cliente por frecuencia de aparición.",
         )
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, use_container_width=True)
 
 # Row 3: Feature Gaps
 col_left, col_right = st.columns(2)
@@ -97,7 +97,7 @@ with col_left:
         chart_tooltip(
             "Top de features faltantes por frecuencia de aparición en deals únicos.",
         )
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, use_container_width=True)
 
 with col_right:
     gaps = df[df["insight_type"] == "product_gap"]
@@ -119,7 +119,7 @@ with col_right:
         chart_tooltip(
             "Top de features faltantes por revenue asociado a los deals que las mencionan.",
         )
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, use_container_width=True)
 
 # Row 4: Top competitors (replace pie chart)
 comp = df[df["insight_type"] == "competitive_signal"].copy()
@@ -140,7 +140,7 @@ if not comp.empty:
     chart_tooltip(
         "Ranking de competidores más mencionados en el recorte actual.",
     )
-    st.plotly_chart(fig, width="stretch")
+    st.plotly_chart(fig, use_container_width=True)
 
 # Trend mensual
 if "call_date" in df.columns:
@@ -158,4 +158,4 @@ if "call_date" in df.columns:
             "Evolución mensual del volumen de insights por tipo.",
             "Ayuda a detectar tendencias, estacionalidades o cambios recientes en la demanda.",
         )
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, use_container_width=True)

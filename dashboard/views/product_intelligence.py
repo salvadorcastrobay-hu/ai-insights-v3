@@ -26,7 +26,7 @@ else:
         "Ranking de los pains más repetidos en el recorte actual.",
         "Muestra cuáles son los dolores más urgentes desde la voz del cliente.",
     )
-    st.plotly_chart(fig, width="stretch")
+    st.plotly_chart(fig, use_container_width=True)
 
     col_left, col_right = st.columns(2)
     with col_left:
@@ -38,7 +38,7 @@ else:
             "Volumen de pains agrupados por tema macro (procesos, tecnología, comunicación, etc.).",
             "Sirve para entender qué dimensión del problema domina.",
         )
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, use_container_width=True)
 
     with col_right:
         # Heatmap: pain_subtype x segment
@@ -62,7 +62,7 @@ else:
                     "Cruce entre pains principales y segmento comercial.",
                     "Permite ver si ciertos pains son más fuertes en SMB, Mid-Market o Enterprise.",
                 )
-                st.plotly_chart(fig, width="stretch")
+                st.plotly_chart(fig, use_container_width=True)
 
     # Top pains por modulo (deals unicos)
     module_pains = pains.dropna(subset=["module_display"])
@@ -101,7 +101,7 @@ else:
         chart_tooltip(
             "Cantidad de deals únicos que mencionan pains asociados a cada módulo.",
         )
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, use_container_width=True)
 
     @st.fragment
     def _pain_detail_fragment():
@@ -129,7 +129,7 @@ else:
         )
         st.dataframe(
             pains_detail[available_pain_detail_cols].sort_values("confidence", ascending=False),
-            width="stretch",
+            use_container_width=True,
             height=400,
         )
 
@@ -154,7 +154,7 @@ else:
         "Top de funcionalidades faltantes más mencionadas.",
         "Indica qué gaps aparecen más veces en procesos de venta.",
     )
-    st.plotly_chart(fig, width="stretch")
+    st.plotly_chart(fig, use_container_width=True)
 
     col_left, col_right = st.columns(2)
     with col_left:
@@ -183,7 +183,7 @@ else:
                 chart_tooltip(
                     "Desglose de prioridades de feature gaps por segmento comercial.",
                 )
-                st.plotly_chart(fig, width="stretch")
+                st.plotly_chart(fig, use_container_width=True)
         elif "gap_priority" in gaps.columns:
             priority_counts = gaps["gap_priority"].value_counts().reset_index()
             priority_counts.columns = ["Prioridad", "Cantidad"]
@@ -192,7 +192,7 @@ else:
             chart_tooltip(
                 "Distribución general de prioridades de feature gaps.",
             )
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, use_container_width=True)
 
     with col_right:
         # Feature gaps por segment — stacked bar
@@ -214,7 +214,7 @@ else:
                     "Features faltantes cruzadas por segmento comercial.",
                     "Revela si la demanda de funcionalidades cambia según tipo de cliente.",
                 )
-                st.plotly_chart(fig, width="stretch")
+                st.plotly_chart(fig, use_container_width=True)
 
     # Revenue at stake
     gap_rev = cached_dedup_groupby(
@@ -232,7 +232,7 @@ else:
             "Revenue potencial comprometido por cada feature faltante.",
             "Permite priorizar por impacto económico además de frecuencia.",
         )
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, use_container_width=True)
 
     # Modulos missing vs existing
     if "module_status" in gaps.columns:
@@ -248,7 +248,7 @@ else:
                 "Comparación de gaps en módulos existentes vs faltantes.",
                 "Ayuda a decidir entre mejorar capacidades actuales o construir nuevas.",
             )
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, use_container_width=True)
 
     @st.fragment
     def _feature_gap_detail_fragment():
@@ -277,7 +277,7 @@ else:
         )
         st.dataframe(
             gap_detail[available_gap_detail_cols].sort_values("confidence", ascending=False),
-            width="stretch",
+            use_container_width=True,
             height=400,
         )
 

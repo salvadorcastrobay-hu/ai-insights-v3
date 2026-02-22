@@ -40,7 +40,7 @@ if "country" in df.columns:
         chart_tooltip(
             "Top 15 países por cantidad de insights, con desglose por tipo de insight.",
         )
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, use_container_width=True)
 
 # Top pains por region
 pains = df[df["insight_type"] == "pain"]
@@ -67,7 +67,7 @@ if not pains.empty and "region" in pains.columns:
                 "Top 5 pains por cada región.",
                 "Permite comparar diferencias de dolor entre mercados.",
             )
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, use_container_width=True)
 
 # Modules by region — heatmap
 mod_region = df.dropna(subset=["module_display", "region"])
@@ -89,7 +89,7 @@ if not mod_region.empty:
             "Módulos más mencionados por región.",
             "Sirve para detectar prioridades de producto o GTM según geografía.",
         )
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, use_container_width=True)
 
 # Competitors by country — table
 comp = df[df["insight_type"] == "competitive_signal"].copy()
@@ -112,7 +112,7 @@ if not comp.empty and "country" in comp.columns:
         .sort_values(["country", "menciones"], ascending=[True, False])
     )
     comp_country.columns = ["Pais", "Competidor", "Menciones", "Relacion Principal"]
-    st.dataframe(comp_country, width="stretch", height=400)
+    st.dataframe(comp_country, use_container_width=True, height=400)
 
 # Pipeline coverage: segment x region
 if "segment" in df.columns and "region" in df.columns:
@@ -135,7 +135,7 @@ if "segment" in df.columns and "region" in df.columns:
         deals_pivot = coverage.pivot(index="segment", columns="region", values="deals").fillna(0)
 
         st.write("**Revenue por Segmento x Region**")
-        st.dataframe(rev_pivot.map(format_currency), width="stretch", height=300)
+        st.dataframe(rev_pivot.map(format_currency), use_container_width=True, height=300)
 
         st.write("**Deals por Segmento x Region**")
-        st.dataframe(deals_pivot.astype(int), width="stretch", height=300)
+        st.dataframe(deals_pivot.astype(int), use_container_width=True, height=300)

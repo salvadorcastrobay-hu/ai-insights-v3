@@ -680,13 +680,13 @@ with tabs[0]:
                     fig.update_layout(margin=dict(l=10, r=10, t=40, b=10))
                     what_shows, how_to_read = _chart_intent(spec)
                     chart_tooltip(what_shows, how_to_read)
-                    st.plotly_chart(fig, width="stretch")
+                    st.plotly_chart(fig, use_container_width=True)
                     with st.expander("Datos de vista previa"):
-                        st.dataframe(preview_df.head(200), width="stretch", hide_index=True, height=300)
+                        st.dataframe(preview_df.head(200), use_container_width=True, hide_index=True, height=300)
 
                 save_col1, save_col2 = st.columns([1, 2])
                 with save_col1:
-                    if st.button("Guardar gráfico en dashboard", width="stretch"):
+                    if st.button("Guardar gráfico en dashboard", use_container_width=True):
                         ok, err = _save_chart_to_dashboard(
                             owner=owner,
                             dashboard_name=dashboard_name,
@@ -715,7 +715,7 @@ with tabs[1]:
             st.subheader(selected_dashboard.get("name", "Dashboard sin título"))
             st.caption(f"{len(selected_dashboard.get('charts', []))} gráfico(s)")
         with top_right:
-            if st.button("Eliminar dashboard", type="secondary", width="stretch"):
+            if st.button("Eliminar dashboard", type="secondary", use_container_width=True):
                 ok, err = _delete_dashboard(owner=owner, dashboard_id=selected_dashboard.get("id", ""))
                 if ok:
                     st.success("Dashboard eliminado.")
@@ -743,12 +743,12 @@ with tabs[1]:
                     fig.update_layout(margin=dict(l=10, r=10, t=40, b=10))
                     what_shows, how_to_read = _chart_intent(chart)
                     chart_tooltip(what_shows, how_to_read)
-                    st.plotly_chart(fig, width="stretch")
+                    st.plotly_chart(fig, use_container_width=True)
 
                 with st.expander("Datos del gráfico"):
-                    st.dataframe(chart_data.head(200), width="stretch", hide_index=True, height=300)
+                    st.dataframe(chart_data.head(200), use_container_width=True, hide_index=True, height=300)
 
-                if st.button("Eliminar gráfico", key=f"delete_chart_{chart.get('id')}", width="stretch"):
+                if st.button("Eliminar gráfico", key=f"delete_chart_{chart.get('id')}", use_container_width=True):
                     ok, err = _delete_chart(
                         owner=owner,
                         dashboard_id=dashboard_id,

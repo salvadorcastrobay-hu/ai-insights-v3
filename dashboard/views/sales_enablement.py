@@ -44,7 +44,7 @@ else:
         "Ranking de fricciones más frecuentes.",
         "Muestra qué bloqueos de venta aparecen con mayor repetición.",
     )
-    st.plotly_chart(fig, width="stretch")
+    st.plotly_chart(fig, use_container_width=True)
 
     col_left, col_right = st.columns(2)
     with col_left:
@@ -62,7 +62,7 @@ else:
                     "Fricciones cruzadas por segmento comercial.",
                     "Permite ver si cada segmento enfrenta bloqueos distintos.",
                 )
-                st.plotly_chart(fig, width="stretch")
+                st.plotly_chart(fig, use_container_width=True)
 
     with col_right:
         # Friction por deal_stage — heatmap
@@ -81,7 +81,7 @@ else:
                         "Cruce entre tipo de fricción y etapa del deal.",
                         "Ayuda a detectar en qué fase del pipeline se traba cada fricción.",
                     )
-                    st.plotly_chart(fig, width="stretch")
+                    st.plotly_chart(fig, use_container_width=True)
 
 # === Section B: Performance por AE ===
 st.subheader("B. Performance por AE")
@@ -124,7 +124,7 @@ if "deal_owner" in df.columns:
             "Tabla comparativa de performance por AE: volumen, deals y principales señales.",
             "Sirve para coaching comercial y asignación de soporte.",
         )
-        st.dataframe(ae_table, width="stretch", height=400)
+        st.dataframe(ae_table, use_container_width=True, height=400)
 
         # Bar chart: frictions per AE (top 10)
         ae_fric_data = ae_data[ae_data["insight_type"] == "deal_friction"]
@@ -144,7 +144,7 @@ if "deal_owner" in df.columns:
                 "Distribución de fricciones por AE para los AEs con mayor volumen.",
                 "Permite entender qué bloqueos predominan en cada cartera.",
             )
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, use_container_width=True)
 else:
     st.info("No hay datos de deal_owner disponibles.")
 
@@ -162,7 +162,7 @@ else:
         "Ranking de temas de FAQ más consultados en ventas.",
         "Se usa para priorizar materiales de enablement y battle cards.",
     )
-    st.plotly_chart(fig, width="stretch")
+    st.plotly_chart(fig, use_container_width=True)
 
     st.subheader("Preguntas y Respuestas")
     chart_tooltip(
@@ -171,4 +171,4 @@ else:
     )
     display_cols = ["company_name", "insight_subtype_display", "summary", "verbatim_quote"]
     available_cols = [c for c in display_cols if c in faqs.columns]
-    st.dataframe(faqs[available_cols], width="stretch", height=400)
+    st.dataframe(faqs[available_cols], use_container_width=True, height=400)
