@@ -99,13 +99,25 @@ def run_pipeline(
     if force:
         logger.info("Force mode: skipping already-processed filter")
     else:
-        processed_ids = get_processed_transcript_ids(supabase)
-        logger.info(f"Found {len(processed_ids)} already-processed transcript IDs")
+        processed_ids = get_processed_transcript_ids(supabase, prompt_version=config.PROMPT_VERSION)
+        logger.info(f"Found {len(processed_ids)} already-processed transcript IDs (version={config.PROMPT_VERSION})")
         if not sample:
             before = len(transcripts)
             transcripts = [t for t in transcripts
                            if (t.get("transcript_id") or t.get("id", "unknown")) not in processed_ids]
             logger.info(f"Filtered: {before} -> {len(transcripts)} transcripts remaining")
+
+    # ── Step 3b: Deduplicate by transcript_id (view may return duplicates) ──
+    seen_tids: set[str] = set()
+    unique_transcripts = []
+    for t in transcripts:
+        tid = t.get("transcript_id") or t.get("id", "unknown")
+        if tid not in seen_tids:
+            seen_tids.add(tid)
+            unique_transcripts.append(t)
+    if len(unique_transcripts) < len(transcripts):
+        logger.info(f"Deduplicated: {len(transcripts)} -> {len(unique_transcripts)} unique transcripts")
+    transcripts = unique_transcripts
 
     # ── Step 4: Chunk transcripts ──
     all_chunks = []

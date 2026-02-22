@@ -233,18 +233,20 @@ def get_processed_hashes(client: Client) -> set[str]:
     return all_hashes
 
 
-def get_processed_transcript_ids(client: Client) -> set[str]:
-    """Get distinct transcript_ids already processed (for skipping)."""
+def get_processed_transcript_ids(client: Client, prompt_version: str | None = None) -> set[str]:
+    """Get distinct transcript_ids already processed (for skipping).
+
+    Args:
+        prompt_version: If set, only consider insights with this prompt_version.
+    """
     all_ids = set()
     offset = 0
     page_size = 1000
     while True:
-        response = (
-            client.table("transcript_insights")
-            .select("transcript_id")
-            .range(offset, offset + page_size - 1)
-            .execute()
-        )
+        query = client.table("transcript_insights").select("transcript_id")
+        if prompt_version:
+            query = query.eq("prompt_version", prompt_version)
+        response = query.range(offset, offset + page_size - 1).execute()
         all_ids.update(row["transcript_id"] for row in response.data)
         if len(response.data) < page_size:
             break
