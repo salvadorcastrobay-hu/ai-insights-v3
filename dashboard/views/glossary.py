@@ -132,8 +132,6 @@ if insight_rows:
 
 # ── 3. Taxonomia de Subtipos ─────────────────────────────────────────────
 
-st.subheader("Taxonomia de Subtipos") if not q else None
-
 # Pain Subtypes (31, grouped by theme)
 pain_by_theme: dict[str, list[dict]] = defaultdict(list)
 for code, info in PAIN_SUBTYPES.items():
@@ -145,14 +143,6 @@ for code, info in PAIN_SUBTYPES.items():
     if not q or _any_matches([row["Subtipo"], row["Codigo"], row["Descripcion"], PAIN_THEME_NAMES.get(info["theme"], "")], q):
         pain_by_theme[info["theme"]].append(row)
 
-if pain_by_theme:
-    total_shown = sum(len(v) for v in pain_by_theme.values())
-    with st.expander(f"Pain Subtypes ({total_shown} de {len(PAIN_SUBTYPES)}, agrupados por tema)", expanded=bool(q)):
-        for theme_code, rows in pain_by_theme.items():
-            theme_name = PAIN_THEME_NAMES.get(theme_code, theme_code)
-            st.markdown(f"**{theme_name}** ({len(rows)})")
-            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
-
 # Product Gap Subtypes (5)
 pg_rows = []
 for code, info in PRODUCT_GAP_SUBTYPES.items():
@@ -160,9 +150,12 @@ for code, info in PRODUCT_GAP_SUBTYPES.items():
     if not q or _any_matches([row["Subtipo"], row["Codigo"], row["Descripcion"]], q):
         pg_rows.append(row)
 
-if pg_rows:
-    with st.expander(f"Product Gap Subtypes ({len(pg_rows)} de {len(PRODUCT_GAP_SUBTYPES)})", expanded=bool(q)):
-        st.dataframe(pd.DataFrame(pg_rows), use_container_width=True, hide_index=True)
+# Competitive Signal Subtypes (= Competitive Relationships)
+cs_rows = []
+for code, info in COMPETITIVE_RELATIONSHIPS.items():
+    row = {"Subtipo": info["display_name"], "Codigo": code, "Descripcion": info.get("description", "")}
+    if not q or _any_matches([row["Subtipo"], row["Codigo"], row["Descripcion"]], q):
+        cs_rows.append(row)
 
 # Deal Friction Subtypes (14)
 df_rows = []
@@ -171,10 +164,6 @@ for code, info in DEAL_FRICTION_SUBTYPES.items():
     if not q or _any_matches([row["Subtipo"], row["Codigo"], row["Descripcion"]], q):
         df_rows.append(row)
 
-if df_rows:
-    with st.expander(f"Deal Friction Subtypes ({len(df_rows)} de {len(DEAL_FRICTION_SUBTYPES)})", expanded=bool(q)):
-        st.dataframe(pd.DataFrame(df_rows), use_container_width=True, hide_index=True)
-
 # FAQ Subtypes (18)
 faq_rows = []
 for code, info in FAQ_SUBTYPES.items():
@@ -182,8 +171,34 @@ for code, info in FAQ_SUBTYPES.items():
     if not q or _any_matches([row["Subtipo"], row["Codigo"], row["Descripcion"]], q):
         faq_rows.append(row)
 
+has_any_subtypes = pain_by_theme or pg_rows or cs_rows or df_rows or faq_rows
+if has_any_subtypes:
+    st.subheader("Taxonomia de Subtipos")
+    st.markdown("Cada tipo de insight tiene sus propios subtipos. En total hay **5 familias** de subtipos.")
+
+if pain_by_theme:
+    total_shown = sum(len(v) for v in pain_by_theme.values())
+    with st.expander(f"Dolor / Problema — Subtypes ({total_shown} de {len(PAIN_SUBTYPES)}, agrupados por tema)", expanded=bool(q)):
+        for theme_code, rows in pain_by_theme.items():
+            theme_name = PAIN_THEME_NAMES.get(theme_code, theme_code)
+            st.markdown(f"**{theme_name}** ({len(rows)})")
+            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+if pg_rows:
+    with st.expander(f"Feature Faltante — Subtypes ({len(pg_rows)} de {len(PRODUCT_GAP_SUBTYPES)})", expanded=bool(q)):
+        st.dataframe(pd.DataFrame(pg_rows), use_container_width=True, hide_index=True)
+
+if cs_rows:
+    with st.expander(f"Senal Competitiva — Subtypes ({len(cs_rows)} de {len(COMPETITIVE_RELATIONSHIPS)})", expanded=bool(q)):
+        st.caption("Para senales competitivas, el subtipo indica la relacion del prospecto con el competidor.")
+        st.dataframe(pd.DataFrame(cs_rows), use_container_width=True, hide_index=True)
+
+if df_rows:
+    with st.expander(f"Friccion del Deal — Subtypes ({len(df_rows)} de {len(DEAL_FRICTION_SUBTYPES)})", expanded=bool(q)):
+        st.dataframe(pd.DataFrame(df_rows), use_container_width=True, hide_index=True)
+
 if faq_rows:
-    with st.expander(f"FAQ Subtypes ({len(faq_rows)} de {len(FAQ_SUBTYPES)})", expanded=bool(q)):
+    with st.expander(f"Pregunta Frecuente — Subtypes ({len(faq_rows)} de {len(FAQ_SUBTYPES)})", expanded=bool(q)):
         st.dataframe(pd.DataFrame(faq_rows), use_container_width=True, hide_index=True)
 
 
@@ -332,6 +347,7 @@ if q and not any([
     insight_rows,
     pain_by_theme,
     pg_rows,
+    cs_rows,
     df_rows,
     faq_rows,
     modules_by_cat,
