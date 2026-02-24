@@ -21,14 +21,15 @@ if "module_status" in pains.columns:
     pains["module_status"] = pains["module_status"].map(humanize)
 
 col1, col2, col3 = st.columns(3)
-general = pains[pains["pain_scope"] == "General"]
-module_linked = pains[pains["pain_scope"] == "Vinculado a Módulo"]
+module_signal = pains["module_display"].notna() if "module_display" in pains.columns else pains["module"].notna()
+general = pains[~module_signal]
+module_linked = pains[module_signal]
 col1.metric("Total Pains", len(pains), help="Cantidad total de pains detectados.")
-col2.metric("Generales", len(general), help="Pains no vinculados a un módulo específico.")
+col2.metric("Generales", len(general), help="Pains sin módulo asignado en el insight.")
 col3.metric(
     "Vinculados a Modulo",
     len(module_linked),
-    help="Pains asociados a un módulo concreto de producto.",
+    help="Pains con módulo asignado en el insight.",
 )
 
 col_left, col_right = st.columns(2)
