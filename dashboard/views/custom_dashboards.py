@@ -680,7 +680,11 @@ with tabs[0]:
                     fig.update_layout(margin=dict(l=10, r=10, t=40, b=10))
                     what_shows, how_to_read = _chart_intent(spec)
                     chart_tooltip(what_shows, how_to_read)
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(
+                        fig,
+                        width="stretch",
+                        key=f"preview_chart_{spec.get('id')}",
+                    )
                     with st.expander("Datos de vista previa"):
                         st.dataframe(preview_df.head(200), use_container_width=True, hide_index=True, height=300)
 
@@ -743,7 +747,8 @@ with tabs[1]:
                     fig.update_layout(margin=dict(l=10, r=10, t=40, b=10))
                     what_shows, how_to_read = _chart_intent(chart)
                     chart_tooltip(what_shows, how_to_read)
-                    st.plotly_chart(fig, use_container_width=True)
+                    chart_key = f"saved_chart_{dashboard_id}_{chart.get('id') or idx}"
+                    st.plotly_chart(fig, width="stretch", key=chart_key)
 
                 with st.expander("Datos del gráfico"):
                     st.dataframe(chart_data.head(200), use_container_width=True, hide_index=True, height=300)
