@@ -14,9 +14,11 @@ from __future__ import annotations
 
 import os
 import re
+from urllib.parse import quote_plus
 
 import psycopg2
 import psycopg2.extras
+import plotly.express as px
 import streamlit as st
 from openai import OpenAI
 
@@ -26,6 +28,22 @@ from openai import OpenAI
 # ---------------------------------------------------------------------------
 
 SEARCH_RESULTS_LIMIT = 15
+OPENAI_REQUEST_TIMEOUT_SECONDS = 45
+OPENAI_SEARCH_KEYWORDS_TIMEOUT_SECONDS = 20
+DB_CONNECT_TIMEOUT_SECONDS = 10
+LATAM_REGION_OPTIONS = {
+    "1": ["HISPAM"],
+    "2": ["Brazil"],
+    "3": ["HISPAM", "Brazil"],
+}
+
+LATAM_ALIASES_RE = re.compile(r"\b(latam|latin\s*america|hispam|brazil|br\b)", re.IGNORECASE)
+CHAT_EXAMPLE_PROMPTS = [
+    "Top 5 pains en Enterprise para HISPAM",
+    "Top product gaps por industria en los últimos 90 días",
+    "Qué competidores aparecen más en Mid-Market y por qué",
+    "Qué dicen los prospects sobre onboarding en retail",
+]
 
 # ---------------------------------------------------------------------------
 # System prompt
@@ -57,12 +75,14 @@ temas que no estan en los insights estructurados, o cuando se necesita contexto 
 de conversaciones especificas:
 SEARCH:
 ---FILTROS---
-(condiciones SQL opcionales para filtrar por metadata: segment, region, country, \
-company_name, deal_name, deal_owner, deal_stage, industry, call_date, amount, source_type)
+(condiciones SQL opcionales para filtrar SOLO por columnas de raw_transcripts: \
+title, call_date, team. Ejemplo: title ILIKE '%Coca%Cola%'. \
+NO uses columnas como industry, segment, region aqui — esas solo existen en v_insights_dashboard.)
 ---BUSQUEDA---
 (descripcion en lenguaje natural de lo que buscar en las transcripciones)
 ---SQL---
-(query SQL opcional contra v_insights_dashboard para datos cuantitativos complementarios)
+(query SQL opcional contra v_insights_dashboard para datos cuantitativos complementarios. \
+Aqui SI puedes usar segment, region, industry, etc.)
 
 **Modo CHAT** — saludo, aclaracion, pregunta general:
 CHAT:
@@ -158,7 +178,13 @@ integracion SAP/Workday/Slack/Teams, chatbot con IA, modo offline, entre otros.
 ### Vista principal: v_insights_dashboard
 Columnas principales:
 - id (UUID), transcript_id, deal_id, deal_name, company_name
-- region, country, segment, industry, company_size
+- region, country, industry, company_size
+- **segment** — VALORES EXACTOS (usa siempre el valor completo con ILIKE o el string exacto): \
+'SMB (<250 employees)', 'Mid Market (250-1000 employees)', \
+'Enterprise (1001-3000 employees)', 'Large Enterprise (>3000 employees)'. \
+NUNCA uses segment = 'Enterprise' a secas — usa segment ILIKE 'Enterprise%' o el valor completo. \
+Si el usuario dice "enterprise", incluye tanto Enterprise como Large Enterprise usando \
+segment ILIKE '%Enterprise%'.
 - deal_stage, deal_owner, amount (numeric — revenue del deal en USD)
 - call_date (date)
 - insight_type: 'pain' | 'product_gap' | 'competitive_signal' | 'deal_friction' | 'faq'
@@ -240,7 +266,8 @@ herramienta actual que usan, plataforma actual, sistema que tienen hoy
 ---SQL---
 SELECT company_name, competitor_name, competitor_relationship_display, COUNT(*) AS menciones
 FROM v_insights_dashboard
-WHERE insight_type = 'competitive_signal' AND segment = 'Enterprise' AND region = 'LATAM'
+WHERE insight_type = 'competitive_signal' AND segment = 'Enterprise'
+  AND region = 'LATAM'
   AND competitor_name IS NOT NULL
 GROUP BY company_name, competitor_name, competitor_relationship_display
 ORDER BY menciones DESC
@@ -305,6 +332,13 @@ LIMIT 10;
 title, call_date, team. Ejemplo de filtro: title ILIKE '%Coca%Cola%'.
 10. En modo SEARCH, la busqueda debe incluir palabras clave variadas y sinonimos \
 (en espanol e ingles) para maximizar la cobertura de resultados.
+11. Si el usuario pide LATAM y ya confirmo alcance regional, usa SIEMPRE \
+region IN ('HISPAM','Brazil') o el subconjunto confirmado (solo HISPAM o solo Brazil). \
+No uses region = 'LATAM'.
+12. 'Humand' (y variantes 'Human', 'Human D') es NUESTRA empresa, NO un competidor. \
+Nunca la incluyas en consultas de competidores. Agrega siempre \
+AND competitor_name NOT IN ('Humand', 'Human', 'Human D') cuando filtres por \
+insight_type = 'competitive_signal' o uses competitor_name.
 """
 
 SUMMARIZE_SYSTEM_PROMPT = """\
@@ -437,7 +471,11 @@ def _get_chat_model() -> str:
 
 
 def _get_openai_client() -> OpenAI:
-    return OpenAI(api_key=_get_secret("OPENAI_API_KEY"))
+    return OpenAI(
+        api_key=_get_secret("OPENAI_API_KEY"),
+        timeout=OPENAI_REQUEST_TIMEOUT_SECONDS,
+        max_retries=1,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -446,15 +484,20 @@ def _get_openai_client() -> OpenAI:
 
 def _get_db_connection():
     """Get a read-only PostgreSQL connection with retry on transient errors."""
-    database_url = _get_secret_optional("DATABASE_URL")
+    database_url = _get_secret_optional("DATABASE_URL") or _build_db_url_from_supabase_secrets()
     if not database_url:
         raise RuntimeError(
-            "Falta configurar DATABASE_URL en los Secrets de Streamlit Cloud. "
-            "Usa la URL del Transaction Pooler de Supabase."
+            "Falta configurar la conexion PostgreSQL. "
+            "Opcion A: DATABASE_URL (Transaction Pooler). "
+            "Opcion B: SUPABASE_URL + SUPABASE_DB_PASSWORD "
+            "(opcionalmente SUPABASE_DB_HOST, SUPABASE_DB_PORT, SUPABASE_DB_NAME, SUPABASE_DB_USER)."
         )
     database_url = re.sub(r"[?&]sslmode=[^&]*", "", database_url)
     sep = "&" if "?" in database_url else "?"
     database_url = f"{database_url}{sep}sslmode=require"
+    if not re.search(r"(?i)[?&]connect_timeout=", database_url):
+        sep = "&" if "?" in database_url else "?"
+        database_url = f"{database_url}{sep}connect_timeout={DB_CONNECT_TIMEOUT_SECONDS}"
     import time
     last_err = None
     for attempt in range(3):
@@ -467,6 +510,49 @@ def _get_db_connection():
             if attempt < 2:
                 time.sleep(1)
     raise last_err
+
+
+def _build_db_url_from_supabase_secrets() -> str | None:
+    """Build a PostgreSQL URL from Supabase secrets if DATABASE_URL is not provided."""
+    supabase_url = (_get_secret_optional("SUPABASE_URL") or "").strip()
+    db_password = (_get_secret_optional("SUPABASE_DB_PASSWORD") or "").strip()
+    if not supabase_url or not db_password:
+        return None
+
+    match = re.search(r"https://([^.]+)\.supabase\.co", supabase_url)
+    if not match:
+        return None
+    project_ref = match.group(1)
+
+    host = (_get_secret_optional("SUPABASE_DB_HOST") or "aws-0-us-west-2.pooler.supabase.com").strip()
+    is_pooler = ".pooler.supabase.com" in host or host.startswith("aws-")
+    default_port = "6543" if is_pooler else "5432"
+    default_user = f"postgres.{project_ref}" if is_pooler else "postgres"
+
+    port = (_get_secret_optional("SUPABASE_DB_PORT") or default_port).strip()
+    db_name = (_get_secret_optional("SUPABASE_DB_NAME") or "postgres").strip()
+    user = (_get_secret_optional("SUPABASE_DB_USER") or default_user).strip()
+
+    return (
+        "postgresql://"
+        f"{quote_plus(user)}:{quote_plus(db_password)}"
+        f"@{host}:{port}/{db_name}"
+    )
+
+
+def _get_chat_setup_status() -> dict[str, bool]:
+    db_url = _get_secret_optional("DATABASE_URL") or _build_db_url_from_supabase_secrets()
+    return {
+        "openai_ready": bool(_get_secret_optional("OPENAI_API_KEY")),
+        "database_ready": bool(db_url),
+    }
+
+
+def _is_missing_database_url_error(error_text: str) -> bool:
+    lowered = (error_text or "").lower()
+    return ("database_url" in lowered and ("missing secret" in lowered or "falta configurar" in lowered)) or (
+        "conexion postgresql" in lowered
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -561,6 +647,139 @@ def _parse_search_content(content: str) -> dict:
             result[current_key] = part.strip()
 
     return result
+
+
+def _build_latam_disambiguation_prompt() -> str:
+    return (
+        "LATAM en este dataset se compone de dos buckets: **HISPAM** y **Brazil**.\n\n"
+        "Que alcance queres usar?\n"
+        "1) HISPAM only\n"
+        "2) BR only\n"
+        "3) Both (HISPAM + BR)\n\n"
+        "Responde con `1`, `2` o `3`."
+    )
+
+
+def _parse_latam_choice(answer: str) -> str | None:
+    normalized = (answer or "").strip().lower()
+    options = {
+        "1": "1",
+        "hispam": "1",
+        "hispam only": "1",
+        "2": "2",
+        "br": "2",
+        "bra": "2",
+        "brazil": "2",
+        "br only": "2",
+        "3": "3",
+        "both": "3",
+        "ambos": "3",
+        "hispam + br": "3",
+        "hispam y br": "3",
+        "hispam and br": "3",
+        "hispam and brazil": "3",
+        "hispam y brazil": "3",
+    }
+    return options.get(normalized)
+
+
+def _build_region_scope_note(regions: list[str]) -> str:
+    if not regions:
+        return ""
+    if len(regions) == 1:
+        return f"Scope regional aplicado: **{regions[0]}**."
+    return f"Scope regional aplicado: **{regions[0]} + {regions[1]}**."
+
+
+def _inject_region_scope(question: str, regions: list[str]) -> str:
+    if regions == ["HISPAM"]:
+        sql_hint = "region = 'LATAM' AND country != 'Brazil'"
+    elif regions == ["Brazil"]:
+        sql_hint = "country = 'Brazil'"
+    else:
+        sql_hint = "region = 'LATAM'"
+    return (
+        f"{question}\n\n"
+        "Instruccion de alcance regional confirmada por el usuario:\n"
+        f"- Usa este filtro SQL: {sql_hint}.\n"
+        "- La columna region NO tiene 'HISPAM' ni 'Brazil'. Usa country para distinguir."
+    )
+
+
+
+
+def _rewrite_sql_region_scope(sql: str, regions: list[str] | None) -> str:
+    """Force SQL to use the user-selected concrete region values.
+
+    Behavior:
+    - Rewrites existing region predicates (`region = ...`, `region IN (...)`) to the chosen scope.
+    - If no region predicate exists, injects one in WHERE/AND before GROUP/ORDER/LIMIT clauses.
+    """
+    if not sql or not regions:
+        return sql
+
+    if regions == ["HISPAM"]:
+        scope_condition = "region = 'HISPAM'"
+    elif regions == ["Brazil"]:
+        scope_condition = "region = 'Brazil'"
+    elif regions == ["HISPAM", "Brazil"] or set(regions) == {"HISPAM", "Brazil"}:
+        scope_condition = "region IN ('HISPAM', 'Brazil')"
+    else:
+        scope_condition = (
+            f"region = '{regions[0]}'"
+            if len(regions) == 1
+            else "region IN (" + ", ".join(f"'{r}'" for r in regions) + ")"
+        )
+
+    def _scoped_predicate(lhs: str) -> str:
+        return scope_condition
+
+    rewritten = sql
+    had_region_predicate = bool(
+        re.search(
+            r"(?is)(?:\b\w+\.)?region\s*(?:=|IN\s*\()",
+            rewritten,
+        )
+    )
+
+    # Rewrite equality predicates on region (with optional table alias).
+    rewritten = re.sub(
+        r"(?is)(?P<lhs>(?:\b\w+\.)?region)\s*=\s*(?:'[^']*'|\"[^\"]*\")",
+        lambda m: _scoped_predicate(m.group("lhs")),
+        rewritten,
+    )
+
+    # Rewrite IN predicates on region (with optional table alias).
+    rewritten = re.sub(
+        r"(?is)(?P<lhs>(?:\b\w+\.)?region)\s+IN\s*\([^)]*\)",
+        lambda m: _scoped_predicate(m.group("lhs")),
+        rewritten,
+    )
+
+    if had_region_predicate:
+        return rewritten
+
+    # No region predicate found: inject scope condition.
+    suffix = ""
+    core = rewritten.strip()
+    if core.endswith(";"):
+        core = core[:-1].rstrip()
+        suffix = ";"
+
+    split_match = re.search(r"(?is)\b(group\s+by|order\s+by|limit|offset|fetch)\b", core)
+    if split_match:
+        head = core[: split_match.start()].rstrip()
+        tail = core[split_match.start() :]
+    else:
+        head = core
+        tail = ""
+
+    if re.search(r"(?is)\bwhere\b", head):
+        head = f"{head} AND ({scope_condition})"
+    else:
+        head = f"{head} WHERE {scope_condition}"
+
+    return f"{head} {tail}".rstrip() + suffix
 
 
 # ---------------------------------------------------------------------------
@@ -736,10 +955,80 @@ def execute_query(sql: str) -> tuple[list[str], list[tuple]]:
         conn.close()
 
 
+def _auto_chart(
+    columns: list[str], rows: list[tuple], max_rows: int = 30,
+) -> object | None:
+    """Detect chart-worthy results and return a Plotly figure, or None."""
+    if not columns or not rows or len(rows) > max_rows:
+        return None
+
+    import pandas as pd
+    df = pd.DataFrame(rows, columns=columns)
+    if df.empty or len(df.columns) < 2:
+        return None
+
+    # Find one categorical and one numeric column
+    cat_col = None
+    num_col = None
+    date_col = None
+    for col in df.columns:
+        if pd.api.types.is_numeric_dtype(df[col]) and num_col is None:
+            num_col = col
+        elif pd.api.types.is_datetime64_any_dtype(df[col]) and date_col is None:
+            date_col = col
+        elif df[col].dtype == object and cat_col is None:
+            cat_col = col
+
+    if not num_col:
+        return None
+
+    try:
+        # Date + numeric → line chart
+        if date_col and num_col:
+            fig = px.line(
+                df, x=date_col, y=num_col,
+                labels={date_col: date_col.replace('_', ' ').title(),
+                        num_col: num_col.replace('_', ' ').title()},
+            )
+            fig.update_layout(margin=dict(l=10, r=10, t=30, b=10))
+            return fig
+
+        # Categorical + numeric → bar chart (horizontal for readability)
+        if cat_col and num_col:
+            plot_df = df[[cat_col, num_col]].copy()
+            # Pie for ≤6 categories when it looks like proportions
+            if len(plot_df) <= 6:
+                fig = px.pie(
+                    plot_df, names=cat_col, values=num_col,
+                    labels={cat_col: cat_col.replace('_', ' ').title()},
+                )
+                fig.update_layout(margin=dict(l=10, r=10, t=30, b=10))
+                return fig
+
+            fig = px.bar(
+                plot_df, y=cat_col, x=num_col, orientation='h',
+                labels={cat_col: cat_col.replace('_', ' ').title(),
+                        num_col: num_col.replace('_', ' ').title()},
+            )
+            fig.update_layout(
+                margin=dict(l=10, r=10, t=30, b=10),
+                yaxis={'categoryorder': 'total ascending'},
+            )
+            return fig
+    except Exception:
+        return None
+
+    return None
+
+
 def _generate_search_keywords(client: OpenAI, search_query: str) -> list[str]:
     """Use GPT to generate bilingual search keywords from a natural language query."""
     try:
-        response = client.chat.completions.create(
+        # Use a shorter timeout for keyword generation so SEARCH mode fails fast.
+        response = client.with_options(
+            timeout=OPENAI_SEARCH_KEYWORDS_TIMEOUT_SECONDS,
+            max_retries=0,
+        ).chat.completions.create(
             model="gpt-4o-mini",
             messages=[{
                 "role": "system",
@@ -862,9 +1151,17 @@ def search_transcript_chunks(
 # Mode handlers
 # ---------------------------------------------------------------------------
 
-def _handle_hybrid(client: OpenAI, question: str, content: str) -> None:
+def _handle_hybrid(
+    client: OpenAI,
+    question: str,
+    content: str,
+    region_scope: list[str] | None = None,
+    region_scope_note: str = "",
+) -> None:
     """Handle HYBRID mode: execute quantitative + qualitative queries and synthesize."""
     quant_sql, qual_sql = _split_hybrid_queries(content)
+    quant_sql = _rewrite_sql_region_scope(quant_sql, region_scope)
+    qual_sql = _rewrite_sql_region_scope(qual_sql, region_scope)
 
     valid1, err1 = validate_sql(quant_sql)
     valid2, err2 = validate_sql(qual_sql)
@@ -872,6 +1169,9 @@ def _handle_hybrid(client: OpenAI, question: str, content: str) -> None:
     if not valid1 and not valid2:
         response_text = f"No puedo ejecutar las consultas generadas: {err1}"
         st.markdown(response_text)
+        with st.expander("🔍 Debug: Ver SQL generado"):
+            st.code(quant_sql, language="sql")
+            st.code(qual_sql, language="sql")
         st.session_state.sql_chat_messages.append({"role": "assistant", "content": response_text})
         _trim_history()
         return
@@ -881,6 +1181,15 @@ def _handle_hybrid(client: OpenAI, question: str, content: str) -> None:
         try:
             quant_cols, quant_rows = execute_query(quant_sql)
         except Exception as e:
+            if _is_missing_database_url_error(str(e)):
+                response_text = (
+                    "No puedo consultar datos porque falta configuracion de DB. "
+                    "Usa `DATABASE_URL` o `SUPABASE_URL + SUPABASE_DB_PASSWORD`."
+                )
+                st.markdown(response_text)
+                st.session_state.sql_chat_messages.append({"role": "assistant", "content": response_text})
+                _trim_history()
+                return
             st.caption(f"Query cuantitativa con error: {e}")
 
     qual_cols, qual_rows = [], []
@@ -888,11 +1197,25 @@ def _handle_hybrid(client: OpenAI, question: str, content: str) -> None:
         try:
             qual_cols, qual_rows = execute_query(qual_sql)
         except Exception as e:
+            if _is_missing_database_url_error(str(e)):
+                response_text = (
+                    "No puedo consultar datos porque falta configuracion de DB. "
+                    "Usa `DATABASE_URL` o `SUPABASE_URL + SUPABASE_DB_PASSWORD`."
+                )
+                st.markdown(response_text)
+                st.session_state.sql_chat_messages.append({"role": "assistant", "content": response_text})
+                _trim_history()
+                return
             st.caption(f"Query cualitativa con error: {e}")
 
     if not quant_rows and not qual_rows:
         response_text = "Las consultas no devolvieron resultados. Intenta reformular tu pregunta."
         st.markdown(response_text)
+        with st.expander("🔍 Debug: Ver SQL generado"):
+            st.caption("Cuantitativo:")
+            st.code(quant_sql, language="sql")
+            st.caption("Cualitativo:")
+            st.code(qual_sql, language="sql")
         st.session_state.sql_chat_messages.append({"role": "assistant", "content": response_text})
         _trim_history()
         return
@@ -904,7 +1227,17 @@ def _handle_hybrid(client: OpenAI, question: str, content: str) -> None:
     except Exception:
         summary = "No pude generar la sintesis. Revisa los datos crudos abajo."
 
+    if region_scope_note:
+        st.caption(region_scope_note)
     st.markdown(summary)
+
+    # Auto-chart from quantitative data
+    if quant_cols and quant_rows:
+        fig = _auto_chart(quant_cols, quant_rows)
+        if fig:
+            with st.expander("📊 Mostrar gráfico"):
+                st.plotly_chart(fig, use_container_width=True, key=f"hybrid_chart_{id(quant_rows)}")
+
     with st.expander("Ver SQL — cuantitativo"):
         st.code(quant_sql, language="sql")
     with st.expander("Ver SQL — cualitativo"):
@@ -915,19 +1248,20 @@ def _handle_hybrid(client: OpenAI, question: str, content: str) -> None:
         import pandas as pd
         quant_data = {"columns": quant_cols, "rows": [list(r) for r in quant_rows]}
         with st.expander("Ver datos cuantitativos"):
-            st.dataframe(pd.DataFrame(quant_rows, columns=quant_cols), use_container_width=True)
+            st.dataframe(pd.DataFrame(quant_rows, columns=quant_cols), width="stretch")
 
     qual_data = None
     if qual_cols and qual_rows:
         import pandas as pd
         qual_data = {"columns": qual_cols, "rows": [list(r) for r in qual_rows]}
         with st.expander("Ver datos cualitativos"):
-            st.dataframe(pd.DataFrame(qual_rows, columns=qual_cols), use_container_width=True)
+            st.dataframe(pd.DataFrame(qual_rows, columns=qual_cols), width="stretch")
 
     st.session_state.sql_chat_messages.append({
         "role": "assistant", "content": summary,
         "quant_sql": quant_sql, "qual_sql": qual_sql,
         "quant_data": quant_data, "qual_data": qual_data,
+        "region_scope_note": region_scope_note,
     })
     st.session_state.sql_chat_openai_history.append({"role": "user", "content": question})
     st.session_state.sql_chat_openai_history.append(
@@ -936,7 +1270,13 @@ def _handle_hybrid(client: OpenAI, question: str, content: str) -> None:
     _trim_history()
 
 
-def _handle_search(client: OpenAI, question: str, content: str) -> None:
+def _handle_search(
+    client: OpenAI,
+    question: str,
+    content: str,
+    region_scope: list[str] | None = None,
+    region_scope_note: str = "",
+) -> None:
     """Handle SEARCH mode: semantic search on transcript chunks + optional SQL."""
     parsed = _parse_search_content(content)
     search_query = parsed["search_query"]
@@ -954,6 +1294,15 @@ def _handle_search(client: OpenAI, question: str, content: str) -> None:
     try:
         chunks = search_transcript_chunks(client, search_query, filters=filters)
     except Exception as e:
+        if _is_missing_database_url_error(str(e)):
+            response_text = (
+                "No puedo ejecutar la busqueda porque falta configuracion de DB. "
+                "Usa `DATABASE_URL` o `SUPABASE_URL + SUPABASE_DB_PASSWORD`."
+            )
+            st.markdown(response_text)
+            st.session_state.sql_chat_messages.append({"role": "assistant", "content": response_text})
+            _trim_history()
+            return
         response_text = f"Error en la busqueda semantica: {e}"
         st.markdown(response_text)
         st.session_state.sql_chat_messages.append({"role": "assistant", "content": response_text})
@@ -963,6 +1312,7 @@ def _handle_search(client: OpenAI, question: str, content: str) -> None:
     # 2. Optional SQL query
     sql_cols, sql_rows = None, None
     if sql and sql.strip():
+        sql = _rewrite_sql_region_scope(sql, region_scope)
         valid, err = validate_sql(sql)
         if valid:
             try:
@@ -970,11 +1320,29 @@ def _handle_search(client: OpenAI, question: str, content: str) -> None:
                 sql_cols = sql_cols_list
                 sql_rows = sql_rows_list
             except Exception as e:
+                if _is_missing_database_url_error(str(e)):
+                    response_text = (
+                        "No puedo ejecutar SQL complementario porque falta configuracion de DB. "
+                        "Usa `DATABASE_URL` o `SUPABASE_URL + SUPABASE_DB_PASSWORD`."
+                    )
+                    st.markdown(response_text)
+                    st.session_state.sql_chat_messages.append({"role": "assistant", "content": response_text})
+                    _trim_history()
+                    return
                 st.caption(f"Query SQL complementaria con error: {e}")
 
     if not chunks and not sql_rows:
         response_text = "No se encontraron resultados relevantes. Intenta con otra pregunta o menos filtros."
         st.markdown(response_text)
+        with st.expander("🔍 Debug: Ver detalles de busqueda"):
+            st.caption("Busqueda:")
+            st.text(search_query)
+            if filters:
+                st.caption("Filtros:")
+                st.code(filters, language="sql")
+            if sql and sql.strip():
+                st.caption("SQL complementario:")
+                st.code(sql, language="sql")
         st.session_state.sql_chat_messages.append({"role": "assistant", "content": response_text})
         _trim_history()
         return
@@ -989,7 +1357,16 @@ def _handle_search(client: OpenAI, question: str, content: str) -> None:
         summary = "No pude generar la sintesis. Revisa los fragmentos recuperados abajo."
 
     # 4. Display
+    if region_scope_note:
+        st.caption(region_scope_note)
     st.markdown(summary)
+
+    # Auto-chart from SQL data
+    if sql_cols and sql_rows:
+        fig = _auto_chart(sql_cols, sql_rows)
+        if fig:
+            with st.expander("📊 Mostrar gráfico"):
+                st.plotly_chart(fig, use_container_width=True, key=f"search_chart_{id(sql_rows)}")
 
     # Show search metadata
     if filters:
@@ -1009,14 +1386,14 @@ def _handle_search(client: OpenAI, question: str, content: str) -> None:
                     "fecha": c.get("call_date") or "",
                     "texto": c["chunk_text"][:300] + "..." if len(c["chunk_text"]) > 300 else c["chunk_text"],
                 })
-            st.dataframe(pd.DataFrame(display_data), use_container_width=True)
+            st.dataframe(pd.DataFrame(display_data), width="stretch")
     if sql and sql.strip():
         with st.expander("Ver SQL complementario"):
             st.code(sql, language="sql")
         if sql_cols and sql_rows:
             import pandas as pd
             with st.expander("Ver datos SQL"):
-                st.dataframe(pd.DataFrame(sql_rows, columns=sql_cols), use_container_width=True)
+                st.dataframe(pd.DataFrame(sql_rows, columns=sql_cols), width="stretch")
 
     # Build serializable search data for history
     search_data = None
@@ -1041,6 +1418,7 @@ def _handle_search(client: OpenAI, question: str, content: str) -> None:
         "search_data": search_data,
         "search_sql": sql if sql and sql.strip() else None,
         "search_sql_data": sql_data,
+        "region_scope_note": region_scope_note,
     })
     st.session_state.sql_chat_openai_history.append({"role": "user", "content": question})
     st.session_state.sql_chat_openai_history.append(
@@ -1064,21 +1442,47 @@ def page_sql_chat(df) -> None:
         "Las respuestas combinan datos cuantitativos, insights estructurados y "
         "busqueda semantica en transcripciones completas."
     )
+    with st.expander("Como preguntar (ejemplos)", expanded=False):
+        st.markdown(
+            "\n".join(f"- {prompt}" for prompt in CHAT_EXAMPLE_PROMPTS)
+            + "\n\nTip: si escribes `LATAM`, el asistente te pedirá elegir entre HISPAM, BR o ambos."
+        )
+
+    setup = _get_chat_setup_status()
+    if setup["openai_ready"] and setup["database_ready"]:
+        st.caption("✅ Conectado")
+
+    if not setup["openai_ready"]:
+        st.error(
+            "Falta `OPENAI_API_KEY`. Configurala en los secrets del entorno para habilitar el chat."
+        )
+        return
+    if not setup["database_ready"]:
+        st.warning(
+            "Falta configuracion de DB (`DATABASE_URL` o `SUPABASE_URL + SUPABASE_DB_PASSWORD`). "
+            "El chat puede responder preguntas generales de taxonomía, "
+            "pero las consultas con datos no funcionarán."
+        )
 
     if "sql_chat_messages" not in st.session_state:
         st.session_state.sql_chat_messages = []
     if "sql_chat_openai_history" not in st.session_state:
         st.session_state.sql_chat_openai_history = []
+    if "sql_chat_pending_latam_resolution" not in st.session_state:
+        st.session_state.sql_chat_pending_latam_resolution = None
 
     if st.sidebar.button("Limpiar chat", key="clear_sql_chat"):
         st.session_state.sql_chat_messages = []
         st.session_state.sql_chat_openai_history = []
+        st.session_state.sql_chat_pending_latam_resolution = None
         st.rerun()
 
     # --- Render chat history ---
     for msg in st.session_state.sql_chat_messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
+            if msg.get("region_scope_note"):
+                st.caption(msg["region_scope_note"])
             # SQL mode
             if msg.get("sql"):
                 with st.expander("Ver SQL"):
@@ -1098,38 +1502,53 @@ def page_sql_chat(df) -> None:
                         st.text(f"Filtros: {msg['search_filters']}")
                     if msg.get("search_data"):
                         import pandas as pd
-                        st.dataframe(pd.DataFrame(msg["search_data"]), use_container_width=True)
+                        st.dataframe(pd.DataFrame(msg["search_data"]), width="stretch")
             if msg.get("search_sql"):
                 with st.expander("Ver SQL complementario"):
                     st.code(msg["search_sql"], language="sql")
             # Data expanders
             if msg.get("raw_data"):
+                _raw = msg["raw_data"]
+                _fig = _auto_chart(_raw["columns"], [tuple(r) for r in _raw["rows"]])
+                if _fig:
+                    with st.expander("📊 Mostrar gráfico"):
+                        st.plotly_chart(_fig, use_container_width=True, key=f"hist_sql_chart_{id(msg)}")
                 with st.expander("Ver datos crudos"):
                     import pandas as pd
                     st.dataframe(
-                        pd.DataFrame(msg["raw_data"]["rows"], columns=msg["raw_data"]["columns"]),
-                        use_container_width=True,
+                        pd.DataFrame(_raw["rows"], columns=_raw["columns"]),
+                        width="stretch",
                     )
             if msg.get("quant_data"):
+                _qd = msg["quant_data"]
+                _fig = _auto_chart(_qd["columns"], [tuple(r) for r in _qd["rows"]])
+                if _fig:
+                    with st.expander("📊 Mostrar gráfico"):
+                        st.plotly_chart(_fig, use_container_width=True, key=f"hist_hybrid_chart_{id(msg)}")
                 with st.expander("Ver datos cuantitativos"):
                     import pandas as pd
                     st.dataframe(
-                        pd.DataFrame(msg["quant_data"]["rows"], columns=msg["quant_data"]["columns"]),
-                        use_container_width=True,
+                        pd.DataFrame(_qd["rows"], columns=_qd["columns"]),
+                        width="stretch",
                     )
             if msg.get("qual_data"):
                 with st.expander("Ver datos cualitativos"):
                     import pandas as pd
                     st.dataframe(
                         pd.DataFrame(msg["qual_data"]["rows"], columns=msg["qual_data"]["columns"]),
-                        use_container_width=True,
+                        width="stretch",
                     )
             if msg.get("search_sql_data"):
+                _sd = msg["search_sql_data"]
+                _fig = _auto_chart(_sd["columns"], [tuple(r) for r in _sd["rows"]])
+                if _fig:
+                    with st.expander("📊 Mostrar gráfico"):
+                        st.plotly_chart(_fig, use_container_width=True, key=f"hist_search_chart_{id(msg)}")
                 with st.expander("Ver datos SQL"):
                     import pandas as pd
                     st.dataframe(
-                        pd.DataFrame(msg["search_sql_data"]["rows"], columns=msg["search_sql_data"]["columns"]),
-                        use_container_width=True,
+                        pd.DataFrame(_sd["rows"], columns=_sd["columns"]),
+                        width="stretch",
                     )
 
     # --- Chat input ---
@@ -1141,15 +1560,50 @@ def page_sql_chat(df) -> None:
     with st.chat_message("user"):
         st.markdown(question)
 
+    pending_latam = st.session_state.get("sql_chat_pending_latam_resolution")
+    region_scope = None
+    region_scope_note = ""
+    question_for_ai = question
+
+    if pending_latam:
+        selected_option = _parse_latam_choice(question)
+        if not selected_option:
+            response_text = (
+                "Para continuar, necesito que elijas una opcion valida (`1`, `2` o `3`).\n\n"
+                + _build_latam_disambiguation_prompt()
+            )
+            with st.chat_message("assistant"):
+                st.markdown(response_text)
+            st.session_state.sql_chat_messages.append({"role": "assistant", "content": response_text})
+            return
+
+        region_scope = pending_latam["options"][selected_option]
+        region_scope_note = _build_region_scope_note(region_scope)
+        question_for_ai = _inject_region_scope(pending_latam["original_question"], region_scope)
+        st.session_state.sql_chat_pending_latam_resolution = None
+    else:
+        if LATAM_ALIASES_RE.search(question):
+            prompt = _build_latam_disambiguation_prompt()
+            st.session_state.sql_chat_pending_latam_resolution = {
+                "original_question": question,
+                "options": LATAM_REGION_OPTIONS,
+            }
+            with st.chat_message("assistant"):
+                st.markdown(prompt)
+            st.session_state.sql_chat_messages.append({"role": "assistant", "content": prompt})
+            return
+
     # --- Process ---
     with st.chat_message("assistant"):
         try:
+            if region_scope_note:
+                st.caption(region_scope_note)
             with st.spinner("Pensando..."):
                 client = _get_openai_client()
 
                 try:
                     mode, content = generate_response(
-                        client, question, st.session_state.sql_chat_openai_history,
+                        client, question_for_ai, st.session_state.sql_chat_openai_history,
                     )
                 except Exception:
                     response_text = "No pude conectarme con el servicio de IA. Intenta de nuevo."
@@ -1160,8 +1614,12 @@ def page_sql_chat(df) -> None:
             # --- CHAT ---
             if mode == "chat":
                 st.markdown(content)
-                st.session_state.sql_chat_messages.append({"role": "assistant", "content": content})
-                st.session_state.sql_chat_openai_history.append({"role": "user", "content": question})
+                st.session_state.sql_chat_messages.append({
+                    "role": "assistant",
+                    "content": content,
+                    "region_scope_note": region_scope_note,
+                })
+                st.session_state.sql_chat_openai_history.append({"role": "user", "content": question_for_ai})
                 st.session_state.sql_chat_openai_history.append({"role": "assistant", "content": content})
                 _trim_history()
                 return
@@ -1169,24 +1627,37 @@ def page_sql_chat(df) -> None:
             # --- HYBRID ---
             if mode == "hybrid":
                 with st.spinner("Consultando datos cuantitativos y cualitativos..."):
-                    _handle_hybrid(client, question, content)
+                    _handle_hybrid(
+                        client,
+                        question_for_ai,
+                        content,
+                        region_scope=region_scope,
+                        region_scope_note=region_scope_note,
+                    )
                 return
 
             # --- SEARCH ---
             if mode == "search":
                 with st.spinner("Buscando en transcripciones..."):
-                    _handle_search(client, question, content)
+                    _handle_search(
+                        client,
+                        question_for_ai,
+                        content,
+                        region_scope=region_scope,
+                        region_scope_note=region_scope_note,
+                    )
                 return
 
             # --- SQL ---
             sql = content
+            sql = _rewrite_sql_region_scope(sql, region_scope)
 
             valid, err = validate_sql(sql)
             if not valid:
                 response_text = f"No puedo ejecutar esa consulta: {err}"
                 st.markdown(response_text)
                 st.session_state.sql_chat_messages.append({"role": "assistant", "content": response_text})
-                st.session_state.sql_chat_openai_history.append({"role": "user", "content": question})
+                st.session_state.sql_chat_openai_history.append({"role": "user", "content": question_for_ai})
                 st.session_state.sql_chat_openai_history.append({"role": "assistant", "content": response_text})
                 _trim_history()
                 return
@@ -1200,16 +1671,26 @@ def page_sql_chat(df) -> None:
                     exec_error = str(e)
 
                 if exec_error:
+                    if _is_missing_database_url_error(exec_error):
+                        response_text = (
+                            "No puedo consultar datos porque falta configuracion de DB. "
+                            "Usa `DATABASE_URL` o `SUPABASE_URL + SUPABASE_DB_PASSWORD`."
+                        )
+                        st.markdown(response_text)
+                        st.session_state.sql_chat_messages.append({"role": "assistant", "content": response_text})
+                        _trim_history()
+                        return
                     retry_prompt = (
                         f"El SQL anterior fallo con este error:\n{exec_error}\n\n"
                         f"SQL que fallo:\n{sql}\n\n"
-                        f"Pregunta original: {question}\n\n"
+                        f"Pregunta original: {question_for_ai}\n\n"
                         "Genera un SQL corregido. Responde con SQL: seguido del query."
                     )
                     try:
                         sql = generate_sql(
                             client, retry_prompt, st.session_state.sql_chat_openai_history,
                         )
+                        sql = _rewrite_sql_region_scope(sql, region_scope)
                     except Exception:
                         response_text = "Hubo un error al generar la consulta. Intenta reformular."
                         st.markdown(response_text)
@@ -1235,12 +1716,20 @@ def page_sql_chat(df) -> None:
                         return
 
                 try:
-                    summary = summarize_results(client, question, sql, columns, rows)
+                    summary = summarize_results(client, question_for_ai, sql, columns, rows)
                 except Exception:
                     summary = "No pude generar el resumen. Revisa los datos crudos abajo."
 
             # Display (outside spinner)
             st.markdown(summary)
+
+            # Auto-chart
+            if columns and rows:
+                fig = _auto_chart(columns, rows)
+                if fig:
+                    with st.expander("📊 Mostrar gráfico"):
+                        st.plotly_chart(fig, use_container_width=True, key=f"sql_chart_{id(rows)}")
+
             with st.expander("Ver SQL"):
                 st.code(sql, language="sql")
 
@@ -1249,12 +1738,16 @@ def page_sql_chat(df) -> None:
                 import pandas as pd
                 raw_data = {"columns": columns, "rows": [list(r) for r in rows]}
                 with st.expander("Ver datos crudos"):
-                    st.dataframe(pd.DataFrame(rows, columns=columns), use_container_width=True)
+                    st.dataframe(pd.DataFrame(rows, columns=columns), width="stretch")
 
             st.session_state.sql_chat_messages.append({
-                "role": "assistant", "content": summary, "sql": sql, "raw_data": raw_data,
+                "role": "assistant",
+                "content": summary,
+                "sql": sql,
+                "raw_data": raw_data,
+                "region_scope_note": region_scope_note,
             })
-            st.session_state.sql_chat_openai_history.append({"role": "user", "content": question})
+            st.session_state.sql_chat_openai_history.append({"role": "user", "content": question_for_ai})
             st.session_state.sql_chat_openai_history.append(
                 {"role": "assistant", "content": f"SQL: {sql}\nResultado resumido: {summary}"}
             )
