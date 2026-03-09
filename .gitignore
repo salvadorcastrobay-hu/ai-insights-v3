@@ -4,6 +4,8 @@
 # Logs & output
 *.log
 *.csv
+diff_output.txt
+test_db.py
 batches/
 
 # State

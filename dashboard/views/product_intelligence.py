@@ -64,6 +64,96 @@ else:
                 )
                 st.plotly_chart(fig, use_container_width=True)
 
+    col_left, col_right = st.columns(2)
+    with col_left:
+        if "industry" in pains.columns and "pain_theme" in pains.columns:
+            pains_ind = pains.dropna(subset=["industry", "pain_theme"])
+            if not pains_ind.empty:
+                top_industries = pains_ind["industry"].value_counts().head(10).index
+                pain_industry = (
+                    pains_ind[pains_ind["industry"].isin(top_industries)]
+                    .groupby(["industry", "pain_theme"])
+                    .size()
+                    .reset_index(name="count")
+                )
+                fig = px.bar(
+                    pain_industry,
+                    x="count",
+                    y="industry",
+                    color="pain_theme",
+                    orientation="h",
+                    barmode="stack",
+                    title="Pains por Industria (Top 10)",
+                    labels={"count": "Menciones", "industry": "Industria", "pain_theme": "Tema de pain"},
+                )
+                fig.update_layout(yaxis=dict(autorange="reversed"))
+                chart_tooltip(
+                    "Desglose de pains por industria, segmentado por tema.",
+                    "Permite identificar qué narrativa duele más en cada vertical.",
+                )
+                st.plotly_chart(fig, use_container_width=True)
+
+    with col_right:
+        module_focus = df[
+            df["insight_type"].isin(["pain", "product_gap"])
+        ].dropna(subset=["module_display", "segment"])
+        if not module_focus.empty:
+            top_modules = module_focus["module_display"].value_counts().head(12).index
+            module_segment = (
+                module_focus[module_focus["module_display"].isin(top_modules)]
+                .groupby(["module_display", "segment"])
+                .size()
+                .reset_index(name="count")
+            )
+            fig = px.bar(
+                module_segment,
+                x="count",
+                y="module_display",
+                color="segment",
+                orientation="h",
+                barmode="stack",
+                title="Demanda de Modulos por Segmento",
+                labels={"count": "Menciones", "module_display": "Modulo", "segment": "Segmento"},
+            )
+            fig.update_layout(yaxis=dict(autorange="reversed"))
+            chart_tooltip(
+                "Módulos más demandados por segmento a partir de pains y product gaps.",
+                "Ayuda a priorizar mensaje comercial por tipo de cliente.",
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+    module_focus_industry = df[
+        df["insight_type"].isin(["pain", "product_gap"])
+    ].dropna(subset=["module_display", "industry"])
+    if not module_focus_industry.empty:
+        top_modules = module_focus_industry["module_display"].value_counts().head(10).index
+        top_industries = module_focus_industry["industry"].value_counts().head(8).index
+        module_industry = (
+            module_focus_industry[
+                module_focus_industry["module_display"].isin(top_modules)
+                & module_focus_industry["industry"].isin(top_industries)
+            ]
+            .groupby(["module_display", "industry"])
+            .size()
+            .reset_index(name="count")
+        )
+        fig = px.bar(
+            module_industry,
+            x="count",
+            y="module_display",
+            color="industry",
+            orientation="h",
+            barmode="stack",
+            title="Demanda de Modulos por Industria",
+            labels={"count": "Menciones", "module_display": "Modulo", "industry": "Industria"},
+        )
+        fig.update_layout(yaxis=dict(autorange="reversed"))
+        chart_tooltip(
+            "Cruce entre módulos demandados e industria.",
+            "Sirve para orientar campañas y assets por vertical.",
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
     # Top pains por modulo (deals unicos)
     module_pains = pains.dropna(subset=["module_display"])
     if not module_pains.empty:
@@ -129,7 +219,7 @@ else:
         )
         st.dataframe(
             pains_detail[available_pain_detail_cols].sort_values("confidence", ascending=False),
-            use_container_width=True,
+            width="stretch",
             height=400,
         )
 
@@ -277,7 +367,7 @@ else:
         )
         st.dataframe(
             gap_detail[available_gap_detail_cols].sort_values("confidence", ascending=False),
-            use_container_width=True,
+            width="stretch",
             height=400,
         )
 

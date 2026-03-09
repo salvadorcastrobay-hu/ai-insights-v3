@@ -9,7 +9,6 @@ SUPABASE_KEY = os.environ["SUPABASE_KEY"]
 SUPABASE_DB_PASSWORD = os.getenv("SUPABASE_DB_PASSWORD", "")
 
 def get_db_connection_params() -> dict:
-    """Extract PostgreSQL connection params for Supabase pooler."""
     import re
     match = re.search(r"https://([^.]+)\.supabase\.co", SUPABASE_URL)
     project_ref = match.group(1) if match else ""
