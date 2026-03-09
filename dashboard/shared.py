@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import re
+import textwrap
+import unicodedata
 
 import streamlit as st
 import yaml
@@ -98,8 +101,23 @@ COMPETITOR_NORMALIZATION = {
     "book": "Buk",
     "buk hr": "Buk",
     "bukhr": "Buk",
+    "senior": "Senior",
+    "solides": "Sólides",
+    "solids": "Sólides",
+    "fids": "Feedz",
+    "feedz": "Feedz",
+    "totus": "Totvs",
+    "tots": "Totvs",
+    "totvs": "Totvs",
 }
-OWN_BRAND_COMPETITOR_ALIASES = {"humand", "human"}
+OWN_BRAND_COMPETITOR_ALIASES = {"humand", "human", "human d"}
+
+
+def _normalize_competitor_key(value: str) -> str:
+    collapsed = " ".join(value.strip().split()).lower()
+    return "".join(
+        ch for ch in unicodedata.normalize("NFKD", collapsed) if not unicodedata.combining(ch)
+    )
 
 
 def normalize_competitor_name(value):
@@ -108,14 +126,14 @@ def normalize_competitor_name(value):
     cleaned = " ".join(value.strip().split())
     if not cleaned:
         return None
-    lowered = cleaned.lower()
-    return COMPETITOR_NORMALIZATION.get(lowered, cleaned)
+    normalized_key = _normalize_competitor_key(cleaned)
+    return COMPETITOR_NORMALIZATION.get(normalized_key, cleaned)
 
 
 def is_own_brand_competitor(value) -> bool:
     if not isinstance(value, str):
         return False
-    normalized = " ".join(value.strip().split()).lower()
+    normalized = _normalize_competitor_key(value)
     return normalized in OWN_BRAND_COMPETITOR_ALIASES
 
 # ── Auth helpers ──
@@ -183,7 +201,7 @@ def ensure_dashboard_schema(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-@st.cache_data(show_spinner=False, max_entries=1, persist="disk", ttl=3600)
+@st.cache_data(show_spinner=False, max_entries=1, persist="disk")
 def load_data() -> pd.DataFrame:
     """Load insights from the dashboard view, filtered by prompt_version."""
     client = get_supabase()
@@ -318,6 +336,47 @@ def format_currency(value: float) -> str:
 
 def safe_nunique(series: pd.Series) -> int:
     return series.dropna().nunique()
+
+
+# ── Label helpers ──
+
+_STAGE_LABEL_ALIASES = {
+    "decision maker engaged": "Decision Maker",
+    "champion engaged": "Champion",
+    "contract signed": "Contract Signed",
+    "final negotiation": "Final Negotiation",
+    "onboarding churned": "Onboarding Churned",
+    "active partner": "Active Partner",
+}
+_STAGE_SANITIZE_PATTERN = re.compile(r"[^\w\s/&+\-]", flags=re.UNICODE)
+
+
+def clean_stage_label(stage: str, max_chars: int = 16) -> str:
+    """Clean and wrap stage labels to keep heatmap axes readable."""
+    if stage is None:
+        return ""
+    text = " ".join(str(stage).strip().split())
+    if not text:
+        return ""
+
+    normalized_key = _normalize_competitor_key(text)
+    text = _STAGE_LABEL_ALIASES.get(normalized_key, text)
+    text = _STAGE_SANITIZE_PATTERN.sub("", text)
+    text = " ".join(text.split())
+    if len(text) <= max_chars:
+        return text
+    return "<br>".join(textwrap.wrap(text, width=max_chars, break_long_words=False))
+
+
+def topn_with_other(series: pd.Series, n: int, other_label: str = "Other") -> pd.Series:
+    """Keep top N categories by frequency and bucket the rest into other_label."""
+    if series is None or series.empty:
+        return series
+    counts = series.dropna().value_counts()
+    if len(counts) <= n:
+        return series
+    top_values = set(counts.head(n).index.tolist())
+    return series.where(series.isna() | series.isin(top_values), other_label)
 
 
 # ── Display-name mapping ──
