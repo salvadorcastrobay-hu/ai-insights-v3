@@ -155,6 +155,37 @@ with col_right:
             )
             st.plotly_chart(fig, use_container_width=True)
 
+if "industry" in comp.columns:
+    comp_ind = comp.dropna(subset=["industry", "competitor_name"])
+    if not comp_ind.empty:
+        top_comp = comp_ind["competitor_name"].value_counts().head(10).index
+        top_ind = comp_ind["industry"].value_counts().head(8).index
+        ind_data = (
+            comp_ind[
+                comp_ind["competitor_name"].isin(top_comp)
+                & comp_ind["industry"].isin(top_ind)
+            ]
+            .groupby(["competitor_name", "industry"])
+            .size()
+            .reset_index(name="count")
+        )
+        fig = px.bar(
+            ind_data,
+            x="count",
+            y="competitor_name",
+            color="industry",
+            orientation="h",
+            barmode="stack",
+            title="Competidores por Industria (Top 10)",
+            labels={"count": "Menciones", "competitor_name": "Competidor", "industry": "Industria"},
+        )
+        fig.update_layout(yaxis=dict(autorange="reversed"))
+        chart_tooltip(
+            "Desglose de menciones competitivas por industria.",
+            "Ayuda a detectar qué competidores presionan más en cada vertical.",
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
 # Migration opportunities
 migrating = comp[comp["competitor_relationship"] == "migrating_from"]
 if not migrating.empty:
@@ -167,6 +198,6 @@ if not migrating.empty:
     available_cols = [c for c in display_cols if c in migrating.columns]
     st.dataframe(
         migrating[available_cols].sort_values("amount", ascending=False),
-        use_container_width=True,
+        width="stretch",
         height=400,
     )
