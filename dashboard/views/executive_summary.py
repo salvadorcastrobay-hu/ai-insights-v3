@@ -1,5 +1,6 @@
 import streamlit as st
 import plotly.express as px
+import pandas as pd
 from shared import format_currency, chart_tooltip
 from computations import cached_value_counts, cached_dedup_groupby, cached_unique_deals_revenue
 
@@ -42,6 +43,72 @@ c5.metric(
     comp_all["competitor_name"].dropna().nunique(),
     help="Cantidad de competidores distintos detectados en señales competitivas.",
 )
+
+st.subheader("Marketing Snapshot")
+snapshot_rows: list[dict[str, str]] = []
+
+pains_all = df[df["insight_type"] == "pain"].copy()
+if not pains_all.empty:
+    top_theme = (
+        pains_all["pain_theme"].dropna().value_counts().rename_axis("pain_theme").reset_index(name="count")
+    )
+    if not top_theme.empty:
+        theme_name = str(top_theme.iloc[0]["pain_theme"]).replace("_", " ").title()
+        snapshot_rows.append(
+            {
+                "Pregunta": "¿Qué duele más hoy?",
+                "Hallazgo": f"El tema dominante es {theme_name} ({int(top_theme.iloc[0]['count'])} menciones).",
+                "Acción sugerida": "Priorizar narrativa y casos de uso sobre este tema en campañas y discovery.",
+            }
+        )
+
+friction_all = df[df["insight_type"] == "deal_friction"].copy()
+if not friction_all.empty:
+    top_friction = (
+        friction_all["insight_subtype_display"]
+        .dropna()
+        .value_counts()
+        .rename_axis("friction")
+        .reset_index(name="count")
+    )
+    if not top_friction.empty:
+        snapshot_rows.append(
+            {
+                "Pregunta": "¿Qué bloquea más los deals?",
+                "Hallazgo": (
+                    f"La fricción principal es {top_friction.iloc[0]['friction']} "
+                    f"({int(top_friction.iloc[0]['count'])} menciones)."
+                ),
+                "Acción sugerida": "Construir materiales de objection handling específicos para esa fricción.",
+            }
+        )
+
+module_focus = df[df["insight_type"].isin(["pain", "product_gap"])].dropna(subset=["module_display"])
+if not module_focus.empty:
+    top_module = (
+        module_focus["module_display"]
+        .value_counts()
+        .rename_axis("module")
+        .reset_index(name="count")
+    )
+    if not top_module.empty:
+        snapshot_rows.append(
+            {
+                "Pregunta": "¿Qué módulo demanda más el mercado?",
+                "Hallazgo": (
+                    f"El módulo más mencionado es {top_module.iloc[0]['module']} "
+                    f"({int(top_module.iloc[0]['count'])} menciones)."
+                ),
+                "Acción sugerida": "Refinar el posicionamiento comercial y assets de ese módulo por segmento.",
+            }
+        )
+
+if snapshot_rows:
+    chart_tooltip(
+        "Resumen accionable para marketing: pain dominante, principal fricción y foco de demanda por módulo.",
+        "Sirve como punto de partida para priorizar campañas, mensajes y enablement comercial.",
+    )
+    st.dataframe(pd.DataFrame(snapshot_rows), width="stretch", hide_index=True)
 
 # Row 2: Insights by type + Top 10 Pains
 col_left, col_right = st.columns(2)

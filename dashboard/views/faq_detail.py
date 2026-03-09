@@ -39,4 +39,4 @@ chart_tooltip(
 )
 display_cols = ["company_name", "insight_subtype_display", "summary", "verbatim_quote"]
 available_cols = [c for c in display_cols if c in faqs.columns]
-st.dataframe(faqs[available_cols], use_container_width=True, height=400)
+st.dataframe(faqs[available_cols], width="stretch", height=400)

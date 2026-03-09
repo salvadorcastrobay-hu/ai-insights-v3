@@ -127,7 +127,7 @@ if insight_rows:
             "Codigo": r["Codigo"],
             "Descripcion": descriptions.get(r["Codigo"], ""),
         })
-    st.dataframe(pd.DataFrame(full_rows), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(full_rows), width="stretch", hide_index=True)
 
 
 # ── 3. Taxonomia de Subtipos ─────────────────────────────────────────────
@@ -182,24 +182,24 @@ if pain_by_theme:
         for theme_code, rows in pain_by_theme.items():
             theme_name = PAIN_THEME_NAMES.get(theme_code, theme_code)
             st.markdown(f"**{theme_name}** ({len(rows)})")
-            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
 
 if pg_rows:
     with st.expander(f"Feature Faltante — Subtypes ({len(pg_rows)} de {len(PRODUCT_GAP_SUBTYPES)})", expanded=bool(q)):
-        st.dataframe(pd.DataFrame(pg_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(pg_rows), width="stretch", hide_index=True)
 
 if cs_rows:
     with st.expander(f"Senal Competitiva — Subtypes ({len(cs_rows)} de {len(COMPETITIVE_RELATIONSHIPS)})", expanded=bool(q)):
         st.caption("Para senales competitivas, el subtipo indica la relacion del prospecto con el competidor.")
-        st.dataframe(pd.DataFrame(cs_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(cs_rows), width="stretch", hide_index=True)
 
 if df_rows:
     with st.expander(f"Friccion del Deal — Subtypes ({len(df_rows)} de {len(DEAL_FRICTION_SUBTYPES)})", expanded=bool(q)):
-        st.dataframe(pd.DataFrame(df_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(df_rows), width="stretch", hide_index=True)
 
 if faq_rows:
     with st.expander(f"Pregunta Frecuente — Subtypes ({len(faq_rows)} de {len(FAQ_SUBTYPES)})", expanded=bool(q)):
-        st.dataframe(pd.DataFrame(faq_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(faq_rows), width="stretch", hide_index=True)
 
 
 # ── 4. Categorias HR y Modulos ───────────────────────────────────────────
@@ -229,7 +229,7 @@ if modules_by_cat:
             continue
         rows = modules_by_cat[cat_code]
         with st.expander(f"{cat_info['display_name']} ({len(rows)} modulos)", expanded=bool(q)):
-            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
 
 
 # ── 5. Competencia ───────────────────────────────────────────────────────
@@ -258,7 +258,7 @@ if show_competition:
 
     if rel_rows:
         with st.expander(f"Tipos de relacion competitiva ({len(rel_rows)})", expanded=bool(q)):
-            st.dataframe(pd.DataFrame(rel_rows), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(rel_rows), width="stretch", hide_index=True)
 
     for cat_code, cat_info in COMPETITOR_CATEGORIES.items():
         if cat_code not in comp_by_cat:
@@ -266,7 +266,7 @@ if show_competition:
         rows = comp_by_cat[cat_code]
         with st.expander(f"{cat_info['display_name']} ({len(rows)})", expanded=bool(q)):
             st.caption(cat_info.get("description", ""))
-            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
 
 
 # ── 6. Feature Names de referencia ───────────────────────────────────────
@@ -285,7 +285,7 @@ if feat_rows:
         "Lista de features conocidas usadas para clasificar product gaps. "
         "El modelo puede detectar features nuevas fuera de esta lista."
     )
-    st.dataframe(pd.DataFrame(feat_rows), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(feat_rows), width="stretch", hide_index=True)
 
 
 # ── 7. Guia de Dashboard ─────────────────────────────────────────────────
@@ -309,7 +309,7 @@ if show_guide:
             {"Indicador": "Revenue Total", "Calculo": "Suma de amount por deal_id unico.", "Lectura": "Magnitud economica del universo analizado."},
             {"Indicador": "Competidores Unicos", "Calculo": "Cantidad de competitor_name unicos no nulos.", "Lectura": "Diversidad competitiva detectada."},
         ])
-        st.dataframe(kpi_df, use_container_width=True, hide_index=True)
+        st.dataframe(kpi_df, width="stretch", hide_index=True)
 
     with st.expander("Como leer graficos", expanded=False):
         chart_df = pd.DataFrame([
@@ -319,7 +319,7 @@ if show_guide:
             {"Campo": "Agregacion", "Definicion": "Regla para calcular el valor del grafico.", "Tip": "Conteo, Suma, Promedio, Mediana o Conteo distinto."},
             {"Campo": "Top N", "Definicion": "Limita a las N categorias mas relevantes.", "Tip": "Evita graficos sobrecargados."},
         ])
-        st.dataframe(chart_df, use_container_width=True, hide_index=True)
+        st.dataframe(chart_df, width="stretch", hide_index=True)
 
     with st.expander("Diccionario de variables", expanded=False):
         var_df = pd.DataFrame([
@@ -337,7 +337,7 @@ if show_guide:
             {"Variable": "confidence", "Significado": "Confianza del modelo para ese insight (0 a 1)."},
             {"Variable": "amount", "Significado": "Monto del deal usado para analisis de revenue."},
         ])
-        st.dataframe(var_df, use_container_width=True, hide_index=True)
+        st.dataframe(var_df, width="stretch", hide_index=True)
 
 
 # ── Empty state ──────────────────────────────────────────────────────────

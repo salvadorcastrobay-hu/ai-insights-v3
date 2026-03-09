@@ -76,4 +76,4 @@ chart_tooltip(
 )
 display_cols = ["company_name", "insight_subtype_display", "pain_theme", "pain_scope", "module_display", "summary", "confidence"]
 available_cols = [c for c in display_cols if c in pains.columns]
-st.dataframe(pains[available_cols].sort_values("confidence", ascending=False), use_container_width=True, height=400)
+st.dataframe(pains[available_cols].sort_values("confidence", ascending=False), width="stretch", height=400)

@@ -8,7 +8,7 @@ import uuid
 import pandas as pd
 import plotly.express as px
 import streamlit as st
-from shared import chart_tooltip
+from shared import chart_tooltip, is_own_brand_competitor
 
 
 STORE_PATH = Path(__file__).resolve().parent.parent / "custom_dashboards.json"
@@ -43,6 +43,74 @@ SAVE_TARGETS = {
     "new": "Crear dashboard nuevo",
     "existing": "Agregar a dashboard existente",
 }
+CHART_PRESETS = [
+    {
+        "label": "📊 Top Pains",
+        "chart_name": "Top Pains",
+        "chart_type": "bar",
+        "x_col": "insight_subtype_display",
+        "y_col": None,
+        "color_col": None,
+        "aggregation": "count",
+        "top_n": 10,
+        "sort_desc": True,
+    },
+    {
+        "label": "🌎 Pains por Región",
+        "chart_name": "Pains por Región",
+        "chart_type": "bar",
+        "x_col": "region",
+        "y_col": None,
+        "color_col": "insight_subtype_display",
+        "aggregation": "count",
+        "top_n": 12,
+        "sort_desc": True,
+    },
+    {
+        "label": "⚔️ Competidores",
+        "chart_name": "Competidores",
+        "chart_type": "bar",
+        "x_col": "competitor_name",
+        "y_col": None,
+        "color_col": "competitor_relationship_display",
+        "aggregation": "count",
+        "top_n": 10,
+        "sort_desc": True,
+    },
+    {
+        "label": "🧩 Módulos demandados",
+        "chart_name": "Módulos demandados",
+        "chart_type": "bar",
+        "x_col": "module_display",
+        "y_col": None,
+        "color_col": "segment",
+        "aggregation": "count",
+        "top_n": 10,
+        "sort_desc": True,
+    },
+    {
+        "label": "💰 Pipeline por Etapa",
+        "chart_name": "Pipeline por Etapa",
+        "chart_type": "bar",
+        "x_col": "deal_stage",
+        "y_col": "amount",
+        "color_col": None,
+        "aggregation": "sum",
+        "top_n": 12,
+        "sort_desc": True,
+    },
+    {
+        "label": "🎯 Insights por Segmento",
+        "chart_name": "Insights por Segmento",
+        "chart_type": "pie",
+        "x_col": "segment",
+        "y_col": None,
+        "color_col": None,
+        "aggregation": "count",
+        "top_n": 6,
+        "sort_desc": True,
+    },
+]
 FIELD_LABELS = {
     "insight_type_display": "Tipo de insight",
     "insight_subtype_display": "Subtipo de insight",
@@ -340,6 +408,11 @@ def _build_figure(df: pd.DataFrame, spec: dict) -> tuple[object | None, pd.DataF
     top_n = int(spec.get("top_n", 12) or 12)
     sort_desc = bool(spec.get("sort_desc", True))
 
+    # Filter out own-brand (Humand) when charting competitors
+    if x_col == "competitor_name" or color_col == "competitor_name":
+        if "competitor_name" in df.columns:
+            df = df[~df["competitor_name"].map(is_own_brand_competitor).fillna(False)]
+
     if chart_type in AGG_CHARTS:
         agg_df = _build_agg_frame(df=df, x_col=x_col, y_col=y_col, color_col=color_col, aggregation=aggregation)
         if agg_df.empty:
@@ -499,6 +572,22 @@ tabs = st.tabs(["Crear tu dashboard", "Mis dashboards personalizados"])
 
 with tabs[0]:
     st.caption("Podés guardar múltiples gráficos dentro del mismo dashboard.")
+
+    # --- Quick Start Presets ---
+    st.subheader("⚡ Inicio rápido")
+    st.caption("Elegí un preset para pre-cargar la configuración del gráfico.")
+    preset_cols = st.columns(len(CHART_PRESETS))
+    for i, preset in enumerate(CHART_PRESETS):
+        with preset_cols[i]:
+            if st.button(preset["label"], key=f"preset_{i}", use_container_width=True):
+                st.session_state["_cd_preset"] = preset
+                st.rerun()
+
+    active_preset = st.session_state.pop("_cd_preset", None)
+
+    st.divider()
+    st.subheader("🛠️ Constructor de gráficos")
+
     source_mode = st.radio(
         "Fuente de datos",
         list(SOURCE_MODES.keys()),
@@ -540,16 +629,19 @@ with tabs[0]:
             with c3:
                 chart_name = st.text_input(
                     "Nombre del gráfico",
+                    value=active_preset["chart_name"] if active_preset else "",
                     placeholder="Ej: Top pains por región",
                     help="Título visible del gráfico dentro del dashboard.",
                 )
 
             chart_col, x_col_container, color_col_container = st.columns(3)
             with chart_col:
+                _ct_options = list(CHART_TYPES.keys())
+                _ct_default = _ct_options.index(active_preset["chart_type"]) if active_preset and active_preset["chart_type"] in _ct_options else 0
                 chart_type = st.selectbox(
                     "Tipo de gráfico",
-                    list(CHART_TYPES.keys()),
-                    index=0,
+                    _ct_options,
+                    index=_ct_default,
                     format_func=lambda ct: CHART_TYPES[ct],
                     help="Barras/Líneas/Área/Torta muestran agregados; Dispersión/Histograma muestran datos más crudos.",
                 )
@@ -568,16 +660,23 @@ with tabs[0]:
                 st.warning("No hay columnas relevantes para este tipo de gráfico.")
             else:
                 with x_col_container:
+                    _x_default = x_options.index(active_preset["x_col"]) if active_preset and active_preset.get("x_col") in x_options else 0
                     x_col = st.selectbox(
                         "Eje X",
                         x_options,
+                        index=_x_default,
                         format_func=_field_label,
                         help=x_help,
                     )
                 with color_col_container:
+                    _color_options = [None] + column_options["color"]
+                    _color_default = 0
+                    if active_preset and active_preset.get("color_col") in column_options["color"]:
+                        _color_default = _color_options.index(active_preset["color_col"])
                     color_col = st.selectbox(
                         "Color por (opcional)",
-                        [None] + column_options["color"],
+                        _color_options,
+                        index=_color_default,
                         format_func=lambda col: "(sin color)" if col is None else _field_label(col),
                         help="Segmenta el gráfico por una dimensión adicional para comparar cortes (ej: región o tipo de insight).",
                     )
@@ -590,10 +689,12 @@ with tabs[0]:
                 if chart_type in AGG_CHARTS:
                     c6, c7, c8, c9 = st.columns(4)
                     with c6:
+                        _agg_options = list(AGGREGATIONS.keys())
+                        _agg_default = _agg_options.index(active_preset["aggregation"]) if active_preset and active_preset.get("aggregation") in _agg_options else 0
                         aggregation = st.selectbox(
                             "Agregación",
-                            list(AGGREGATIONS.keys()),
-                            index=0,
+                            _agg_options,
+                            index=_agg_default,
                             format_func=_aggregation_label,
                             help="Define cómo calcular el valor: conteo, suma, promedio, mediana o conteo distinto.",
                         )
@@ -631,18 +732,20 @@ with tabs[0]:
                                 st.warning("No hay columnas relevantes para conteo distinto.")
                                 y_col = None
                     with c8:
+                        _tn_default = active_preset["top_n"] if active_preset and active_preset.get("top_n") else 12
                         top_n = st.slider(
                             "Top N",
                             min_value=3,
                             max_value=50,
-                            value=12,
+                            value=_tn_default,
                             step=1,
                             help="Para rankings, limita la vista a las N categorías más relevantes.",
                         )
                     with c9:
+                        _sd_default = active_preset["sort_desc"] if active_preset and "sort_desc" in active_preset else True
                         sort_desc = st.checkbox(
                             "Ordenar de mayor a menor",
-                            value=True,
+                            value=_sd_default,
                             help="Si está activo, primero aparecen los valores más altos.",
                         )
                 elif chart_type == "scatter":
@@ -682,15 +785,15 @@ with tabs[0]:
                     chart_tooltip(what_shows, how_to_read)
                     st.plotly_chart(
                         fig,
-                        width="stretch",
+                        use_container_width=True,
                         key=f"preview_chart_{spec.get('id')}",
                     )
                     with st.expander("Datos de vista previa"):
-                        st.dataframe(preview_df.head(200), use_container_width=True, hide_index=True, height=300)
+                        st.dataframe(preview_df.head(200), width="stretch", hide_index=True, height=300)
 
                 save_col1, save_col2 = st.columns([1, 2])
                 with save_col1:
-                    if st.button("Guardar gráfico en dashboard", use_container_width=True):
+                    if st.button("Guardar gráfico en dashboard", width="stretch"):
                         ok, err = _save_chart_to_dashboard(
                             owner=owner,
                             dashboard_name=dashboard_name,
@@ -719,7 +822,7 @@ with tabs[1]:
             st.subheader(selected_dashboard.get("name", "Dashboard sin título"))
             st.caption(f"{len(selected_dashboard.get('charts', []))} gráfico(s)")
         with top_right:
-            if st.button("Eliminar dashboard", type="secondary", use_container_width=True):
+            if st.button("Eliminar dashboard", type="secondary", width="stretch"):
                 ok, err = _delete_dashboard(owner=owner, dashboard_id=selected_dashboard.get("id", ""))
                 if ok:
                     st.success("Dashboard eliminado.")
@@ -748,12 +851,12 @@ with tabs[1]:
                     what_shows, how_to_read = _chart_intent(chart)
                     chart_tooltip(what_shows, how_to_read)
                     chart_key = f"saved_chart_{dashboard_id}_{chart.get('id') or idx}"
-                    st.plotly_chart(fig, width="stretch", key=chart_key)
+                    st.plotly_chart(fig, use_container_width=True, key=chart_key)
 
                 with st.expander("Datos del gráfico"):
-                    st.dataframe(chart_data.head(200), use_container_width=True, hide_index=True, height=300)
+                    st.dataframe(chart_data.head(200), width="stretch", hide_index=True, height=300)
 
-                if st.button("Eliminar gráfico", key=f"delete_chart_{chart.get('id')}", use_container_width=True):
+                if st.button("Eliminar gráfico", key=f"delete_chart_{chart.get('id')}", width="stretch"):
                     ok, err = _delete_chart(
                         owner=owner,
                         dashboard_id=dashboard_id,
