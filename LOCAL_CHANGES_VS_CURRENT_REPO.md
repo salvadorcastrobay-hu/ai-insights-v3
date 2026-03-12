@@ -121,6 +121,46 @@ src/agents/chat_agent.py             | 164 ++++-------
 
 ---
 
+## Notion page — Product Intelligence CTAs vs implementation status
+
+Source: https://www.notion.so/humand-co/Product-Intelligence-31f6757f3130800799bfc4bccdff18ea
+
+| # | Notion CTA | Status |
+|---|---|---|
+| 1 | Reorganizar en 3 secciones A / B / C con preguntas orientadoras | ✅ Implemented |
+| 2 | Clarificar unidad de medida en todos los gráficos (demos únicas) | ✅ Done — uses `cached_pains_with_pct`, labels updated to "Demos únicas" |
+| 3 | Mover "Demanda de Módulos" al inicio de sección B | ✅ Moved — renamed to "Módulos más buscados en la primera demo" |
+| 4 | Renombrar "Top 20 Features Faltantes" con pregunta orientadora | ✅ Done — "¿Qué nos piden que no tenemos? (por frecuencia)" |
+| 5 | Desglose de los 2 pains principales con subtemas (columna derecha) | ✅ Done — Pain Breakdown by `module_display` for top 2 pains |
+| 6 | % sobre total de demos en gráfico de Pains | ✅ Done — hover data via `cached_pains_with_pct` |
+| 7 | Sección C separada para Revenue at Stake | ✅ Done — new `st.subheader("C. ¿Cuánto revenue...")` |
+| 8 | Línea explicativa debajo del título de Revenue at Stake | ✅ Done — `st.caption(...)` with explanatory text |
+| 9 | Instrucción visible arriba del selector de Feature Gap | ✅ Done — `st.caption(...)` inside `_feature_gap_detail_fragment` |
+| 10 | Gráfico de torta "Distribución por Prioridad" → tabla | ✅ Done — replaced with `st.dataframe` showing priority + count + description |
+| 11 | "Pains por Theme" → mover al final de sección A | ✅ Done — moved below industria chart as context |
+
+### `dashboard/views/product_intelligence.py` — [Session 2026-03-12]
+
+- **Section A renamed**: `A. Pains` → `A. ¿Con qué problemas llegan los prospects?`
+- **Top 15 Pains**: switched from raw `cached_value_counts` to `cached_pains_with_pct` — x-axis is now `Demos únicas` (unique transcript count), `% del total` shown in hover.
+- **Pain Breakdown panel**: new right column next to Top 15 Pains. For each of the top 2 pains, shows breakdown by `module_display` (demos únicas + % within that pain). Layout `st.columns([3, 2])`.
+- **Top 15 Pains × Segmento**: renamed to `¿Varía el pain según el tamaño de empresa?`, moved to full width. Count uses `transcript_id.nunique()` per cell.
+- **Pains por Industria**: renamed to `¿Varía el pain según la industria?`, added `automargin=True` to prevent label truncation.
+- **Pains por Theme**: moved from `col_left` (alongside Top 15) to bottom of Section A as context.
+- **Section B renamed**: `B. Feature Gaps` → `B. ¿Qué módulos y features buscan los prospects?`
+- **Demanda de Módulos por Segmento**: moved from Section A to top of Section B, renamed to `Módulos más buscados en la primera demo`.
+- **Demanda de Módulos por Industria**: also moved from Section A to Section B.
+- **Top 20 Features Faltantes**: renamed to `¿Qué nos piden que no tenemos? (por frecuencia)`.
+- **Feature Gaps por Segmento**: renamed to `¿Qué nos falta según el tamaño de empresa?`.
+- **Frequency + Revenue at Stake side-by-side**: both charts shown in `st.columns(2)` in Section B for direct comparison.
+- **Distribución por Prioridad**: replaced `px.bar` chart with `st.dataframe` table showing Prioridad / Cantidad / Descripción.
+- **Feature Gap selector**: added `st.caption(...)` instruction above selectbox.
+- **Section C (new)**: `C. ¿Cuánto revenue estamos dejando ir por lo que no tenemos?` with `st.caption(...)` note explaining revenue at stake definition. Shows Revenue at Stake chart + priority summary table (unique features + revenue sum per priority) side by side.
+- **Removed charts not in Notion final layout**: "Pains por Módulo (Top 15)", "Demanda de Módulos por Industria", "Gaps: Módulos Existentes vs Faltantes".
+- **Priority table in Section B**: added `st.markdown("**Distribución por prioridad de gaps**")` visible title above the table; renamed column to "Cantidad de features" per Notion spec.
+
+---
+
 ## Other modified views (earlier sessions, already documented)
 
 - `dashboard/views/competitive_intelligence.py` — Added `Competidores por Industria (Top 10)`.
