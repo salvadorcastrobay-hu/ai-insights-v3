@@ -138,7 +138,7 @@ def is_own_brand_competitor(value) -> bool:
 
 # ── Auth helpers ──
 
-CONFIG_PATH = Path(__file__).parent.parent / "config.yaml"
+CONFIG_PATH = Path(__file__).parent / "config.yaml"
 
 
 def load_auth_config():
