@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import re
+import textwrap
+import unicodedata
 
 import streamlit as st
 import yaml
@@ -98,8 +101,23 @@ COMPETITOR_NORMALIZATION = {
     "book": "Buk",
     "buk hr": "Buk",
     "bukhr": "Buk",
+    "senior": "Senior",
+    "solides": "Sólides",
+    "solids": "Sólides",
+    "fids": "Feedz",
+    "feedz": "Feedz",
+    "totus": "Totvs",
+    "tots": "Totvs",
+    "totvs": "Totvs",
 }
-OWN_BRAND_COMPETITOR_ALIASES = {"humand", "human"}
+OWN_BRAND_COMPETITOR_ALIASES = {"humand", "human", "human d"}
+
+
+def _normalize_competitor_key(value: str) -> str:
+    collapsed = " ".join(value.strip().split()).lower()
+    return "".join(
+        ch for ch in unicodedata.normalize("NFKD", collapsed) if not unicodedata.combining(ch)
+    )
 
 
 def normalize_competitor_name(value):
@@ -108,19 +126,19 @@ def normalize_competitor_name(value):
     cleaned = " ".join(value.strip().split())
     if not cleaned:
         return None
-    lowered = cleaned.lower()
-    return COMPETITOR_NORMALIZATION.get(lowered, cleaned)
+    normalized_key = _normalize_competitor_key(cleaned)
+    return COMPETITOR_NORMALIZATION.get(normalized_key, cleaned)
 
 
 def is_own_brand_competitor(value) -> bool:
     if not isinstance(value, str):
         return False
-    normalized = " ".join(value.strip().split()).lower()
+    normalized = _normalize_competitor_key(value)
     return normalized in OWN_BRAND_COMPETITOR_ALIASES
 
 # ── Auth helpers ──
 
-CONFIG_PATH = Path(__file__).parent / "config.yaml"
+CONFIG_PATH = Path(__file__).parent.parent / "config.yaml"
 
 
 def load_auth_config():
@@ -185,8 +203,9 @@ def ensure_dashboard_schema(df: pd.DataFrame) -> pd.DataFrame:
 
 @st.cache_data(show_spinner=False, max_entries=1, persist="disk")
 def load_data() -> pd.DataFrame:
-    """Load insights from the dashboard view."""
+    """Load insights from the dashboard view, filtered by prompt_version."""
     client = get_supabase()
+    prompt_version = os.environ.get("PROMPT_VERSION", "v3.0")
     all_data = []
     offset = 0
     page_size = 1000
@@ -194,6 +213,8 @@ def load_data() -> pd.DataFrame:
         response = (
             client.table("v_insights_dashboard")
             .select(LOAD_DATA_SELECT)
+            .eq("prompt_version", prompt_version)
+            .order("id")
             .range(offset, offset + page_size - 1)
             .execute()
         )
@@ -220,72 +241,75 @@ def load_data() -> pd.DataFrame:
     return df
 
 
+@st.cache_data(show_spinner=False, ttl=3600)
+def load_total_transcripts_count() -> int:
+    """Returns total count of processed transcripts in raw_transcripts."""
+    client = get_supabase()
+    result = client.table("raw_transcripts").select("*", count="exact").limit(0).execute()
+    return result.count or 0
+
+
 # ── Sidebar filters ──
+
+@st.cache_data(show_spinner=False)
+def _compute_filter_options(df: pd.DataFrame) -> dict:
+    """Precompute sorted unique values for sidebar filters (cached)."""
+    options: dict = {}
+    options["types"] = sorted(df["insight_type_display"].dropna().unique())
+    options["regions"] = sorted(df["region"].dropna().unique())
+    options["segments"] = sorted(df["segment"].dropna().unique()) if "segment" in df.columns else []
+    options["countries"] = sorted(df["country"].dropna().unique()) if "country" in df.columns else []
+    options["industries"] = sorted(df["industry"].dropna().unique()) if "industry" in df.columns else []
+    options["owners"] = sorted(df["deal_owner"].dropna().unique()) if "deal_owner" in df.columns else []
+    options["modules"] = sorted(df["module_display"].dropna().unique())
+    options["categories"] = sorted(df["hr_category_display"].dropna().unique())
+    if "call_date" in df.columns:
+        valid_dates = df["call_date"].dropna()
+        if not valid_dates.empty:
+            options["min_date"] = valid_dates.min().date()
+            options["max_date"] = valid_dates.max().date()
+    return options
+
 
 def render_sidebar(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         return df
 
+    opts = _compute_filter_options(df)
+
     # Insight type filter
-    types = sorted(df["insight_type_display"].dropna().unique())
-    selected_types = st.sidebar.multiselect("Tipo de Insight", types, default=types)
+    selected_types = st.sidebar.multiselect("Tipo de Insight", opts["types"], default=opts["types"])
 
     # Region filter
-    regions = sorted(df["region"].dropna().unique())
-    selected_regions = st.sidebar.multiselect("Region", regions, default=regions)
+    selected_regions = st.sidebar.multiselect("Region", opts["regions"], default=opts["regions"])
 
     # Segment filter
-    if "segment" in df.columns:
-        segments = sorted(df["segment"].dropna().unique())
-        selected_segments = st.sidebar.multiselect("Segmento", segments)
-    else:
-        selected_segments = []
+    selected_segments = st.sidebar.multiselect("Segmento", opts["segments"]) if opts["segments"] else []
 
     # Country filter
-    if "country" in df.columns:
-        countries = sorted(df["country"].dropna().unique())
-        selected_countries = st.sidebar.multiselect("Pais", countries)
-    else:
-        selected_countries = []
+    selected_countries = st.sidebar.multiselect("Pais", opts["countries"]) if opts["countries"] else []
 
     # Industry filter
-    if "industry" in df.columns:
-        industries = sorted(df["industry"].dropna().unique())
-        selected_industries = st.sidebar.multiselect("Industria", industries)
-    else:
-        selected_industries = []
+    selected_industries = st.sidebar.multiselect("Industria", opts["industries"]) if opts["industries"] else []
 
     # Deal Owner (AE) filter
-    if "deal_owner" in df.columns:
-        owners = sorted(df["deal_owner"].dropna().unique())
-        selected_owners = st.sidebar.multiselect("Deal Owner (AE)", owners)
-    else:
-        selected_owners = []
+    selected_owners = st.sidebar.multiselect("Deal Owner (AE)", opts["owners"]) if opts["owners"] else []
 
     # Date range filter
-    if "call_date" in df.columns:
-        valid_dates = df["call_date"].dropna()
-        if not valid_dates.empty:
-            min_date = valid_dates.min().date()
-            max_date = valid_dates.max().date()
-            date_range = st.sidebar.date_input(
-                "Rango de fechas",
-                value=(min_date, max_date),
-                min_value=min_date,
-                max_value=max_date,
-            )
-        else:
-            date_range = None
-    else:
-        date_range = None
+    date_range = None
+    if "min_date" in opts:
+        date_range = st.sidebar.date_input(
+            "Rango de fechas",
+            value=(opts["min_date"], opts["max_date"]),
+            min_value=opts["min_date"],
+            max_value=opts["max_date"],
+        )
 
     # Module filter
-    modules = sorted(df["module_display"].dropna().unique())
-    selected_modules = st.sidebar.multiselect("Modulo", modules)
+    selected_modules = st.sidebar.multiselect("Modulo", opts["modules"])
 
     # HR Category filter
-    categories = sorted(df["hr_category_display"].dropna().unique())
-    selected_categories = st.sidebar.multiselect("Categoria HR", categories)
+    selected_categories = st.sidebar.multiselect("Categoria HR", opts["categories"])
 
     # Apply filters
     mask = df["insight_type_display"].isin(selected_types) & df["region"].isin(selected_regions)
@@ -308,6 +332,62 @@ def render_sidebar(df: pd.DataFrame) -> pd.DataFrame:
     return df[mask]
 
 
+def render_inline_filters(df: pd.DataFrame, key_prefix: str = "page") -> pd.DataFrame:
+    """Render filters as an inline expander at the top of a page. Returns filtered df."""
+    if df.empty:
+        return df
+
+    opts = _compute_filter_options(df)
+
+    with st.expander("Filtros", expanded=False):
+        fr1, fr2, fr3 = st.columns(3)
+        sel_types = fr1.multiselect(
+            "Tipo de Insight", opts["types"], default=opts["types"], key=f"{key_prefix}_types"
+        )
+        sel_regions = fr2.multiselect(
+            "Region", opts["regions"], default=opts["regions"], key=f"{key_prefix}_regions"
+        )
+        sel_segments = fr3.multiselect("Segmento", opts["segments"], key=f"{key_prefix}_segments")
+
+        fr4, fr5, fr6 = st.columns(3)
+        sel_countries = fr4.multiselect("País", opts["countries"], key=f"{key_prefix}_countries")
+        sel_industries = fr5.multiselect("Industria", opts["industries"], key=f"{key_prefix}_industries")
+        sel_owners = fr6.multiselect("Deal Owner (AE)", opts["owners"], key=f"{key_prefix}_owners")
+
+        fr7, fr8, fr9 = st.columns(3)
+        sel_modules = fr7.multiselect("Módulo", opts["modules"], key=f"{key_prefix}_modules")
+        sel_categories = fr8.multiselect("Categoría HR", opts["categories"], key=f"{key_prefix}_categories")
+
+        date_range = None
+        if "min_date" in opts:
+            date_range = fr9.date_input(
+                "Rango de fechas",
+                value=(opts["min_date"], opts["max_date"]),
+                min_value=opts["min_date"],
+                max_value=opts["max_date"],
+                key=f"{key_prefix}_dates",
+            )
+
+    mask = df["insight_type_display"].isin(sel_types) & df["region"].isin(sel_regions)
+    if sel_segments:
+        mask &= df["segment"].isin(sel_segments)
+    if sel_countries:
+        mask &= df["country"].isin(sel_countries)
+    if sel_industries:
+        mask &= df["industry"].isin(sel_industries)
+    if sel_owners:
+        mask &= df["deal_owner"].isin(sel_owners)
+    if date_range and isinstance(date_range, tuple) and len(date_range) == 2:
+        start, end = date_range
+        mask &= (df["call_date"].dt.date >= start) & (df["call_date"].dt.date <= end)
+    if sel_modules:
+        mask &= df["module_display"].isin(sel_modules)
+    if sel_categories:
+        mask &= df["hr_category_display"].isin(sel_categories)
+
+    return df[mask]
+
+
 # ── Formatting helpers ──
 
 def format_currency(value: float) -> str:
@@ -322,6 +402,47 @@ def safe_nunique(series: pd.Series) -> int:
     return series.dropna().nunique()
 
 
+# ── Label helpers ──
+
+_STAGE_LABEL_ALIASES = {
+    "decision maker engaged": "Decision Maker",
+    "champion engaged": "Champion",
+    "contract signed": "Contract Signed",
+    "final negotiation": "Final Negotiation",
+    "onboarding churned": "Onboarding Churned",
+    "active partner": "Active Partner",
+}
+_STAGE_SANITIZE_PATTERN = re.compile(r"[^\w\s/&+\-]", flags=re.UNICODE)
+
+
+def clean_stage_label(stage: str, max_chars: int = 16) -> str:
+    """Clean and wrap stage labels to keep heatmap axes readable."""
+    if stage is None:
+        return ""
+    text = " ".join(str(stage).strip().split())
+    if not text:
+        return ""
+
+    normalized_key = _normalize_competitor_key(text)
+    text = _STAGE_LABEL_ALIASES.get(normalized_key, text)
+    text = _STAGE_SANITIZE_PATTERN.sub("", text)
+    text = " ".join(text.split())
+    if len(text) <= max_chars:
+        return text
+    return "<br>".join(textwrap.wrap(text, width=max_chars, break_long_words=False))
+
+
+def topn_with_other(series: pd.Series, n: int, other_label: str = "Other") -> pd.Series:
+    """Keep top N categories by frequency and bucket the rest into other_label."""
+    if series is None or series.empty:
+        return series
+    counts = series.dropna().value_counts()
+    if len(counts) <= n:
+        return series
+    top_values = set(counts.head(n).index.tolist())
+    return series.where(series.isna() | series.isin(top_values), other_label)
+
+
 # ── Display-name mapping ──
 
 DISPLAY_NAMES = {
@@ -332,11 +453,14 @@ DISPLAY_NAMES = {
     "module_linked": "Vinculado a Módulo",
     "existing": "Existente",
     "missing": "Faltante",
+    "roadmap": "Roadmap",
     "technology": "Tecnología",
     "processes": "Procesos",
     "communication": "Comunicación",
     "talent": "Talento",
     "engagement": "Engagement",
+    "data_and_analytics": "Datos y Analytics",
+    "compliance_and_scale": "Compliance y Escala",
     "data": "Datos",
     "compliance": "Compliance",
     "compensation": "Compensación",
