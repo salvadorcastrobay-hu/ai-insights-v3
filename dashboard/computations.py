@@ -62,3 +62,22 @@ def cached_dedup_groupby(
 def cached_unique_deals_revenue(df: pd.DataFrame) -> float:
     """Sum of amount across unique deal_ids."""
     return float(df.drop_duplicates("deal_id")["amount"].sum())
+
+
+@st.cache_data(show_spinner=False)
+def cached_pains_with_pct(pains: pd.DataFrame, n: int = 10) -> pd.DataFrame:
+    """Returns top-n pains by unique demo count, with % of total demos."""
+    total_demos = pains["transcript_id"].nunique()
+    result = (
+        pains.groupby("insight_subtype_display")["transcript_id"]
+        .nunique()
+        .sort_values(ascending=False)
+        .head(n)
+        .reset_index()
+    )
+    result.columns = ["Pain", "Demos"]
+    if total_demos > 0:
+        result["% del total"] = (result["Demos"] / total_demos * 100).round(1).astype(str) + "%"
+    else:
+        result["% del total"] = "0.0%"
+    return result
