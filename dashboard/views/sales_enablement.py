@@ -1,12 +1,17 @@
 import streamlit as st
 import plotly.express as px
 import pandas as pd
-from shared import format_currency, chart_tooltip, clean_stage_label, topn_with_other
+from shared import format_currency, chart_tooltip, clean_stage_label, topn_with_other, render_inline_filters
 from computations import cached_value_counts, cached_unique_deals_revenue
 
-df = st.session_state.get("filtered_df")
-if df is None or df.empty:
+raw_df = st.session_state.get("df")
+if raw_df is None or raw_df.empty:
     st.warning("No hay datos para mostrar.")
+    st.stop()
+
+df = render_inline_filters(raw_df, key_prefix="se")
+if df.empty:
+    st.warning("No hay datos para los filtros seleccionados.")
     st.stop()
 
 st.header("Sales Enablement")
