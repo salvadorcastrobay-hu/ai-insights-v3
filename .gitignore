@@ -27,5 +27,8 @@ venv/
 *.swo
 .DS_Store
 
-# Claude Code
-.claude/
+# Claude Code (keep CLAUDE.md and skills tracked)
+.claude/*
+!.claude/CLAUDE.md
+!.claude/skills/
+!.claude/skills/**
