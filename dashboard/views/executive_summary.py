@@ -159,6 +159,10 @@ with col_seg:
 # ── Resumen de señales detectadas (Insights por Tipo) ─────────────────────────
 
 st.subheader("Resumen de señales detectadas")
+st.caption(
+    "Cantidad de insights únicos detectados en el período seleccionado. "
+    "Una misma demo puede generar múltiples insights de distintos tipos."
+)
 type_counts = cached_value_counts(df, "insight_type_display", n=20)
 type_counts.columns = ["Tipo", "Cantidad"]
 fig = px.bar(
@@ -186,8 +190,10 @@ with col_pains:
         fig = px.bar(
             top_pains, x="Demos", y="Pain", orientation="h",
             title="Top 10 Pains (demos únicas)",
+            text="% del total",
             hover_data=["% del total"],
         )
+        fig.update_traces(textposition="outside")
         fig.update_layout(yaxis=dict(autorange="reversed"))
         chart_tooltip(
             "Ranking de los 10 pains más mencionados.",
@@ -198,39 +204,40 @@ with col_pains:
 
 with col_pain_insights:
     if not pains.empty:
-        module_pain = (
+        pain_module = (
             pains.dropna(subset=["module_display"])
-            .groupby(["module_display", "insight_subtype_display"])["transcript_id"]
+            .groupby(["insight_subtype_display", "module_display"])["transcript_id"]
             .nunique()
-            .reset_index(name="count")
+            .reset_index(name="Demos")
         )
-        if not module_pain.empty:
-            top_modules = (
-                module_pain.groupby("module_display")["count"].sum()
-                .nlargest(10).index
-            )
-            top_pains_global = pains["insight_subtype_display"].value_counts().head(8).index
-            hm = module_pain[
-                module_pain["module_display"].isin(top_modules) &
-                module_pain["insight_subtype_display"].isin(top_pains_global)
-            ]
-            pivot = hm.pivot(
-                index="module_display", columns="insight_subtype_display", values="count"
-            ).fillna(0)
-            fig = px.imshow(
-                pivot, text_auto=True, aspect="auto",
-                title="Pain Insights — Top Pains por Módulo",
-                color_continuous_scale="Blues",
-                labels=dict(x="Pain", y="Módulo", color="Demos"),
-            )
-            fig.update_layout(height=420)
-            chart_tooltip(
-                "Para los 10 módulos más demandados, los 8 pains más frecuentes.",
-                "Color más intenso = más demos con ese pain en ese módulo.",
-            )
-            st.plotly_chart(fig, use_container_width=True)
-        else:
+        top2_pain_names = pains["insight_subtype_display"].value_counts().head(2).index.tolist()
+        if pain_module.empty or not top2_pain_names:
             st.info("Sin datos de módulos asociados a los pains.")
+        else:
+            st.markdown("**Pain Insights — Desglose de los 2 principales pains**")
+            chart_tooltip(
+                "Para cada uno de los 2 pains más frecuentes, los módulos donde más aparece.",
+                "Muestra en qué áreas de producto se concentra cada pain principal.",
+            )
+            for pain_name in top2_pain_names:
+                subset = (
+                    pain_module[pain_module["insight_subtype_display"] == pain_name]
+                    .nlargest(6, "Demos")
+                    .reset_index(drop=True)
+                )
+                subset.columns = ["Pain", "Módulo", "Demos"]
+                if not subset.empty:
+                    fig = px.bar(
+                        subset, x="Demos", y="Módulo", orientation="h",
+                        title=f"Desglose: {pain_name}",
+                        labels={"Módulo": "Módulo", "Demos": "Demos únicas"},
+                    )
+                    fig.update_layout(
+                        yaxis=dict(autorange="reversed"),
+                        height=240,
+                        margin=dict(t=40, b=20),
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
 
 # Top 15 Pains × Segmento heatmap (full-width)
 if not pains.empty and "segment" in pains.columns:
@@ -261,7 +268,7 @@ if not pains.empty and "segment" in pains.columns:
 
 # ── 2️⃣ ¿Qué módulos buscan más? ──────────────────────────────────────────────
 
-st.subheader("¿Qué módulos buscan más?")
+st.subheader("¿Qué módulos buscan y qué les falta?")
 
 module_focus = df[df["insight_type"].isin(["pain", "product_gap"])].dropna(subset=["module_display"])
 if not module_focus.empty:
@@ -311,13 +318,22 @@ with col_gap_rev:
             group_col="feature_display", agg_col="amount", agg_func="sum", n=10,
         )
         gap_revenue.columns = ["feature_display", "amount"]
+        gap_revenue["Revenue_fmt"] = gap_revenue["amount"].apply(format_currency)
         fig = px.bar(
             gap_revenue, x="amount", y="feature_display", orientation="h",
             title="Top 10 Feature Gaps — Revenue Impact",
-            labels={"feature_display": "Feature", "amount": "Revenue"},
+            text="Revenue_fmt",
+            labels={"feature_display": "Feature", "amount": "Revenue en Riesgo"},
         )
-        fig.update_layout(yaxis=dict(autorange="reversed"))
-        chart_tooltip("Top de features faltantes por revenue asociado a los deals que las mencionan.")
+        fig.update_traces(textposition="outside")
+        fig.update_layout(
+            yaxis=dict(autorange="reversed"),
+            xaxis=dict(tickformat="$,.2s"),
+        )
+        chart_tooltip(
+            "Top de features faltantes por revenue asociado a los deals que las mencionan.",
+            "Revenue asociado a deals en los que se mencionó esta feature como ausente.",
+        )
         st.plotly_chart(fig, use_container_width=True)
 
 # ── 3️⃣ ¿Qué competidores se mencionan más? ───────────────────────────────────
@@ -388,33 +404,44 @@ with col_fric:
 
 with col_fric_insights:
     if not friction_all.empty:
-        module_fric = (
-            friction_all.dropna(subset=["module_display"])
-            .groupby(["module_display", "insight_subtype_display"])["transcript_id"]
+        top2_fric_types = (
+            friction_all.groupby("insight_subtype_display")["transcript_id"]
             .nunique()
-            .reset_index(name="Demos")
+            .nlargest(2)
+            .index.tolist()
         )
-        if not module_fric.empty:
-            top2_fric = (
-                module_fric
-                .sort_values(["module_display", "Demos"], ascending=[True, False])
-                .groupby("module_display")
-                .head(2)
+        breakdown_col = "deal_stage" if "deal_stage" in friction_all.columns else "segment"
+        breakdown_label = "Etapa del Deal" if breakdown_col == "deal_stage" else "Segmento"
+        if top2_fric_types:
+            st.markdown("**Desglose de las 2 principales fricciones**")
+            chart_tooltip(
+                f"Para cada fricción principal, distribución por {breakdown_label.lower()}.",
+                "Ayuda a los AEs a entender en qué momento del proceso aparece cada fricción.",
             )
-            top_modules_fric = (
-                top2_fric.groupby("module_display")["Demos"].sum()
-                .nlargest(10).index
-            )
-            plot_df_fric = top2_fric[top2_fric["module_display"].isin(top_modules_fric)]
-            fig = px.bar(
-                plot_df_fric, x="Demos", y="module_display", color="insight_subtype_display",
-                orientation="h", barmode="group",
-                title="Fricción Insights — Top 2 Fricciones por Módulo",
-                labels={"module_display": "Módulo", "Demos": "Demos únicas", "insight_subtype_display": "Fricción"},
-            )
-            fig.update_layout(yaxis=dict(autorange="reversed"))
-            chart_tooltip("Para cada módulo, las 2 fricciones más frecuentes en demos que lo mencionan.")
-            st.plotly_chart(fig, use_container_width=True)
+            for fric_name in top2_fric_types:
+                subset = friction_all[friction_all["insight_subtype_display"] == fric_name]
+                if breakdown_col in subset.columns:
+                    fric_bd = (
+                        subset.dropna(subset=[breakdown_col])
+                        .groupby(breakdown_col)["transcript_id"]
+                        .nunique()
+                        .sort_values(ascending=False)
+                        .head(8)
+                        .reset_index()
+                    )
+                    fric_bd.columns = [breakdown_label, "Demos"]
+                    if not fric_bd.empty:
+                        fig = px.bar(
+                            fric_bd, x="Demos", y=breakdown_label, orientation="h",
+                            title=f"Desglose: {fric_name}",
+                            labels={breakdown_label: breakdown_label, "Demos": "Demos únicas"},
+                        )
+                        fig.update_layout(
+                            yaxis=dict(autorange="reversed"),
+                            height=240,
+                            margin=dict(t=40, b=20),
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
 
 # Fricciones por revenue (full-width)
 if not friction_all.empty and "amount" in friction_all.columns:
@@ -445,6 +472,13 @@ if not friction_all.empty and "amount" in friction_all.columns:
 st.subheader("¿Qué preguntas aparecen siempre?")
 
 faq_all = df[df["insight_type"] == "faq"].copy()
+
+# Pre-compute transcript→module mapping (reused in heatmap and desglose below)
+transcript_modules = (
+    df.dropna(subset=["module_display"])[["transcript_id", "module_display"]]
+    .drop_duplicates()
+)
+
 col_faq, col_faq_insights = st.columns([2, 3])
 
 with col_faq:
@@ -473,10 +507,6 @@ with col_faq:
 with col_faq_insights:
     if not faq_all.empty:
         # FAQs have no module tag — use co-occurrence
-        transcript_modules = (
-            df.dropna(subset=["module_display"])[["transcript_id", "module_display"]]
-            .drop_duplicates()
-        )
         faq_module = (
             faq_all[["transcript_id", "insight_subtype_display"]]
             .drop_duplicates()
@@ -514,6 +544,42 @@ with col_faq_insights:
             )
             st.plotly_chart(fig, use_container_width=True)
 
+# FAQ desglose: top 2 FAQ topics × module co-occurrence
+if not faq_all.empty and not transcript_modules.empty:
+    top2_faq_types = faq_all["insight_subtype_display"].value_counts().head(2).index.tolist()
+    if top2_faq_types:
+        st.markdown("**Desglose de los 2 principales topics de FAQs por módulo co-ocurrente**")
+        chart_tooltip(
+            "Para cada uno de los 2 topics de FAQ más frecuentes, los módulos donde más co-ocurre.",
+            "Co-ocurrencia: demos en las que aparece el topic y también se menciona el módulo.",
+        )
+        faq_dcol1, faq_dcol2 = st.columns(2)
+        for col_d, topic in zip([faq_dcol1, faq_dcol2], top2_faq_types):
+            faq_topic_modules = (
+                faq_all[faq_all["insight_subtype_display"] == topic][["transcript_id"]]
+                .drop_duplicates()
+                .merge(transcript_modules, on="transcript_id", how="inner")
+                .groupby("module_display")["transcript_id"]
+                .nunique()
+                .sort_values(ascending=False)
+                .head(6)
+                .reset_index()
+            )
+            faq_topic_modules.columns = ["Módulo", "Demos"]
+            if not faq_topic_modules.empty:
+                with col_d:
+                    fig = px.bar(
+                        faq_topic_modules, x="Demos", y="Módulo", orientation="h",
+                        title=f"Módulos donde aparece: {topic}",
+                        labels={"Módulo": "Módulo", "Demos": "Demos únicas"},
+                    )
+                    fig.update_layout(
+                        yaxis=dict(autorange="reversed"),
+                        height=280,
+                        margin=dict(t=40, b=20),
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+
 # ── Tendencia Mensual ─────────────────────────────────────────────────────────
 
 st.subheader("Tendencia Mensual")
@@ -533,3 +599,7 @@ if "call_date" in df.columns:
             "Ayuda a detectar tendencias, estacionalidades o cambios recientes en la demanda.",
         )
         st.plotly_chart(fig, use_container_width=True)
+        st.caption(
+            "La caída en las últimas semanas del período puede reflejar que el dataset "
+            "aún no está completo para esas fechas al momento de esta captura."
+        )
