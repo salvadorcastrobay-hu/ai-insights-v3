@@ -31,15 +31,6 @@ credentials:
       password: $2b$12$NamiW6VbImi8tAG/vV26uOn06JAWMXBtAb3BRTmqEg.3Luu/.Z6a.
       roles:
       - viewer
-    carolina.arditi:
-      email: carolina.arditi@humand.co
-      failed_login_attempts: 0
-      first_name: Carolina
-      last_name: Arditi
-      logged_in: false
-      password: $2b$12$q9DSwxtu5Ht43cfUpK5deeNejNtOLiJyVFG4tNRlGwSFojnSMT25e
-      roles:
-      - viewer
     juan.diego.alcocer:
       email: juan.diego.alcocer@humand.co
       failed_login_attempts: 0
@@ -54,7 +45,7 @@ credentials:
       failed_login_attempts: 0
       first_name: Juanba
       last_name: Scelzi
-      logged_in: true
+      logged_in: false
       password: $2b$12$XZj.bOdEV3c7mk66ZRfeaO6AaMWU93l/vol7zGn/ieXUtnYjqkrw6
       roles:
       - admin
@@ -100,7 +91,7 @@ credentials:
       first_name: Pedro
       last_name: ''
       logged_in: false
-      password: $2b$12$M3tEU2DIAip.uV6SAMz7PO0NK38dKlnELb1xFxQr9jJBN05cuZf8O
+      password: $2b$12$c/1n09t29UpAYtu5EgFgde0PDXAJL9j.xnXQKf0rfKb1Gqs7r7rYe
       roles:
       - viewer
     raphael.montressor:

@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "dashboards": [
+    {
+      "id": "3eb24540-5c10-41e9-a318-cf6b6bd9c044",
+      "owner": "salvador.castrobay",
+      "name": "Pedro",
+      "created_at": "2026-02-20T20:58:35.093610Z",
+      "charts": [
+        {
+          "id": "917f9d6f-34e4-4783-9273-38c01943c2b5",
+          "name": "Pepe",
+          "source_mode": "filtered",
+          "chart_type": "bar",
+          "x_col": "insight_type_display",
+          "y_col": null,
+          "color_col": null,
+          "aggregation": "count",
+          "top_n": 12,
+          "sort_desc": true,
+          "created_at": "2026-02-20T20:58:35.075796Z"
+        },
+        {
+          "id": "37bc5b06-77be-4e77-b857-a7ef440d78cc",
+          "name": "Pepe2",
+          "source_mode": "filtered",
+          "chart_type": "line",
+          "x_col": "insight_type_display",
+          "y_col": null,
+          "color_col": null,
+          "aggregation": "count",
+          "top_n": 12,
+          "sort_desc": true,
+          "created_at": "2026-02-20T20:59:01.169402Z"
+        }
+      ]
+    }
+  ]
+}
