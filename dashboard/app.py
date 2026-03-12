@@ -21,7 +21,7 @@ if _PROJECT_ROOT not in sys.path:
 import pandas as pd
 import streamlit as st
 import streamlit_authenticator as stauth
-from shared import load_auth_config, save_auth_config, load_data, render_sidebar
+from shared import load_auth_config, save_auth_config, load_data
 
 # ── Page config (must be first Streamlit call) ──
 
@@ -108,15 +108,12 @@ if needs_data:
     with st.spinner("Cargando datos..."):
         df = load_data()
     st.session_state["df"] = df
-    if nav.title == "Executive Summary":
-        filtered_df = df  # Executive Summary renders its own inline top-of-page filters
-    else:
-        filtered_df = render_sidebar(df)
 else:
     df = st.session_state.get("df", pd.DataFrame())
-    filtered_df = df
 
-st.session_state["filtered_df"] = filtered_df
+# Each page renders its own inline filters — store unfiltered df as filtered_df
+# so custom_dashboards and legacy reads still work
+st.session_state["filtered_df"] = df
 
 # ── Run selected page ──
 
@@ -125,8 +122,6 @@ nav.run()
 # ── Footer ──
 
 st.sidebar.markdown("---")
-if needs_data and not df.empty:
-    st.sidebar.caption(f"{len(filtered_df)}/{len(df)} insights mostrados")
 with st.sidebar:
     st.write(f"**{st.session_state.get('name')}**")
     authenticator.logout("Cerrar sesion")
