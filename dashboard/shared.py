@@ -332,6 +332,62 @@ def render_sidebar(df: pd.DataFrame) -> pd.DataFrame:
     return df[mask]
 
 
+def render_inline_filters(df: pd.DataFrame, key_prefix: str = "page") -> pd.DataFrame:
+    """Render filters as an inline expander at the top of a page. Returns filtered df."""
+    if df.empty:
+        return df
+
+    opts = _compute_filter_options(df)
+
+    with st.expander("Filtros", expanded=False):
+        fr1, fr2, fr3 = st.columns(3)
+        sel_types = fr1.multiselect(
+            "Tipo de Insight", opts["types"], default=opts["types"], key=f"{key_prefix}_types"
+        )
+        sel_regions = fr2.multiselect(
+            "Region", opts["regions"], default=opts["regions"], key=f"{key_prefix}_regions"
+        )
+        sel_segments = fr3.multiselect("Segmento", opts["segments"], key=f"{key_prefix}_segments")
+
+        fr4, fr5, fr6 = st.columns(3)
+        sel_countries = fr4.multiselect("País", opts["countries"], key=f"{key_prefix}_countries")
+        sel_industries = fr5.multiselect("Industria", opts["industries"], key=f"{key_prefix}_industries")
+        sel_owners = fr6.multiselect("Deal Owner (AE)", opts["owners"], key=f"{key_prefix}_owners")
+
+        fr7, fr8, fr9 = st.columns(3)
+        sel_modules = fr7.multiselect("Módulo", opts["modules"], key=f"{key_prefix}_modules")
+        sel_categories = fr8.multiselect("Categoría HR", opts["categories"], key=f"{key_prefix}_categories")
+
+        date_range = None
+        if "min_date" in opts:
+            date_range = fr9.date_input(
+                "Rango de fechas",
+                value=(opts["min_date"], opts["max_date"]),
+                min_value=opts["min_date"],
+                max_value=opts["max_date"],
+                key=f"{key_prefix}_dates",
+            )
+
+    mask = df["insight_type_display"].isin(sel_types) & df["region"].isin(sel_regions)
+    if sel_segments:
+        mask &= df["segment"].isin(sel_segments)
+    if sel_countries:
+        mask &= df["country"].isin(sel_countries)
+    if sel_industries:
+        mask &= df["industry"].isin(sel_industries)
+    if sel_owners:
+        mask &= df["deal_owner"].isin(sel_owners)
+    if date_range and isinstance(date_range, tuple) and len(date_range) == 2:
+        start, end = date_range
+        mask &= (df["call_date"].dt.date >= start) & (df["call_date"].dt.date <= end)
+    if sel_modules:
+        mask &= df["module_display"].isin(sel_modules)
+    if sel_categories:
+        mask &= df["hr_category_display"].isin(sel_categories)
+
+    return df[mask]
+
+
 # ── Formatting helpers ──
 
 def format_currency(value: float) -> str:
