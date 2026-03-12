@@ -1,17 +1,24 @@
 import streamlit as st
 import plotly.express as px
 try:
-    from shared import chart_tooltip
+    from shared import chart_tooltip, render_inline_filters
 except ImportError:
     def chart_tooltip(*_args, **_kwargs):
         return None
 
-df = st.session_state.get("filtered_df")
-if df is None or df.empty:
+    def render_inline_filters(df, **_):
+        return df
+
+raw_df = st.session_state.get("df")
+if raw_df is None or raw_df.empty:
     st.warning("No hay datos para mostrar.")
     st.stop()
 
 st.header("FAQs — Detalle")
+df = render_inline_filters(raw_df, key_prefix="faq")
+if df.empty:
+    st.warning("No hay datos para los filtros seleccionados.")
+    st.stop()
 
 faqs = df[df["insight_type"] == "faq"]
 if faqs.empty:

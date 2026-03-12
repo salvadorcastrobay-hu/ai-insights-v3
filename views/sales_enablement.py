@@ -2,19 +2,26 @@ import streamlit as st
 import plotly.express as px
 import pandas as pd
 try:
-    from shared import format_currency, chart_tooltip
+    from shared import format_currency, chart_tooltip, render_inline_filters
 except ImportError:
     from shared import format_currency
 
     def chart_tooltip(*_args, **_kwargs):
         return None
 
-df = st.session_state.get("filtered_df")
-if df is None or df.empty:
+    def render_inline_filters(df, **_):
+        return df
+
+raw_df = st.session_state.get("df")
+if raw_df is None or raw_df.empty:
     st.warning("No hay datos para mostrar.")
     st.stop()
 
 st.header("Sales Enablement")
+df = render_inline_filters(raw_df, key_prefix="se")
+if df.empty:
+    st.warning("No hay datos para los filtros seleccionados.")
+    st.stop()
 
 # === Section A: ¿Qué está frenando los deals? ===
 st.subheader("A. ¿Qué está frenando los deals?")
