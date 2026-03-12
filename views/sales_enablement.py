@@ -66,100 +66,96 @@ else:
     )
     subtype_counts.columns = ["Tipo de Friccion", "Deals"]
 
-    col_chart, col_breakdown = st.columns(2)
-    with col_chart:
-        fig = px.bar(
-            subtype_counts,
-            x="Deals",
-            y="Tipo de Friccion",
-            orientation="h",
-            title="¿Qué está frenando más los deals?",
-        )
-        fig.update_layout(yaxis=dict(autorange="reversed"))
-        chart_tooltip(
-            "Ranking de fricciones más frecuentes (deals únicos).",
-            "Muestra qué bloqueos de venta aparecen en más deals distintos.",
-        )
-        st.plotly_chart(fig, width="stretch")
+    fig = px.bar(
+        subtype_counts,
+        x="Deals",
+        y="Tipo de Friccion",
+        orientation="h",
+        title="¿Qué está frenando más los deals?",
+    )
+    fig.update_layout(yaxis=dict(autorange="reversed"))
+    chart_tooltip(
+        "Ranking de fricciones más frecuentes (deals únicos).",
+        "Muestra qué bloqueos de venta aparecen en más deals distintos.",
+    )
+    st.plotly_chart(fig, use_container_width=True)
 
-    with col_breakdown:
-        st.markdown("**Fricción Breakdown — Top 2**")
-        top2_frictions = subtype_counts["Tipo de Friccion"].head(2).tolist()
-        for fric_name in top2_frictions:
-            fric_subset = friction[friction["insight_subtype_display"] == fric_name]
-            n_deals = fric_subset["deal_id"].dropna().nunique()
-            total_deals_pct = round(n_deals / deals_afectados * 100) if deals_afectados > 0 else 0
-            st.markdown(f"**{fric_name}** — aparece en {n_deals} deals ({total_deals_pct}%)")
-            # Breakdown by most common summaries within this friction type
-            if "summary" in fric_subset.columns:
-                top_summaries = fric_subset["summary"].dropna().value_counts().head(5)
-                if not top_summaries.empty:
-                    total_s = top_summaries.sum()
-                    for s_text, s_count in top_summaries.items():
-                        pct = round(s_count / total_s * 100) if total_s > 0 else 0
-                        short_s = s_text[:70] + "…" if len(s_text) > 70 else s_text
-                        st.caption(f"• {short_s} → {pct}%")
-                else:
-                    st.caption("_(Sin datos de summary)_")
+    st.markdown("**Fricción Breakdown — Top 2**")
+    top2_frictions = subtype_counts["Tipo de Friccion"].head(2).tolist()
+    bd_cols = st.columns(len(top2_frictions)) if len(top2_frictions) > 1 else [st]
+    for col, fric_name in zip(bd_cols, top2_frictions):
+        fric_subset = friction[friction["insight_subtype_display"] == fric_name]
+        n_deals = fric_subset["deal_id"].dropna().nunique()
+        total_deals_pct = round(n_deals / deals_afectados * 100) if deals_afectados > 0 else 0
+        col.markdown(f"**{fric_name}** — aparece en {n_deals} deals ({total_deals_pct}%)")
+        if "summary" in fric_subset.columns:
+            top_summaries = fric_subset["summary"].dropna().value_counts().head(5)
+            if not top_summaries.empty:
+                total_s = top_summaries.sum()
+                for s_text, s_count in top_summaries.items():
+                    pct = round(s_count / total_s * 100) if total_s > 0 else 0
+                    short_s = s_text[:120] + "…" if len(s_text) > 120 else s_text
+                    col.caption(f"• {short_s} → {pct}%")
             else:
-                st.caption("_(Sin datos de summary)_")
+                col.caption("_(Sin datos de summary)_")
+        else:
+            col.caption("_(Sin datos de summary)_")
 
-    col_left, col_right = st.columns(2)
-    with col_left:
-        # Friction por segment
-        if "segment" in friction.columns:
-            fric_seg = friction.dropna(subset=["segment"])
-            if not fric_seg.empty:
-                seg_data = (
-                    fric_seg.drop_duplicates(subset=["deal_id", "insight_subtype_display", "segment"])
-                    .groupby(["insight_subtype_display", "segment"])["deal_id"]
-                    .nunique()
-                    .reset_index(name="count")
+    # Friction por segment — full width
+    if "segment" in friction.columns:
+        fric_seg = friction.dropna(subset=["segment"])
+        if not fric_seg.empty:
+            seg_data = (
+                fric_seg.drop_duplicates(subset=["deal_id", "insight_subtype_display", "segment"])
+                .groupby(["insight_subtype_display", "segment"])["deal_id"]
+                .nunique()
+                .reset_index(name="count")
+            )
+            fig = px.bar(
+                seg_data, x="count", y="insight_subtype_display", color="segment",
+                orientation="h", title="¿Varía la fricción según el tamaño de empresa?",
+                labels={"insight_subtype_display": "Fricción", "count": "Deals"},
+            )
+            fig.update_layout(yaxis=dict(autorange="reversed"))
+            chart_tooltip(
+                "Fricciones cruzadas por segmento comercial (deals únicos).",
+                "Permite ver si cada segmento enfrenta bloqueos distintos.",
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+    # Friction por deal_stage — heatmap, full width
+    if "deal_stage" in friction.columns:
+        fric_stage = friction.dropna(subset=["deal_stage"])
+        if not fric_stage.empty:
+            hm = (
+                fric_stage.drop_duplicates(subset=["deal_id", "insight_subtype_display", "deal_stage"])
+                .groupby(["insight_subtype_display", "deal_stage"])["deal_id"]
+                .nunique()
+                .reset_index(name="count")
+            )
+            pivot = hm.pivot(index="insight_subtype_display", columns="deal_stage", values="count").fillna(0)
+            if not pivot.empty:
+                fig = px.imshow(
+                    pivot, text_auto=True, aspect="auto",
+                    title="¿En qué etapa del deal aparece cada fricción?",
+                    labels=dict(x="Deal Stage", y="Fricción", color="Deals"),
                 )
-                fig = px.bar(
-                    seg_data, x="count", y="insight_subtype_display", color="segment",
-                    orientation="h", title="¿Varía la fricción según el tamaño de empresa?",
-                )
-                fig.update_layout(yaxis=dict(autorange="reversed"))
                 chart_tooltip(
-                    "Fricciones cruzadas por segmento comercial (deals únicos).",
-                    "Permite ver si cada segmento enfrenta bloqueos distintos.",
+                    "Cruce entre tipo de fricción y etapa del deal (deals únicos).",
+                    "Ayuda a detectar en qué fase del pipeline se traba cada fricción.",
                 )
-                st.plotly_chart(fig, width="stretch")
-
-    with col_right:
-        # Friction por deal_stage — heatmap
-        if "deal_stage" in friction.columns:
-            fric_stage = friction.dropna(subset=["deal_stage"])
-            if not fric_stage.empty:
-                hm = (
-                    fric_stage.drop_duplicates(subset=["deal_id", "insight_subtype_display", "deal_stage"])
-                    .groupby(["insight_subtype_display", "deal_stage"])["deal_id"]
-                    .nunique()
-                    .reset_index(name="count")
+                st.plotly_chart(fig, use_container_width=True)
+                st.info(
+                    "Si una fricción aparece mucho en Discovery, es una señal de que hay que abordarla "
+                    "desde el principio de la conversación. Si aparece en Final Negotiation o Postponed, "
+                    "es un bloqueante tardío que necesita un argumento preparado de antemano."
                 )
-                pivot = hm.pivot(index="insight_subtype_display", columns="deal_stage", values="count").fillna(0)
-                if not pivot.empty:
-                    fig = px.imshow(
-                        pivot, text_auto=True, aspect="auto",
-                        title="¿En qué etapa del deal aparece cada fricción?",
-                        labels=dict(x="Deal Stage", y="Friccion", color="Deals"),
-                    )
-                    chart_tooltip(
-                        "Cruce entre tipo de fricción y etapa del deal (deals únicos).",
-                        "Ayuda a detectar en qué fase del pipeline se traba cada fricción.",
-                    )
-                    st.plotly_chart(fig, width="stretch")
-                    st.info(
-                        "Si una fricción aparece mucho en Discovery, es una señal de que hay que abordarla "
-                        "desde el principio de la conversación. Si aparece en Final Negotiation o Postponed, "
-                        "es un bloqueante tardío que necesita un argumento preparado de antemano."
-                    )
 
     # Blockers por Industria
     if "industry" in friction.columns:
-        fric_ind = friction.dropna(subset=["industry"])
+        fric_ind = friction.dropna(subset=["industry"]).copy()
         if not fric_ind.empty:
+            fric_ind["industry"] = fric_ind["industry"].str.replace("_", " ").str.title()
             ind_data = (
                 fric_ind.drop_duplicates(subset=["deal_id", "insight_subtype_display", "industry"])
                 .groupby(["insight_subtype_display", "industry"])["deal_id"]
@@ -173,13 +169,13 @@ else:
                 fig = px.imshow(
                     pivot_ind, text_auto=True, aspect="auto",
                     title="¿Qué fricción predomina según la industria?",
-                    labels=dict(x="Industria", y="Friccion", color="Deals"),
+                    labels=dict(x="Industria", y="Fricción", color="Deals"),
                 )
                 chart_tooltip(
                     "Heatmap de fricciones por industria (deals únicos).",
                     "Permite adaptar el pitch según el sector del prospect.",
                 )
-                st.plotly_chart(fig, width="stretch")
+                st.plotly_chart(fig, use_container_width=True)
 
 # === Section B: ¿Qué AEs necesitan más soporte? ===
 st.subheader("B. ¿Qué AEs necesitan más soporte?")
@@ -263,7 +259,7 @@ if "deal_owner" in df.columns:
             "El AE con más fricciones/deal es quien más soporte de coaching necesita.",
         )
         st.caption("Ordenado por fricciones promedio por deal — el AE con más complejidad aparece primero")
-        st.dataframe(ae_table, width="stretch")
+        st.dataframe(ae_table, use_container_width=True)
 
         # Bar chart: frictions per AE ordered by total frictions descending
         ae_fric_data = ae_data[ae_data["insight_type"] == "deal_friction"]
@@ -291,7 +287,7 @@ if "deal_owner" in df.columns:
                 "Distribución de fricciones por AE, ordenado por total de fricciones descendente.",
                 "Si un AE tiene muchas fricciones de un tipo, necesita argumentos específicos para ese bloqueo.",
             )
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, use_container_width=True)
 else:
     st.info("No hay datos de deal_owner disponibles.")
 
@@ -318,43 +314,39 @@ else:
     )
     topic_counts.columns = ["Topic", "Demos"]
 
-    col_faq_chart, col_faq_breakdown = st.columns(2)
-    with col_faq_chart:
-        fig = px.bar(
-            topic_counts,
-            x="Demos",
-            y="Topic",
-            orientation="h",
-            title="¿Qué temas preguntan más los prospects?",
-        )
-        fig.update_layout(yaxis=dict(autorange="reversed"))
-        chart_tooltip(
-            "Ranking de temas de FAQ más consultados (demos únicas).",
-            "Se usa para priorizar materiales de enablement y battle cards.",
-        )
-        st.plotly_chart(fig, width="stretch")
+    fig = px.bar(
+        topic_counts,
+        x="Demos",
+        y="Topic",
+        orientation="h",
+        title="¿Qué temas preguntan más los prospects?",
+    )
+    fig.update_layout(yaxis=dict(autorange="reversed"))
+    chart_tooltip(
+        "Ranking de temas de FAQ más consultados (demos únicas).",
+        "Se usa para priorizar materiales de enablement y battle cards.",
+    )
+    st.plotly_chart(fig, use_container_width=True)
 
-    with col_faq_breakdown:
-        st.markdown("**FAQ Breakdown — Top 2 topics**")
-        top2_topics = topic_counts["Topic"].head(2).tolist()
-        total_demos = faqs["transcript_id"].dropna().nunique()
-        for topic_name in top2_topics:
-            topic_subset = faqs[faqs["insight_subtype_display"] == topic_name]
-            n_demos = topic_subset["transcript_id"].dropna().nunique()
-            st.markdown(f"**{topic_name}** — aparece en {n_demos} demos")
-            if "summary" in topic_subset.columns:
-                # Show the most common questions (summaries) for this topic
-                faq_questions = topic_subset["summary"].dropna().value_counts().head(5)
-                if not faq_questions.empty:
-                    total_q = faq_questions.sum()
-                    for q_text, q_count in faq_questions.items():
-                        pct = round(q_count / total_q * 100) if total_q > 0 else 0
-                        short_q = q_text[:70] + "…" if len(q_text) > 70 else q_text
-                        st.caption(f"• {short_q} → {pct}%")
-                else:
-                    st.caption("_(Sin preguntas disponibles)_")
+    st.markdown("**FAQ Breakdown — Top 2 topics**")
+    top2_topics = topic_counts["Topic"].head(2).tolist()
+    faq_bd_cols = st.columns(len(top2_topics)) if len(top2_topics) > 1 else [st]
+    for col, topic_name in zip(faq_bd_cols, top2_topics):
+        topic_subset = faqs[faqs["insight_subtype_display"] == topic_name]
+        n_demos = topic_subset["transcript_id"].dropna().nunique()
+        col.markdown(f"**{topic_name}** — aparece en {n_demos} demos")
+        if "summary" in topic_subset.columns:
+            faq_questions = topic_subset["summary"].dropna().value_counts().head(5)
+            if not faq_questions.empty:
+                total_q = faq_questions.sum()
+                for q_text, q_count in faq_questions.items():
+                    pct = round(q_count / total_q * 100) if total_q > 0 else 0
+                    short_q = q_text[:120] + "…" if len(q_text) > 120 else q_text
+                    col.caption(f"• {short_q} → {pct}%")
             else:
-                st.caption("_(Sin datos de summary)_")
+                col.caption("_(Sin preguntas disponibles)_")
+        else:
+            col.caption("_(Sin datos de summary)_")
 
     st.subheader("Preguntas y Respuestas por Topic")
     st.caption("Filtrá por topic para prepararte antes de una demo")
@@ -381,7 +373,7 @@ else:
     )
     st.dataframe(
         faqs_display,
-        width="stretch",
+        use_container_width=True,
         column_config={
             "Pregunta": st.column_config.TextColumn("Pregunta", width="large"),
             "Cita textual": st.column_config.TextColumn("Cita textual", width="large"),
