@@ -241,6 +241,14 @@ def load_data() -> pd.DataFrame:
     return df
 
 
+@st.cache_data(show_spinner=False, ttl=3600)
+def load_total_transcripts_count() -> int:
+    """Returns total count of processed transcripts in raw_transcripts."""
+    client = get_supabase()
+    result = client.table("raw_transcripts").select("*", count="exact").limit(0).execute()
+    return result.count or 0
+
+
 # ── Sidebar filters ──
 
 @st.cache_data(show_spinner=False)
