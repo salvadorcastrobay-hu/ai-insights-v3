@@ -10,7 +10,7 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 import streamlit_authenticator as stauth
-from shared import load_auth_config, save_auth_config, load_data, render_sidebar
+from shared import load_auth_config, save_auth_config, load_data
 
 # ── Page config (must be first Streamlit call) ──
 
@@ -95,7 +95,7 @@ if needs_data:
     with st.spinner("Cargando datos..."):
         df = load_data()
     st.session_state["df"] = df
-    filtered_df = render_sidebar(df)
+    filtered_df = df
 else:
     df = st.session_state.get("df", pd.DataFrame())
     filtered_df = df
@@ -109,8 +109,6 @@ nav.run()
 # ── Footer ──
 
 st.sidebar.markdown("---")
-if needs_data and not df.empty:
-    st.sidebar.caption(f"{len(filtered_df)}/{len(df)} insights mostrados")
 with st.sidebar:
     st.write(f"**{st.session_state.get('name')}**")
     authenticator.logout("Cerrar sesion")

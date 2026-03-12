@@ -1,12 +1,15 @@
 import streamlit as st
 import plotly.express as px
 try:
-    from shared import format_currency, chart_tooltip
+    from shared import format_currency, chart_tooltip, render_inline_filters
 except ImportError:
     from shared import format_currency
 
     def chart_tooltip(*_args, **_kwargs):
         return None
+
+    def render_inline_filters(df, **_):
+        return df
 
 try:
     from taxonomy import COMPETITORS
@@ -14,12 +17,16 @@ try:
 except ImportError:
     CURATED_COMPETITORS = set()
 
-df = st.session_state.get("filtered_df")
-if df is None or df.empty:
+raw_df = st.session_state.get("df")
+if raw_df is None or raw_df.empty:
     st.warning("No hay datos para mostrar.")
     st.stop()
 
 st.header("Competitive Intelligence")
+df = render_inline_filters(raw_df, key_prefix="ci")
+if df.empty:
+    st.warning("No hay datos para los filtros seleccionados.")
+    st.stop()
 
 comp = df[df["insight_type"] == "competitive_signal"].copy()
 if "is_own_brand_competitor" in comp.columns:
