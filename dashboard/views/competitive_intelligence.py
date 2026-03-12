@@ -1,11 +1,16 @@
 import streamlit as st
 import plotly.express as px
-from shared import format_currency, chart_tooltip
+from shared import format_currency, chart_tooltip, render_inline_filters
 from computations import cached_value_counts, cached_unique_deals_revenue
 
-df = st.session_state.get("filtered_df")
-if df is None or df.empty:
+raw_df = st.session_state.get("df")
+if raw_df is None or raw_df.empty:
     st.warning("No hay datos para mostrar.")
+    st.stop()
+
+df = render_inline_filters(raw_df, key_prefix="ci")
+if df.empty:
+    st.warning("No hay datos para los filtros seleccionados.")
     st.stop()
 
 st.header("Competitive Intelligence")

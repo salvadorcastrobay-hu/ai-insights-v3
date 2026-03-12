@@ -1,10 +1,15 @@
 import streamlit as st
 import plotly.express as px
-from shared import humanize, chart_tooltip
+from shared import humanize, chart_tooltip, render_inline_filters
 
-df = st.session_state.get("filtered_df")
-if df is None or df.empty:
+raw_df = st.session_state.get("df")
+if raw_df is None or raw_df.empty:
     st.warning("No hay datos para mostrar.")
+    st.stop()
+
+df = render_inline_filters(raw_df, key_prefix="pd")
+if df.empty:
+    st.warning("No hay datos para los filtros seleccionados.")
     st.stop()
 
 st.header("Pains — Detalle")
