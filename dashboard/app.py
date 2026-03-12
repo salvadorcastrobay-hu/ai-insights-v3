@@ -108,7 +108,10 @@ if needs_data:
     with st.spinner("Cargando datos..."):
         df = load_data()
     st.session_state["df"] = df
-    filtered_df = render_sidebar(df)
+    if nav.title == "Executive Summary":
+        filtered_df = df  # Executive Summary renders its own inline top-of-page filters
+    else:
+        filtered_df = render_sidebar(df)
 else:
     df = st.session_state.get("df", pd.DataFrame())
     filtered_df = df

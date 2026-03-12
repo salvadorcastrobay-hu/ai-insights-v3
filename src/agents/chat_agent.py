@@ -75,9 +75,10 @@ temas que no estan en los insights estructurados, o cuando se necesita contexto 
 de conversaciones especificas:
 SEARCH:
 ---FILTROS---
-(condiciones SQL opcionales para filtrar SOLO por columnas de raw_transcripts: \
-title, call_date, team. Ejemplo: title ILIKE '%Coca%Cola%'. \
-NO uses columnas como industry, segment, region aqui — esas solo existen en v_insights_dashboard.)
+(condiciones SQL opcionales para filtrar por columnas de transcript_chunks: \
+segment, region, country, company_name, call_date, deal_stage, source_type. \
+Ejemplos: segment = 'Enterprise', region = 'HISPAM', company_name ILIKE '%Coca%'. \
+NO uses columnas de v_insights_dashboard aqui.)
 ---BUSQUEDA---
 (descripcion en lenguaje natural de lo que buscar en las transcripciones)
 ---SQL---
@@ -255,7 +256,7 @@ LIMIT 25;
 Pregunta: "Que dijo el prospecto de Coca-Cola sobre su proceso de onboarding?"
 SEARCH:
 ---FILTROS---
-title ILIKE '%coca%cola%'
+company_name ILIKE '%coca%cola%'
 ---BUSQUEDA---
 proceso de onboarding actual, como manejan el onboarding de empleados
 
@@ -328,8 +329,9 @@ LIMIT 10;
 6. Para revenue, usa SUM(DISTINCT amount) o subquery para evitar duplicados.
 7. En modo HYBRID, la query CUALITATIVA debe incluir summary y/o verbatim_quote.
 8. En modo SEARCH, la seccion ---BUSQUEDA--- es obligatoria. ---FILTROS--- y ---SQL--- son opcionales.
-9. En modo SEARCH, los filtros deben usar columnas de raw_transcripts: \
-title, call_date, team. Ejemplo de filtro: title ILIKE '%Coca%Cola%'.
+9. En modo SEARCH, los filtros deben usar columnas de transcript_chunks: \
+segment, region, country, company_name, call_date, deal_stage. \
+Ejemplos: segment = 'Enterprise', region = 'HISPAM', company_name ILIKE '%Coca%Cola%'.
 10. En modo SEARCH, la busqueda debe incluir palabras clave variadas y sinonimos \
 (en espanol e ingles) para maximizar la cobertura de resultados.
 11. Si el usuario pide LATAM y ya confirmo alcance regional, usa SIEMPRE \
@@ -1021,38 +1023,6 @@ def _auto_chart(
     return None
 
 
-def _generate_search_keywords(client: OpenAI, search_query: str) -> list[str]:
-    """Use GPT to generate bilingual search keywords from a natural language query."""
-    try:
-        # Use a shorter timeout for keyword generation so SEARCH mode fails fast.
-        response = client.with_options(
-            timeout=OPENAI_SEARCH_KEYWORDS_TIMEOUT_SECONDS,
-            max_retries=0,
-        ).chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{
-                "role": "system",
-                "content": (
-                    "Given a search query about sales call transcripts, generate 4-6 "
-                    "search keywords to find relevant content. Include both Spanish and "
-                    "English versions of the most important terms.\n"
-                    "Return ONLY a comma-separated list of single keywords, nothing else.\n"
-                    "Example: 'onboarding, incorporacion, induccion, new hire'"
-                ),
-            }, {
-                "role": "user",
-                "content": search_query,
-            }],
-            temperature=0,
-            max_tokens=100,
-        )
-        raw = response.choices[0].message.content.strip()
-        keywords = [k.strip().strip("'\"") for k in raw.split(",") if k.strip()]
-        return keywords[:6]  # Cap at 6 keywords
-    except Exception:
-        # Fallback: split original query into words > 2 chars
-        return [w for w in search_query.split() if len(w) > 2][:4]
-
 
 def search_transcript_chunks(
     client: OpenAI,
@@ -1060,88 +1030,76 @@ def search_transcript_chunks(
     filters: str = "",
     limit: int = SEARCH_RESULTS_LIMIT,
 ) -> list[dict]:
-    """Keyword-based search on raw_transcripts.fathom_summary.
+    """Semantic search on transcript_chunks using pgvector cosine similarity.
 
-    Uses GPT to generate bilingual keywords, then searches with ILIKE on
-    raw_transcripts (~5K rows, lightweight — no vector columns).
-    Returns results ordered by recency (most recent calls first).
+    Embeds the search query with text-embedding-3-large, then queries the
+    transcript_chunks table using the HNSW index for approximate nearest
+    neighbour search.
 
     Returns list of dicts with keys: chunk_text, source_type, company_name,
-    call_date, segment, similarity.
+    call_date, segment, region, country, deal_stage, similarity.
     """
-    # 1. Generate bilingual search keywords
-    keywords = _generate_search_keywords(client, search_query)
-    if not keywords:
-        return []
+    # 1. Embed the search query
+    try:
+        resp = client.embeddings.create(
+            model="text-embedding-3-large",
+            input=search_query,
+            dimensions=2000,
+        )
+        embedding_list = resp.data[0].embedding
+    except Exception as e:
+        raise RuntimeError(f"No se pudo generar el embedding de busqueda: {e}") from e
 
-    # 2. Build parameterized ILIKE patterns
-    patterns = [f"%{kw}%" for kw in keywords]
+    # Format as Postgres vector literal understood by psycopg2
+    vec_str = "[" + ",".join(str(v) for v in embedding_list) + "]"
 
-    # WHERE: at least one keyword matches
-    or_clauses = " OR ".join(f"fathom_summary ILIKE %s" for _ in patterns)
-
-    # Step 1: Find matching recording_ids (fast — no TOAST decompression)
-    id_query = f"""
-        SELECT recording_id, title, call_date::text AS call_date, team
-        FROM raw_transcripts
-        WHERE fathom_summary IS NOT NULL
-          AND ({or_clauses})
-    """
-    id_params: list = list(patterns)
-
+    # 2. Build query with optional metadata filters
+    filter_clause = ""
     if filters and filters.strip():
-        valid, err = _validate_filters(filters)
+        valid, _err = _validate_filters(filters)
         if valid:
-            id_query += f" AND ({filters})"
+            filter_clause = f"AND ({filters})"
 
-    id_query += """
-        ORDER BY call_date DESC NULLS LAST
+    query = f"""
+        SELECT
+            chunk_text,
+            source_type,
+            company_name,
+            call_date::text AS call_date,
+            segment,
+            region,
+            country,
+            deal_stage,
+            1 - (embedding <=> %s::vector(2000)) AS similarity
+        FROM transcript_chunks
+        WHERE embedding IS NOT NULL
+          {filter_clause}
+        ORDER BY embedding <=> %s::vector(2000)
         LIMIT %s
     """
-    id_params.append(int(limit))
 
     conn = _get_db_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute("SET statement_timeout = '15s';")
-            cur.execute(id_query, id_params)
-            id_rows = cur.fetchall()
+            cur.execute("SET statement_timeout = '30s';")
+            cur.execute(query, (vec_str, vec_str, int(limit)))
+            rows = cur.fetchall()
 
-        if not id_rows:
-            return []
-
-        # Step 2: Fetch text for matching IDs (small batch, fast)
-        recording_ids = [r[0] for r in id_rows]
-        placeholders = ",".join(["%s"] * len(recording_ids))
-        with conn.cursor() as cur:
-            cur.execute("SET statement_timeout = '15s';")
-            cur.execute(
-                f"SELECT recording_id, LEFT(fathom_summary, 2000) "
-                f"FROM raw_transcripts WHERE recording_id IN ({placeholders})",
-                recording_ids,
-            )
-            text_rows = cur.fetchall()
-        text_map = {r[0]: r[1] for r in text_rows}
-
-        # Normalize results to expected format
         results = []
-        for row in id_rows:
-            rid, title, call_date, team = row
-            chunk_text = text_map.get(rid, "")
-            # Count how many keywords match for scoring
-            text_lower = (chunk_text or "").lower()
-            matches = sum(1 for kw in keywords if kw.lower() in text_lower)
-            similarity = round(matches / len(keywords), 3) if keywords else 0
+        for row in rows:
+            (chunk_text, source_type, company_name, call_date,
+             segment, region, country, deal_stage, similarity) = row
             results.append({
-                "chunk_text": chunk_text,
-                "source_type": "fathom_summary",
-                "company_name": title or "",
-                "call_date": call_date,
-                "segment": team or "",
-                "similarity": similarity,
+                "chunk_text": chunk_text or "",
+                "source_type": source_type or "transcript",
+                "company_name": company_name or "",
+                "call_date": call_date or "",
+                "segment": segment or "",
+                "region": region or "",
+                "country": country or "",
+                "deal_stage": deal_stage or "",
+                "similarity": round(float(similarity or 0), 4),
             })
-        # Re-sort by relevance score first, then date
-        results.sort(key=lambda x: (-x["similarity"], x.get("call_date") or ""))
         return results
     finally:
         conn.close()
