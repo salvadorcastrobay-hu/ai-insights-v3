@@ -99,6 +99,7 @@ else:
                 pivot, text_auto=True, aspect="auto",
                 title="¿Varía el pain según el tamaño de empresa?",
                 labels=dict(x="Segmento", y="Pain", color="Demos únicas"),
+                color_continuous_scale="Blues",
             )
             fig.update_layout(height=620)
             chart_tooltip(
