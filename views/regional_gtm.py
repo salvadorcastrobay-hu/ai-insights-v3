@@ -12,6 +12,16 @@ except ImportError:
     def render_inline_filters(df, **_):
         return df
 
+_REGION_ALIASES = {
+    "Santa Fe Province": "HISPAM",
+    "Mendoza Province": "HISPAM",
+    "Cordoba": "HISPAM",
+    "Córdoba": "HISPAM",
+    "Community of Madrid": "EMEA",
+    "Ciudad de Mexico": "HISPAM",
+    "Ciudad de México": "HISPAM",
+}
+
 raw_df = st.session_state.get("df")
 if raw_df is None or raw_df.empty:
     st.warning("No hay datos para mostrar.")
@@ -21,6 +31,10 @@ df = render_inline_filters(raw_df, key_prefix="rg")
 if df.empty:
     st.warning("No hay datos para los filtros seleccionados.")
     st.stop()
+
+if "region" in df.columns:
+    df = df.copy()
+    df["region"] = df["region"].map(lambda r: _REGION_ALIASES.get(r, r) if pd.notna(r) else r)
 
 st.header("Regional / GTM")
 
@@ -120,7 +134,7 @@ if not pains.empty and "region" in pains.columns:
                 },
                 text="Pct",
             )
-            fig.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
+            fig.update_traces(texttemplate="%{text:.1f}%", textposition="inside")
             fig.update_yaxes(autorange="reversed", matches=None)
             fig.update_xaxes(matches=None)
             fig.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
