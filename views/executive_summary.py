@@ -1,6 +1,7 @@
 import streamlit as st
 import plotly.express as px
-from shared import format_currency, chart_tooltip, load_total_transcripts_count
+import pandas as pd
+from shared import format_currency, chart_tooltip, load_total_transcripts_count, annotate_heatmap
 from computations import (
     cached_value_counts,
     cached_dedup_groupby,
@@ -254,12 +255,20 @@ if not pains.empty and "segment" in pains.columns:
         pivot = hm_data.pivot(
             index="insight_subtype_display", columns="segment", values="count"
         ).fillna(0)
+        row_order = pivot.sum(axis=1).sort_values(ascending=False).index
+        col_order = pivot.sum(axis=0).sort_values(ascending=False).index
+        pivot = pivot.loc[row_order, col_order]
         fig = px.imshow(
-            pivot, text_auto=True, aspect="auto",
+            pivot, text_auto=False, aspect="auto",
             title="Top 15 Pains × Segmento",
             color_continuous_scale="Blues",
+            labels=dict(x="Segmento", y="Pain", color="Demos"),
         )
-        fig.update_layout(height=500)
+        fig.update_layout(height=max(500, len(pivot) * 38), margin=dict(t=60, b=130, l=10, r=10))
+        fig.update_xaxes(tickangle=-30, automargin=True)
+        flattened = pivot.to_numpy().flatten().tolist()
+        max_value = float(max(flattened)) if flattened else 0.0
+        annotate_heatmap(fig, pivot, max_value, 0.0)
         chart_tooltip(
             "Cruce entre pains principales y segmento comercial.",
             "Permite ver si ciertos pains son más fuertes en SMB, Mid-Market o Enterprise.",
@@ -531,13 +540,20 @@ with col_faq_insights:
             pivot_faq = hm_faq.pivot(
                 index="module_display", columns="insight_subtype_display", values="count"
             ).fillna(0)
+            faq_row_order = pivot_faq.sum(axis=1).sort_values(ascending=False).index
+            faq_col_order = pivot_faq.sum(axis=0).sort_values(ascending=False).index
+            pivot_faq = pivot_faq.loc[faq_row_order, faq_col_order]
             fig = px.imshow(
-                pivot_faq, text_auto=True, aspect="auto",
+                pivot_faq, text_auto=False, aspect="auto",
                 title="FAQ Insights — Top Preguntas por Módulo",
                 color_continuous_scale="Blues",
                 labels=dict(x="Pregunta", y="Módulo", color="Demos"),
             )
-            fig.update_layout(height=420)
+            fig.update_layout(height=max(380, len(pivot_faq) * 38), margin=dict(t=60, b=130, l=10, r=10))
+            fig.update_xaxes(tickangle=-30, automargin=True)
+            faq_flat = pivot_faq.to_numpy().flatten().tolist()
+            faq_max = float(max(faq_flat)) if faq_flat else 0.0
+            annotate_heatmap(fig, pivot_faq, faq_max, 0.0)
             chart_tooltip(
                 "Para los 10 módulos más demandados, las 6 preguntas más frecuentes.",
                 "Co-ocurrencia: demos donde el módulo y la pregunta coinciden.",
