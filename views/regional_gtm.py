@@ -57,7 +57,7 @@ if "country" in df.columns:
 
         # Per-country % of total insights for Y-axis labels
         country_sums = country_breakdown.groupby("country")["count"].sum()
-        country_order = country_sums.sort_values(ascending=True).index.tolist()
+        country_order = country_sums.sort_values(ascending=False).index.tolist()
         pct_map = {
             c: f"{c}<br><sub>{round(country_sums[c] / grand_total * 100)}%</sub>"
             for c in country_order
