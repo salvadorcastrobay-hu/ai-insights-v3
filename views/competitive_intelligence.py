@@ -1,7 +1,8 @@
 import streamlit as st
 import plotly.express as px
+import pandas as pd
 try:
-    from shared import format_currency, chart_tooltip, render_inline_filters
+    from shared import format_currency, chart_tooltip, render_inline_filters, annotate_heatmap
 except ImportError:
     from shared import format_currency
 
@@ -10,6 +11,9 @@ except ImportError:
 
     def render_inline_filters(df, **_):
         return df
+
+    def annotate_heatmap(*_args, **_kwargs):
+        return None
 
 try:
     from taxonomy import COMPETITORS
@@ -204,19 +208,27 @@ if "country" in comp.columns:
             index="competitor_name", columns="country", values="Deals únicos"
         ).fillna(0)
         if not pivot.empty:
+            row_order = pivot.sum(axis=1).sort_values(ascending=False).index
+            col_order = pivot.sum(axis=0).sort_values(ascending=False).index
+            pivot = pivot.loc[row_order, col_order]
             fig = px.imshow(
                 pivot,
-                text_auto=True,
+                text_auto=False,
                 aspect="auto",
                 title="¿En qué países aparece cada competidor?",
                 labels=dict(x="País", y="Competidor", color="Deals únicos"),
                 color_continuous_scale="Blues",
             )
+            fig.update_layout(height=max(350, len(pivot) * 38), margin=dict(t=60, b=130, l=10, r=10))
+            fig.update_xaxes(tickangle=-30, automargin=True)
+            ci_flat = pivot.to_numpy().flatten().tolist()
+            ci_max = float(max(ci_flat)) if ci_flat else 0.0
+            annotate_heatmap(fig, pivot, ci_max, 0.0)
             chart_tooltip(
                 "Heatmap de competidores por país (deals únicos).",
                 "Más oscuro = más deals con ese competidor en ese país. Celdas en blanco = 0.",
             )
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, use_container_width=True)
 
 col_left, col_right = st.columns(2)
 with col_left:
@@ -262,8 +274,17 @@ with col_right:
                 .head(10)
                 .index
             )
+            top_industries = (
+                comp_ind.drop_duplicates(["competitor_name", "deal_id"])["industry"]
+                .value_counts()
+                .head(5)
+                .index
+            )
             ind_data = (
-                comp_ind[comp_ind["competitor_name"].isin(top_comp)]
+                comp_ind[
+                    comp_ind["competitor_name"].isin(top_comp)
+                    & comp_ind["industry"].isin(top_industries)
+                ]
                 .drop_duplicates(["competitor_name", "industry", "deal_id"])
                 .groupby(["competitor_name", "industry"])
                 .size()
@@ -281,8 +302,9 @@ with col_right:
             fig.update_layout(yaxis=dict(autorange="reversed"))
             chart_tooltip(
                 "Presencia de competidores por industria (deals únicos).",
+                "Ayuda a detectar qué competidores presionan más en cada vertical.",
             )
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, use_container_width=True)
 
 # ── C. ¿En qué momento del deal aparecen? ────────────────────────────────────
 st.markdown("---")

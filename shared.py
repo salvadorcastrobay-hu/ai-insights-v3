@@ -525,3 +525,22 @@ def chart_tooltip(what_shows: str, how_to_read: str | None = None) -> None:
     if how_to_read:
         tooltip_text += f" {how_to_read.strip()}"
     _queue_viz_tooltip(tooltip_text)
+
+
+def annotate_heatmap(fig, pivot, _max_value: float, _threshold: float, font_size: int = 13) -> None:
+    """Annotate all cells (including zeros) of a px.imshow heatmap.
+
+    Font color: white on dark cells (value >= 40% of max), dark on light cells.
+    """
+    pivot_max = float(pivot.to_numpy().max()) if pivot.size > 0 else 0.0
+    if pivot_max <= 0:
+        return
+    for row_idx, row_name in enumerate(pivot.index):
+        for col_idx, col_name in enumerate(pivot.columns):
+            value = float(pivot.iat[row_idx, col_idx])
+            color = "white" if pivot_max > 0 and (value / pivot_max) >= 0.4 else "#111111"
+            fig.add_annotation(
+                x=col_name, y=row_name, text=str(int(value)),
+                showarrow=False,
+                font=dict(size=font_size, color=color),
+            )
