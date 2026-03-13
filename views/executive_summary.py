@@ -1,7 +1,13 @@
 import streamlit as st
 import plotly.express as px
 import pandas as pd
-from shared import format_currency, chart_tooltip, load_total_transcripts_count, annotate_heatmap
+try:
+    from shared import format_currency, chart_tooltip, load_total_transcripts_count, annotate_heatmap
+except ImportError:
+    from shared import format_currency, chart_tooltip, load_total_transcripts_count
+
+    def annotate_heatmap(*_args, **_kwargs):
+        return None
 from computations import (
     cached_value_counts,
     cached_dedup_groupby,
