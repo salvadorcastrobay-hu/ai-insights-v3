@@ -19,7 +19,7 @@
 ## Comandos frecuentes
 - `python3 -m src.cli run --sample 5 --model gpt-4o` — Test rápido
 - `python3 -m src.cli qa --sample 30` — QA evaluation
-- `streamlit run dashboard/app.py` — Dashboard local
+- `streamlit run ai-insights-v3/dashboard.py` — Dashboard local
 - DB: Supabase PostgreSQL (ver config.py para conexión)
 
 ## No hacer
