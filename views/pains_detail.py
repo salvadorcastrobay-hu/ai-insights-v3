@@ -11,16 +11,20 @@ except ImportError:
     def render_inline_filters(df, **_):
         return df
 
+from exp_ds import inject_ds_css, DS, apply_ds_layout, ds_sub
+
 raw_df = st.session_state.get("df")
 if raw_df is None or raw_df.empty:
     st.warning("No hay datos para mostrar.")
     st.stop()
 
-st.header("Pains — Detalle")
 df = render_inline_filters(raw_df, key_prefix="pd")
 if df.empty:
     st.warning("No hay datos para los filtros seleccionados.")
     st.stop()
+
+inject_ds_css()
+ds_sub("Pains — Detalle")
 
 pains = df[df["insight_type"] == "pain"].copy()
 if pains.empty:
@@ -79,8 +83,10 @@ with col_left:
             y="Modulo",
             orientation="h",
             title="¿En qué módulos se concentran más problemas?",
+            color_discrete_sequence=[DS["brand_400"]],
         )
         fig.update_layout(yaxis=dict(autorange="reversed"))
+        fig = apply_ds_layout(fig, "¿En qué módulos se concentran más problemas?")
         chart_tooltip(
             "Deals únicos donde se detectó al menos un pain vinculado a este módulo.",
             "Ayuda a priorizar foco por módulo de producto.",
@@ -99,6 +105,7 @@ with col_right:
                 pivot, x="module_status", y="pain_theme", z="count",
                 title="Pains: Theme x Status del Módulo",
             )
+            fig = apply_ds_layout(fig, "Pains: Theme x Status del Módulo")
             chart_tooltip(
                 "Cruce entre tema de pain y status del módulo (existente/faltante).",
                 "Permite separar dolores sobre capacidades actuales vs gaps del producto.",
@@ -106,7 +113,7 @@ with col_right:
             st.plotly_chart(fig, use_container_width=True)
 
 # ── C. Tabla de Detalle ───────────────────────────────────────────────────────
-st.subheader("Detalle de Pains")
+ds_sub("Detalle de Pains")
 
 # Truncate summary for table display
 if "summary" in pains.columns:

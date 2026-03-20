@@ -21,12 +21,15 @@ try:
 except ImportError:
     CURATED_COMPETITORS = set()
 
+from exp_ds import inject_ds_css, DS, apply_ds_layout, BRAND_SCALE, ds_sub
+
 raw_df = st.session_state.get("df")
 if raw_df is None or raw_df.empty:
     st.warning("No hay datos para mostrar.")
     st.stop()
 
-st.header("Competitive Intelligence")
+inject_ds_css()
+st.markdown(f'<div style="font-size:32px;font-weight:600;font-family:Roboto,sans-serif;color:#303036;line-height:1.3;margin-bottom:4px;letter-spacing:0.2px;">Competitive Intelligence</div>', unsafe_allow_html=True)
 df = render_inline_filters(raw_df, key_prefix="ci")
 if df.empty:
     st.warning("No hay datos para los filtros seleccionados.")
@@ -86,8 +89,7 @@ col3.metric(
 )
 
 # ── A. ¿Contra quién competimos? ──────────────────────────────────────────────
-st.markdown("---")
-st.subheader("A. ¿Contra quién competimos?")
+ds_sub("A. ¿Contra quién competimos?")
 
 col_left, col_right = st.columns(2)
 with col_left:
@@ -105,8 +107,10 @@ with col_left:
         orientation="h",
         title="¿Contra quién competimos más seguido?",
         labels={"Deals únicos": "Deals únicos"},
+        color_discrete_sequence=[DS["brand_400"]],
     )
     fig.update_layout(yaxis=dict(autorange="reversed"))
+    fig = apply_ds_layout(fig, "¿Contra quién competimos más seguido?")
     chart_tooltip(
         "Ranking de competidores por deals únicos donde aparecieron.",
         "Solo competidores de la lista curada. Cada competidor cuenta una vez por deal.",
@@ -159,6 +163,7 @@ with col_right:
             color_discrete_map=COLOR_MAP,
         )
         fig.update_layout(yaxis=dict(autorange="reversed"))
+        fig = apply_ds_layout(fig, "¿Cuál es la relación del prospect con el competidor?")
     else:
         fig = None
     chart_tooltip(
@@ -181,8 +186,7 @@ st.caption(
 )
 
 # ── B. ¿Dónde y con quién? ────────────────────────────────────────────────────
-st.markdown("---")
-st.subheader("B. ¿Dónde y con quién?")
+ds_sub("B. ¿Dónde y con quién?")
 
 if "country" in comp.columns:
     comp_country = comp.dropna(subset=["country", "competitor_name"])
@@ -217,13 +221,14 @@ if "country" in comp.columns:
                 aspect="auto",
                 title="¿En qué países aparece cada competidor?",
                 labels=dict(x="País", y="Competidor", color="Deals únicos"),
-                color_continuous_scale="Blues",
+                color_continuous_scale=BRAND_SCALE,
             )
             fig.update_layout(height=max(350, len(pivot) * 38), margin=dict(t=60, b=130, l=10, r=10))
             fig.update_xaxes(tickangle=-30, automargin=True)
             ci_flat = pivot.to_numpy().flatten().tolist()
             ci_max = float(max(ci_flat)) if ci_flat else 0.0
             annotate_heatmap(fig, pivot, ci_max, 0.0)
+            fig = apply_ds_layout(fig, "¿En qué países aparece cada competidor?")
             chart_tooltip(
                 "Heatmap de competidores por país (deals únicos).",
                 "Más oscuro = más deals con ese competidor en ese país. Celdas en blanco = 0.",
@@ -256,8 +261,10 @@ with col_left:
                 orientation="h",
                 title="¿En qué segmento aparece cada competidor?",
                 labels={"competitor_name": "Competidor", "Deals únicos": "Deals únicos"},
+                color_discrete_sequence=DS["palette"],
             )
             fig.update_layout(yaxis=dict(autorange="reversed"))
+            fig = apply_ds_layout(fig, "¿En qué segmento aparece cada competidor?")
             chart_tooltip(
                 "Presencia de competidores por segmento comercial (deals únicos).",
                 "Ayuda a entender en qué segmento tiene más presión cada competidor.",
@@ -298,8 +305,10 @@ with col_right:
                 orientation="h",
                 title="¿En qué industrias aparece cada competidor?",
                 labels={"competitor_name": "Competidor", "Deals únicos": "Deals únicos"},
+                color_discrete_sequence=DS["palette"],
             )
             fig.update_layout(yaxis=dict(autorange="reversed"))
+            fig = apply_ds_layout(fig, "¿En qué industrias aparece cada competidor?")
             chart_tooltip(
                 "Presencia de competidores por industria (deals únicos).",
                 "Ayuda a detectar qué competidores presionan más en cada vertical.",
@@ -307,8 +316,7 @@ with col_right:
             st.plotly_chart(fig, use_container_width=True)
 
 # ── C. ¿En qué momento del deal aparecen? ────────────────────────────────────
-st.markdown("---")
-st.subheader("C. ¿En qué momento del deal aparecen?")
+ds_sub("C. ¿En qué momento del deal aparecen?")
 
 if "deal_stage" in comp.columns:
     comp_stage = comp.dropna(subset=["deal_stage", "competitor_name"])
@@ -334,8 +342,10 @@ if "deal_stage" in comp.columns:
             orientation="h",
             title="¿En qué etapa del deal aparece cada competidor?",
             labels={"competitor_name": "Competidor", "Deals únicos": "Deals únicos", "deal_stage": "Etapa del Deal"},
+            color_discrete_sequence=DS["palette"],
         )
         fig.update_layout(yaxis=dict(autorange="reversed"))
+        fig = apply_ds_layout(fig, "¿En qué etapa del deal aparece cada competidor?")
         chart_tooltip(
             "Competidores por etapa del deal (deals únicos).",
             "Si un competidor aparece mucho en etapas finales, necesitamos argumentos específicos para ese momento del proceso comercial.",
@@ -343,8 +353,7 @@ if "deal_stage" in comp.columns:
         st.plotly_chart(fig, width="stretch")
 
 # ── D. Migration Opportunities ────────────────────────────────────────────────
-st.markdown("---")
-st.subheader("D. Migration Opportunities")
+ds_sub("D. Migration Opportunities")
 
 if "competitor_relationship" in comp.columns:
     migrating = comp[

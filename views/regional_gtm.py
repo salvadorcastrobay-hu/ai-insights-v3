@@ -12,6 +12,8 @@ except ImportError:
     def render_inline_filters(df, **_):
         return df
 
+from exp_ds import inject_ds_css, DS, apply_ds_layout, BRAND_SCALE, ds_sub
+
 _REGION_ALIASES = {
     "Santa Fe Province": "HISPAM",
     "Mendoza Province": "HISPAM",
@@ -27,6 +29,8 @@ if raw_df is None or raw_df.empty:
     st.warning("No hay datos para mostrar.")
     st.stop()
 
+inject_ds_css()
+st.markdown(f'<div style="font-size:32px;font-weight:600;font-family:Roboto,sans-serif;color:#303036;line-height:1.3;margin-bottom:4px;letter-spacing:0.2px;">Regional / GTM</div>', unsafe_allow_html=True)
 df = render_inline_filters(raw_df, key_prefix="rg")
 if df.empty:
     st.warning("No hay datos para los filtros seleccionados.")
@@ -36,10 +40,8 @@ if "region" in df.columns:
     df = df.copy()
     df["region"] = df["region"].map(lambda r: _REGION_ALIASES.get(r, r) if pd.notna(r) else r)
 
-st.header("Regional / GTM")
-
 # ── A. ¿Dónde estamos teniendo más conversaciones? ────────────────────────────
-st.subheader("A. ¿Dónde estamos teniendo más conversaciones?")
+ds_sub("A. ¿Dónde estamos teniendo más conversaciones?")
 
 if "country" in df.columns:
     country_data = df.dropna(subset=["country"]).copy()
@@ -77,12 +79,14 @@ if "country" in df.columns:
                 "insight_type_display": "Tipo de insight",
             },
             category_orders={"country": country_order},
+            color_discrete_sequence=DS["palette"],
         )
         fig.update_yaxes(
             tickmode="array",
             tickvals=country_order,
             ticktext=[pct_map[c] for c in country_order],
         )
+        fig = apply_ds_layout(fig, "¿En qué países tenemos más señales de venta?")
         chart_tooltip(
             "Top 15 países por cantidad de insights, con desglose por tipo de insight.",
             "El porcentaje indica la proporción del total de señales detectadas.",
@@ -90,7 +94,7 @@ if "country" in df.columns:
         st.plotly_chart(fig, use_container_width=True)
 
 # ── B. ¿Qué encontramos en cada mercado? ─────────────────────────────────────
-st.subheader("B. ¿Qué encontramos en cada mercado?")
+ds_sub("B. ¿Qué encontramos en cada mercado?")
 
 # Top 3 pains per region — % of unique demos in that region
 pains = df[df["insight_type"] == "pain"]
@@ -133,11 +137,13 @@ if not pains.empty and "region" in pains.columns:
                     "Region": "Región",
                 },
                 text="Pct",
+                color_discrete_sequence=[DS["brand_400"]],
             )
             fig.update_traces(texttemplate="%{text:.1f}%", textposition="inside")
             fig.update_yaxes(autorange="reversed", matches=None)
             fig.update_xaxes(matches=None)
             fig.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
+            fig = apply_ds_layout(fig, "Top 3 Pains por Región (% de demos únicas en esa región)")
             chart_tooltip(
                 "Top 3 pains por región medidos como % de demos únicas donde apareció ese pain.",
                 "Normalizado por volumen de demos en cada región — permite comparar mercados de distinto tamaño.",
@@ -160,8 +166,9 @@ if not mod_region.empty:
             aspect="auto",
             title="Módulos Demandados por Región (Top 15)",
             labels=dict(x="Región", y="Módulo", color="Menciones"),
-            color_continuous_scale="Blues",
+            color_continuous_scale=BRAND_SCALE,
         )
+        fig = apply_ds_layout(fig, "Módulos Demandados por Región (Top 15)")
         chart_tooltip(
             "Módulos más mencionados por región.",
             "Más oscuro = más menciones. Hover sobre cada celda para ver la cantidad exacta.",
@@ -174,7 +181,7 @@ if "is_own_brand_competitor" in comp.columns:
     comp = comp[~comp["is_own_brand_competitor"].fillna(False)]
 
 if not comp.empty and "country" in comp.columns:
-    st.subheader("Competidores por País")
+    ds_sub("Competidores por País")
     chart_tooltip(
         "Tabla de competidores por país con menciones y relación principal.",
         "Da contexto competitivo local para mensajes comerciales por mercado.",
@@ -223,7 +230,7 @@ if not comp.empty and "country" in comp.columns:
     )
 
 # ── C. ¿Cuánto vale cada mercado? ─────────────────────────────────────────────
-st.subheader("C. ¿Cuánto vale cada mercado?")
+ds_sub("C. ¿Cuánto vale cada mercado?")
 
 if "region" in df.columns:
     pipeline_data = df.dropna(subset=["region"]).drop_duplicates("deal_id")

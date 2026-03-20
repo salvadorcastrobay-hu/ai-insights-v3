@@ -1,6 +1,7 @@
 import pandas as pd
 import streamlit as st
 import plotly.express as px
+from exp_ds import inject_ds_css, DS, apply_ds_layout, BRAND_SCALE, ds_sub
 
 try:
     from shared import chart_tooltip, render_inline_filters
@@ -16,7 +17,8 @@ if raw_df is None or raw_df.empty:
     st.warning("No hay datos para mostrar.")
     st.stop()
 
-st.header("FAQs — Detalle")
+inject_ds_css()
+ds_sub("FAQs — Detalle")
 df = render_inline_filters(raw_df, key_prefix="faq")
 if df.empty:
     st.warning("No hay datos para los filtros seleccionados.")
@@ -85,9 +87,11 @@ fig = px.bar(
     orientation="h",
     title="FAQs por Topic (deals únicos con al menos 1 pregunta de ese topic)",
     text="label",
+    color_discrete_sequence=[DS["brand_400"]],
 )
 fig.update_traces(textposition="inside", insidetextanchor="start")
 fig.update_layout(yaxis=dict(autorange="reversed"))
+fig = apply_ds_layout(fig, "FAQs por Topic (deals únicos con al menos 1 pregunta de ese topic)")
 chart_tooltip(
     "Deals únicos que tuvieron al menos 1 FAQ de ese topic.",
     "Usar para priorizar Battle Cards: los topics con mayor % de demos son los más urgentes.",
@@ -95,7 +99,7 @@ chart_tooltip(
 st.plotly_chart(fig, use_container_width=True)
 
 # ── B2. Top 5 preguntas por Topic (Battle Cards) ─────────────────────────────
-st.subheader("Top 5 preguntas por Topic")
+ds_sub("Top 5 preguntas por Topic")
 topic_options = ["(Seleccionar Topic)"] + sorted(
     faqs["insight_subtype_display"].dropna().unique().tolist()
 )
@@ -119,8 +123,10 @@ if selected_topic != "(Seleccionar Topic)" and "summary" in faqs.columns:
         y="Pregunta",
         orientation="h",
         title=f"Top 5 preguntas — {selected_topic}",
+        color_discrete_sequence=[DS["brand_400"]],
     )
     fig2.update_layout(yaxis=dict(autorange="reversed"))
+    fig2 = apply_ds_layout(fig2, f"Top 5 preguntas — {selected_topic}")
     chart_tooltip(
         f"Las 5 preguntas más frecuentes dentro del topic {selected_topic}.",
         "Base para construir la Battle Card de este topic.",
@@ -129,7 +135,7 @@ if selected_topic != "(Seleccionar Topic)" and "summary" in faqs.columns:
     st.caption(f"→ Estas 5 preguntas son la base para la Battle Card de {selected_topic}. Cada AE debería tener una respuesta preparada para cada una.")
 
 # ── C. Tabla de Preguntas Frecuentes ─────────────────────────────────────────
-st.subheader("Preguntas Frecuentes")
+ds_sub("Preguntas Frecuentes")
 
 # Derived display columns
 if "verbatim_quote" in faqs.columns:
