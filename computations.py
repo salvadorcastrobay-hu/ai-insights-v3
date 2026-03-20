@@ -65,9 +65,9 @@ def cached_unique_deals_revenue(df: pd.DataFrame) -> float:
 
 
 @st.cache_data(show_spinner=False)
-def cached_pains_with_pct(pains: pd.DataFrame, n: int = 10) -> pd.DataFrame:
+def cached_pains_with_pct(pains: pd.DataFrame, n: int = 10, total_transcripts: int | None = None) -> pd.DataFrame:
     """Returns top-n pains by unique demo count, with % of total demos."""
-    total_demos = pains["transcript_id"].nunique()
+    total_demos = total_transcripts if total_transcripts and total_transcripts > 0 else pains["transcript_id"].nunique()
     result = (
         pains.groupby("insight_subtype_display")["transcript_id"]
         .nunique()
