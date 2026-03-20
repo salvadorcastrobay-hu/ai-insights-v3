@@ -12,19 +12,22 @@ except ImportError:
     def render_inline_filters(df, **_):
         return df
 
+from exp_ds import inject_ds_css, DS, apply_ds_layout, BRAND_SCALE, ds_sub
+
 # ── 1. Load data ──────────────────────────────────────────────────────────────
 raw_df = st.session_state.get("df")
 if raw_df is None or raw_df.empty:
     st.warning("No hay datos para mostrar.")
     st.stop()
 
-st.header("Product Gaps — Detalle")
-
 # ── 2. Inline filters ─────────────────────────────────────────────────────────
 df = render_inline_filters(raw_df, key_prefix="pgd")
 if df.empty:
     st.warning("No hay datos para los filtros seleccionados.")
     st.stop()
+
+inject_ds_css()
+ds_sub("Product Gaps — Detalle")
 
 # ── 3. Filter to product_gap insight_type ─────────────────────────────────────
 gaps = df[df["insight_type"] == "product_gap"].copy()
@@ -83,7 +86,7 @@ col3.metric(
 col3.caption("detectadas por el modelo · revisar para ampliar taxonomía")
 
 # ── B. Top 20 Features Faltantes (COUNT DISTINCT deal_id + priority label) ───
-st.subheader("Top 20 Features Faltantes")
+ds_sub("Top 20 Features Faltantes")
 
 feature_counts = (
     gaps.groupby("feature_display")["deal_id"]
@@ -121,6 +124,7 @@ fig = px.bar(
     y="Feature",
     orientation="h",
     title="Top 20 Features Faltantes",
+    color_discrete_sequence=[DS["brand_400"]],
 )
 fig.update_layout(
     yaxis=dict(autorange="reversed"),
@@ -128,6 +132,7 @@ fig.update_layout(
 )
 if text_col is not None:
     fig.update_traces(text=text_col, textposition="outside")
+fig = apply_ds_layout(fig, "Top 20 Features Faltantes")
 
 chart_tooltip(
     "Ranking de features faltantes por deals únicos que la mencionaron.",
@@ -137,7 +142,7 @@ st.plotly_chart(fig, use_container_width=True)
 
 # ── B2. Priority breakdown table (replaces pie chart) ─────────────────────────
 if "gap_priority" in gaps.columns:
-    st.subheader("Distribución por Prioridad")
+    ds_sub("Distribución por Prioridad")
 
     priority_definitions = {
         "must_have": {
@@ -178,7 +183,7 @@ if "gap_priority" in gaps.columns:
 
 # ── B3. Prioridad de Gaps por Segmento (%) ────────────────────────────────────
 if "segment" in gaps.columns and "gap_priority" in gaps.columns:
-    st.subheader("Prioridad de Gaps por Segmento (%)")
+    ds_sub("Prioridad de Gaps por Segmento (%)")
 
     seg_pri = gaps.groupby(["segment", "gap_priority"]).size().reset_index(name="count")
     seg_total = gaps.groupby("segment")["deal_id"].nunique().reset_index(name="total_deals")
@@ -218,8 +223,10 @@ if "segment" in gaps.columns and "gap_priority" in gaps.columns:
             "🟡 Nice to Have": "#D69E2E",
             "🚨 Dealbreaker": "#9B2335",
         },
+        color_discrete_sequence=DS["palette"],
     )
     fig.update_layout(xaxis_ticksuffix="%", yaxis_title="Segmento")
+    fig = apply_ds_layout(fig, "Prioridad de Gaps por Segmento (%)")
     st.plotly_chart(fig, use_container_width=True)
 
     st.caption(
@@ -245,9 +252,10 @@ if "segment" in gaps.columns:
             y="feature_display",
             z="Deals únicos",
             title="Feature Gaps por Segmento (Top 15)",
-            color_continuous_scale="Blues",
+            color_continuous_scale=BRAND_SCALE,
         )
         fig.update_layout(yaxis_title="Feature", xaxis_title="Segmento")
+        fig = apply_ds_layout(fig, "Feature Gaps por Segmento (Top 15)")
         chart_tooltip(
             "Deals únicos por feature y segmento.",
             "Permite ver qué features son más críticas por tamaño de empresa.",
@@ -284,7 +292,7 @@ if "module_status" in gaps.columns:
         text="Etiqueta",
         title="Gaps: Módulos Existentes vs. Faltantes",
         color="module_status_display",
-        color_discrete_sequence=["#3182CE", "#E53E3E", "#DD6B20"],
+        color_discrete_sequence=DS["palette"],
     )
     fig.update_traces(textposition="outside")
     fig.update_layout(
@@ -292,6 +300,7 @@ if "module_status" in gaps.columns:
         showlegend=False,
         yaxis=dict(autorange="reversed"),
     )
+    fig = apply_ds_layout(fig, "Gaps: Módulos Existentes vs. Faltantes")
     chart_tooltip(
         "Distribución de gaps entre módulos que ya existen en Humand vs. los que faltan.",
         "Un alto porcentaje en Existente indica problema de profundidad funcional, no de cobertura.",
@@ -307,8 +316,10 @@ else:
         y="Modulo",
         orientation="h",
         title="Gaps por Módulo",
+        color_discrete_sequence=[DS["brand_400"]],
     )
     fig.update_layout(yaxis=dict(autorange="reversed"))
+    fig = apply_ds_layout(fig, "Gaps por Módulo")
     chart_tooltip(
         "Módulos con mayor concentración de product gaps.",
         "Sirve para priorizar roadmap por área funcional.",
@@ -316,7 +327,7 @@ else:
     st.plotly_chart(fig, use_container_width=True)
 
 # ── C. Tabla de Detalle (con filtros) ─────────────────────────────────────────
-st.subheader("Detalle de Gaps")
+ds_sub("Detalle de Gaps")
 
 tf1, tf2, tf3 = st.columns([2, 2, 3])
 

@@ -15,19 +15,22 @@ except ImportError:
     def annotate_heatmap(*_args, **_kwargs):
         return None
 
+from exp_ds import inject_ds_css, DS, apply_ds_layout, BRAND_SCALE, ds_sub
+
 raw_df = st.session_state.get("df")
 if raw_df is None or raw_df.empty:
     st.warning("No hay datos para mostrar.")
     st.stop()
 
-st.header("Sales Enablement")
+inject_ds_css()
+st.markdown(f'<div style="font-size:32px;font-weight:600;font-family:Roboto,sans-serif;color:#303036;line-height:1.3;margin-bottom:4px;letter-spacing:0.2px;">Sales Enablement</div>', unsafe_allow_html=True)
 df = render_inline_filters(raw_df, key_prefix="se")
 if df.empty:
     st.warning("No hay datos para los filtros seleccionados.")
     st.stop()
 
 # === Section A: ¿Qué está frenando los deals? ===
-st.subheader("A. ¿Qué está frenando los deals?")
+ds_sub("A. ¿Qué está frenando los deals?")
 friction = df[df["insight_type"] == "deal_friction"]
 if friction.empty:
     st.info("No hay fricciones de deal en los datos filtrados.")
@@ -75,8 +78,10 @@ else:
         y="Tipo de Friccion",
         orientation="h",
         title="¿Qué está frenando más los deals?",
+        color_discrete_sequence=[DS["brand_400"]],
     )
     fig.update_layout(yaxis=dict(autorange="reversed"))
+    fig = apply_ds_layout(fig, "¿Qué está frenando más los deals?")
     chart_tooltip(
         "Ranking de fricciones más frecuentes (deals únicos).",
         "Muestra qué bloqueos de venta aparecen en más deals distintos.",
@@ -118,8 +123,10 @@ else:
                 seg_data, x="count", y="insight_subtype_display", color="segment",
                 orientation="h", title="¿Varía la fricción según el tamaño de empresa?",
                 labels={"insight_subtype_display": "Fricción", "count": "Deals"},
+                color_discrete_sequence=DS["palette"],
             )
             fig.update_layout(yaxis=dict(autorange="reversed"))
+            fig = apply_ds_layout(fig, "¿Varía la fricción según el tamaño de empresa?")
             chart_tooltip(
                 "Fricciones cruzadas por segmento comercial (deals únicos).",
                 "Permite ver si cada segmento enfrenta bloqueos distintos.",
@@ -143,7 +150,7 @@ else:
                 pivot = pivot.loc[row_order, col_order]
                 fig = px.imshow(
                     pivot, text_auto=False, aspect="auto",
-                    color_continuous_scale="Blues",
+                    color_continuous_scale=BRAND_SCALE,
                     title="¿En qué etapa del deal aparece cada fricción?",
                     labels=dict(x="Etapa del Deal", y="Fricción", color="Deals"),
                 )
@@ -152,6 +159,7 @@ else:
                 flattened = pivot.to_numpy().flatten().tolist()
                 max_value = float(max(flattened)) if flattened else 0.0
                 annotate_heatmap(fig, pivot, max_value, 0.0)
+                fig = apply_ds_layout(fig, "¿En qué etapa del deal aparece cada fricción?")
                 chart_tooltip(
                     "Cruce entre tipo de fricción y etapa del deal (deals únicos).",
                     "Ayuda a detectar en qué fase del pipeline se traba cada fricción.",
@@ -190,7 +198,7 @@ else:
                 pivot_ind = pivot_ind.loc[row_order, col_order]
                 fig = px.imshow(
                     pivot_ind, text_auto=False, aspect="auto",
-                    color_continuous_scale="Blues",
+                    color_continuous_scale=BRAND_SCALE,
                     title="¿Qué fricción predomina según la industria?",
                     labels=dict(x="Industria", y="Fricción", color="Deals"),
                 )
@@ -199,6 +207,7 @@ else:
                 ind_flat = pivot_ind.to_numpy().flatten().tolist()
                 ind_max = float(max(ind_flat)) if ind_flat else 0.0
                 annotate_heatmap(fig, pivot_ind, ind_max, 0.0)
+                fig = apply_ds_layout(fig, "¿Qué fricción predomina según la industria?")
                 chart_tooltip(
                     "Heatmap de fricciones por industria (deals únicos).",
                     "Permite adaptar el pitch según el sector del prospect.",
@@ -206,7 +215,7 @@ else:
                 st.plotly_chart(fig, use_container_width=True)
 
 # === Section B: ¿Qué AEs necesitan más soporte? ===
-st.subheader("B. ¿Qué AEs necesitan más soporte?")
+ds_sub("B. ¿Qué AEs necesitan más soporte?")
 if "deal_owner" in df.columns:
     ae_data = df.dropna(subset=["deal_owner"])
     if not ae_data.empty:
@@ -309,8 +318,10 @@ if "deal_owner" in df.columns:
                 orientation="h",
                 title="¿Qué tipo de fricciones enfrenta cada AE?",
                 category_orders={"deal_owner": ae_order},
+                color_discrete_sequence=DS["palette"],
             )
             fig.update_layout(yaxis=dict(autorange="reversed"))
+            fig = apply_ds_layout(fig, "¿Qué tipo de fricciones enfrenta cada AE?")
             chart_tooltip(
                 "Distribución de fricciones por AE, ordenado por total de fricciones descendente.",
                 "Si un AE tiene muchas fricciones de un tipo, necesita argumentos específicos para ese bloqueo.",
@@ -320,7 +331,7 @@ else:
     st.info("No hay datos de deal_owner disponibles.")
 
 # === Section C: ¿Qué preguntan los prospects? (Battle Cards) ===
-st.subheader("C. ¿Qué preguntan los prospects? (Battle Cards)")
+ds_sub("C. ¿Qué preguntan los prospects? (Battle Cards)")
 
 st.info(
     "Estas son las preguntas que los prospects hacen más frecuentemente en las primeras demos. "
@@ -348,8 +359,10 @@ else:
         y="Topic",
         orientation="h",
         title="¿Qué temas preguntan más los prospects?",
+        color_discrete_sequence=[DS["brand_400"]],
     )
     fig.update_layout(yaxis=dict(autorange="reversed"))
+    fig = apply_ds_layout(fig, "¿Qué temas preguntan más los prospects?")
     chart_tooltip(
         "Ranking de temas de FAQ más consultados (demos únicas).",
         "Se usa para priorizar materiales de enablement y battle cards.",
@@ -376,7 +389,7 @@ else:
         else:
             st.caption("_(Sin datos de summary)_")
 
-    st.subheader("Preguntas y Respuestas por Topic")
+    ds_sub("Preguntas y Respuestas por Topic")
     st.caption("Filtrá por topic para prepararte antes de una demo")
 
     available_topics = ["Todos"] + topic_counts["Topic"].tolist()

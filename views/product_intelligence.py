@@ -2,23 +2,24 @@ import streamlit as st
 import plotly.express as px
 from shared import humanize, chart_tooltip, render_inline_filters
 from computations import cached_value_counts, cached_dedup_groupby, cached_pains_with_pct
+from exp_ds import inject_ds_css, DS, apply_ds_layout, BRAND_SCALE, ds_sub
 
 raw_df = st.session_state.get("df")
 if raw_df is None or raw_df.empty:
     st.warning("No hay datos para mostrar.")
     st.stop()
 
+inject_ds_css()
+st.markdown(f'<div style="font-size:32px;font-weight:600;font-family:Roboto,sans-serif;color:#303036;line-height:1.3;margin-bottom:4px;letter-spacing:0.2px;">Product Intelligence</div>', unsafe_allow_html=True)
 df = render_inline_filters(raw_df, key_prefix="pi")
 if df.empty:
     st.warning("No hay datos para los filtros seleccionados.")
     st.stop()
 
-st.header("Product Intelligence")
-
 # ============================================================
 # === Section A: ¿Con qué problemas llegan los prospects? ===
 # ============================================================
-st.subheader("A. ¿Con qué problemas llegan los prospects?")
+ds_sub("A. ¿Con qué problemas llegan los prospects?")
 pains = df[df["insight_type"] == "pain"].copy()
 if pains.empty:
     st.info("No hay pains en los datos filtrados.")
@@ -40,8 +41,10 @@ else:
             title="Top 15 Pains",
             hover_data={"% del total": True},
             labels={"Demos": "Demos únicas"},
+            color_discrete_sequence=[DS["brand_400"]],
         )
         fig.update_layout(yaxis=dict(autorange="reversed"))
+        fig = apply_ds_layout(fig, "Top 15 Pains")
         chart_tooltip(
             "Ranking de los pains más frecuentes. Cada barra = demos únicas donde se detectó el pain.",
             "El % del total indica qué fracción de todas las demos analizadas mencionó ese pain.",
@@ -75,12 +78,14 @@ else:
                 title=f"📌 {pain_name}",
                 hover_data={"% dentro del pain": True},
                 labels={"Demos": "Demos únicas"},
+                color_discrete_sequence=[DS["brand_400"]],
             )
             fig.update_layout(
                 yaxis=dict(autorange="reversed"),
                 margin=dict(l=0, r=0, t=40, b=0),
                 height=220,
             )
+            fig = apply_ds_layout(fig, f"📌 {pain_name}")
             st.plotly_chart(fig, use_container_width=True, key=f"pi_pain_breakdown_{pain_name}")
 
     # Heatmap: Top 15 Pains × Segmento — full width
@@ -99,9 +104,10 @@ else:
                 pivot, text_auto=True, aspect="auto",
                 title="¿Varía el pain según el tamaño de empresa?",
                 labels=dict(x="Segmento", y="Pain", color="Demos únicas"),
-                color_continuous_scale="Blues",
+                color_continuous_scale=BRAND_SCALE,
             )
             fig.update_layout(height=620)
+            fig = apply_ds_layout(fig, "¿Varía el pain según el tamaño de empresa?")
             chart_tooltip(
                 "Cruce entre pains principales y segmento comercial. Unidad: demos únicas.",
                 "Permite ver si ciertos pains son más fuertes en SMB, Mid-Market o Enterprise.",
@@ -128,8 +134,10 @@ else:
                 barmode="stack",
                 title="¿Varía el pain según la industria?",
                 labels={"count": "Menciones", "industry": "Industria", "pain_theme": "Tema de pain"},
+                color_discrete_sequence=DS["palette"],
             )
             fig.update_layout(yaxis=dict(autorange="reversed", automargin=True))
+            fig = apply_ds_layout(fig, "¿Varía el pain según la industria?")
             chart_tooltip(
                 "Desglose de pains por industria, segmentado por tema.",
                 "Permite identificar qué narrativa duele más en cada vertical.",
@@ -139,8 +147,9 @@ else:
     # Pains por Theme — moved to bottom of Section A as context
     theme_counts = pains["pain_theme"].value_counts().reset_index()
     theme_counts.columns = ["Theme", "Cantidad"]
-    fig = px.bar(theme_counts, x="Theme", y="Cantidad", title="Pains por Theme", color="Theme")
+    fig = px.bar(theme_counts, x="Theme", y="Cantidad", title="Pains por Theme", color="Theme", color_discrete_sequence=DS["palette"])
     fig.update_layout(showlegend=False)
+    fig = apply_ds_layout(fig, "Pains por Theme")
     chart_tooltip(
         "Volumen de pains agrupados por tema macro (procesos, tecnología, comunicación, etc.).",
         "Referencia adicional: muestra qué dimensión del problema domina en el total.",
@@ -149,7 +158,7 @@ else:
 
     @st.fragment
     def _pain_detail_fragment():
-        st.subheader("Detalle por Pain")
+        ds_sub("Detalle por Pain")
         pain_options = top_pain_names
         selected_pain = st.selectbox(
             "Seleccioná un pain para ver el detalle",
@@ -182,7 +191,7 @@ else:
 # ============================================================
 # === Section B: ¿Qué módulos y features buscan los prospects? ===
 # ============================================================
-st.subheader("B. ¿Qué módulos y features buscan los prospects?")
+ds_sub("B. ¿Qué módulos y features buscan los prospects?")
 gaps = df[df["insight_type"] == "product_gap"].copy()
 
 # --- Demanda de Módulos (moved from Section A) ---
@@ -206,8 +215,10 @@ if not module_focus.empty:
         barmode="stack",
         title="Módulos más buscados en la primera demo",
         labels={"count": "Menciones", "module_display": "Módulo", "segment": "Segmento"},
+        color_discrete_sequence=DS["palette"],
     )
     fig.update_layout(yaxis=dict(autorange="reversed"))
+    fig = apply_ds_layout(fig, "Módulos más buscados en la primera demo")
     chart_tooltip(
         "Módulos más demandados por segmento a partir de pains y product gaps.",
         "Ayuda a priorizar mensaje comercial por tipo de cliente.",
@@ -238,8 +249,10 @@ else:
         fig = px.bar(
             feature_counts, x="Frecuencia", y="Feature", orientation="h",
             title="¿Qué nos piden que no tenemos? (por frecuencia)",
+            color_discrete_sequence=[DS["brand_400"]],
         )
         fig.update_layout(yaxis=dict(autorange="reversed"))
+        fig = apply_ds_layout(fig, "¿Qué nos piden que no tenemos? (por frecuencia)")
         chart_tooltip(
             "Top de funcionalidades faltantes más mencionadas.",
             "Indica qué gaps aparecen más veces en procesos de venta.",
@@ -251,8 +264,10 @@ else:
             fig = px.bar(
                 gap_rev, x="Revenue at Stake", y="Feature", orientation="h",
                 title="Revenue at Stake — Top 10",
+                color_discrete_sequence=[DS["brand_400"]],
             )
             fig.update_layout(yaxis=dict(autorange="reversed"))
+            fig = apply_ds_layout(fig, "Revenue at Stake — Top 10")
             chart_tooltip(
                 "Revenue potencial comprometido por cada feature faltante.",
                 "Permite priorizar por impacto económico además de frecuencia.",
@@ -272,8 +287,10 @@ else:
             fig = px.bar(
                 seg_data, x="count", y="feature_display", color="segment",
                 orientation="h", title="¿Qué nos falta según el tamaño de empresa?",
+                color_discrete_sequence=DS["palette"],
             )
             fig.update_layout(yaxis=dict(autorange="reversed"))
+            fig = apply_ds_layout(fig, "¿Qué nos falta según el tamaño de empresa?")
             chart_tooltip(
                 "Features faltantes cruzadas por segmento comercial.",
                 "Revela si la demanda de funcionalidades cambia según tipo de cliente.",
@@ -297,7 +314,7 @@ else:
 
     @st.fragment
     def _feature_gap_detail_fragment():
-        st.subheader("Detalle por Feature Gap")
+        ds_sub("Detalle por Feature Gap")
         st.caption("Seleccioná una feature para ver qué empresas la pidieron, en qué industria y segmento.")
         feature_options = feature_counts["Feature"].tolist()
         selected_feature = st.selectbox(
@@ -335,7 +352,7 @@ else:
 # === Section C: ¿Cuánto revenue estamos dejando ir? ===
 # ============================================================
 if not gaps.empty and gap_rev["Revenue at Stake"].sum() > 0:
-    st.subheader("C. ¿Cuánto revenue estamos dejando ir por lo que no tenemos?")
+    ds_sub("C. ¿Cuánto revenue estamos dejando ir por lo que no tenemos?")
     st.caption(
         "El revenue at stake es el pipeline total de deals donde se mencionó esa feature como faltante. "
         "No es revenue perdido confirmado — es revenue en riesgo si el gap no se resuelve."
@@ -346,8 +363,10 @@ if not gaps.empty and gap_rev["Revenue at Stake"].sum() > 0:
         fig = px.bar(
             gap_rev, x="Revenue at Stake", y="Feature", orientation="h",
             title="Revenue at Stake — Top 10 Features",
+            color_discrete_sequence=[DS["brand_400"]],
         )
         fig.update_layout(yaxis=dict(autorange="reversed"))
+        fig = apply_ds_layout(fig, "Revenue at Stake — Top 10 Features")
         chart_tooltip(
             "Revenue potencial comprometido por cada feature faltante.",
             "Permite priorizar por impacto económico además de frecuencia.",

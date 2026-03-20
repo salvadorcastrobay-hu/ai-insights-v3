@@ -1,11 +1,13 @@
 import pandas as pd
 import streamlit as st
+from exp_ds import inject_ds_css, ds_sub
 
+inject_ds_css()
 
-st.header("Glosario y Metodología")
+ds_sub("Glosario y Metodología")
 st.caption("Definiciones rápidas para interpretar correctamente variables, indicadores y análisis.")
 
-st.subheader("1) Cómo funciona")
+ds_sub("1) Cómo funciona")
 st.markdown(
     """
     El flujo de AI Sales Insights sigue esta lógica:
@@ -29,7 +31,7 @@ with st.expander("Qué significa esto para el usuario"):
         """
     )
 
-st.subheader("2) Tipos de Insight")
+ds_sub("2) Tipos de Insight")
 st.markdown(
     "Cada insight extraído de una llamada se clasifica en **uno** de estos 5 tipos."
 )
@@ -70,7 +72,7 @@ insight_types = pd.DataFrame(
 st.dataframe(insight_types, width="stretch", hide_index=True)
 
 
-st.subheader("3) Indicadores del Executive Summary")
+ds_sub("3) Indicadores del Executive Summary")
 kpi_df = pd.DataFrame(
     [
         {
@@ -103,7 +105,7 @@ kpi_df = pd.DataFrame(
 st.dataframe(kpi_df, width="stretch", hide_index=True)
 
 
-st.subheader("4) Cómo leer gráficos de Custom Dashboards")
+ds_sub("4) Cómo leer gráficos de Custom Dashboards")
 chart_terms = pd.DataFrame(
     [
         {
@@ -168,7 +170,7 @@ with st.expander("Ver detalle de agregaciones"):
     st.dataframe(aggs, width="stretch", hide_index=True)
 
 
-st.subheader("5) Diccionario corto de variables")
+ds_sub("5) Diccionario corto de variables")
 var_df = pd.DataFrame(
     [
         {"Variable": "region", "Significado": "Región comercial/geográfica del deal."},

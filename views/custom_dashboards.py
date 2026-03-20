@@ -8,6 +8,7 @@ import uuid
 import pandas as pd
 import plotly.express as px
 import streamlit as st
+from exp_ds import inject_ds_css, DS, apply_ds_layout, BRAND_SCALE, ds_sub
 try:
     from shared import chart_tooltip
 except ImportError:
@@ -492,6 +493,7 @@ def _render_chart_block(
     fig.update_layout(margin=dict(l=10, r=10, t=40, b=10))
     what_shows, how_to_read = _chart_intent(spec)
     chart_tooltip(what_shows, how_to_read)
+    fig = apply_ds_layout(fig, "TITLE")
     st.plotly_chart(fig, width="stretch", key=f"{chart_key}_plot")
     _render_takeaways(spec, chart_data)
     with st.expander(data_label):
@@ -643,6 +645,7 @@ def _build_figure(df: pd.DataFrame, spec: dict) -> tuple[object | None, pd.DataF
                 y="value",
                 color=color_col if color_col else None,
                 labels=labels,
+                color_discrete_sequence=DS["palette"] if color_col else [DS["brand_400"]],
             )
         elif chart_type == "line":
             fig = px.line(
@@ -651,6 +654,7 @@ def _build_figure(df: pd.DataFrame, spec: dict) -> tuple[object | None, pd.DataF
                 y="value",
                 color=color_col if color_col else None,
                 labels=labels,
+                color_discrete_sequence=DS["palette"] if color_col else [DS["brand_400"]],
             )
         elif chart_type == "area":
             fig = px.area(
@@ -679,6 +683,7 @@ def _build_figure(df: pd.DataFrame, spec: dict) -> tuple[object | None, pd.DataF
             y=y_col,
             color=color_col if color_col else None,
             labels=_axis_labels(x_col, y_col, color_col),
+            color_discrete_sequence=DS["palette"] if color_col else [DS["brand_400"]],
         )
         return fig, plot_df
 
@@ -778,7 +783,8 @@ def _delete_dashboard(owner: str, dashboard_id: str) -> tuple[bool, str]:
     return _save_store(data)
 
 
-st.header("Dashboards Personalizados")
+inject_ds_css()
+ds_sub("Dashboards Personalizados")
 st.caption("Creá gráficos útiles rápido o con control avanzado, y guardalos para reutilizarlos.")
 
 owner = _owner()
@@ -875,7 +881,7 @@ with tabs[0]:
             filtered_data_df = _apply_optional_filters(data_df, spec)
             fig = None
             preview_df = pd.DataFrame()
-            st.subheader("Vista previa")
+            ds_sub("Vista previa")
             if filtered_data_df.empty:
                 st.info("No hay datos para los filtros de región/país seleccionados.")
             else:
@@ -1082,7 +1088,7 @@ with tabs[1]:
                 filtered_data_df = _apply_optional_filters(data_df, spec)
                 fig = None
                 preview_df = pd.DataFrame()
-                st.subheader("Vista previa")
+                ds_sub("Vista previa")
                 if filtered_data_df.empty:
                     st.info("No hay datos para los filtros de región/país seleccionados.")
                 else:
@@ -1121,7 +1127,7 @@ with tabs[2]:
 
         top_left, top_right = st.columns([3, 1])
         with top_left:
-            st.subheader(selected_dashboard.get("name", "Dashboard sin título"))
+            ds_sub(selected_dashboard.get("name", "Dashboard sin título"))
             st.caption(f"{len(selected_dashboard.get('charts', []))} gráfico(s)")
         with top_right:
             if st.button("Eliminar dashboard", type="secondary", width="stretch"):

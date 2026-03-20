@@ -1,10 +1,14 @@
 import streamlit as st
 import plotly.express as px
 import pandas as pd
+from exp_ds import inject_ds_css, DS, apply_ds_layout, BRAND_SCALE, ds_section
+
 try:
-    from shared import format_currency, chart_tooltip, load_total_transcripts_count, annotate_heatmap
+    from shared import format_currency, chart_tooltip, load_total_transcripts_count, annotate_heatmap, humanize
 except ImportError:
     from shared import format_currency, chart_tooltip, load_total_transcripts_count
+    def humanize(v):
+        return str(v).replace("_", " ").title() if isinstance(v, str) else v
 
     def annotate_heatmap(*_args, **_kwargs):
         return None
@@ -15,12 +19,19 @@ from computations import (
     cached_pains_with_pct,
 )
 
+inject_ds_css()
+
 raw_df = st.session_state.get("df")
 if raw_df is None or raw_df.empty:
     st.warning("No hay datos para mostrar.")
     st.stop()
 
-st.header("Executive Summary")
+st.markdown(
+    f'<div style="font-size:{DS["size_xl"]};font-weight:600;font-family:{DS["font"]};'
+    f'color:{DS["text_default"]};line-height:1.3;margin-bottom:4px;letter-spacing:0.2px;">'
+    f'Executive Summary</div>',
+    unsafe_allow_html=True,
+)
 
 # ── Top-of-page filters ──────────────────────────────────────────────────────
 
@@ -115,12 +126,14 @@ c4.metric(
 c5.metric(
     "Calls con Insights",
     f"{pct_with_insights}%",
+    delta="Positivo",
+    delta_color="normal",
     help="Porcentaje de demos procesadas (sobre el total en base de datos) que contienen al menos un insight detectado.",
 )
 
 # ── Composición de la muestra ─────────────────────────────────────────────────
 
-st.subheader("Composición de la muestra analizada")
+ds_section("Composición de la muestra analizada")
 col_ind, col_seg = st.columns(2)
 
 with col_ind:
@@ -138,8 +151,10 @@ with col_ind:
             fig = px.bar(
                 ind_demos, x="Demos", y="Industria", orientation="h",
                 title="Distribución por Industria",
+                color_discrete_sequence=[DS["brand_400"]],
             )
             fig.update_layout(yaxis=dict(autorange="reversed"), showlegend=False)
+            fig = apply_ds_layout(fig, "Distribución por Industria")
             chart_tooltip("Número de demos únicas por industria en el recorte actual.")
             st.plotly_chart(fig, use_container_width=True)
 
@@ -158,14 +173,16 @@ with col_seg:
             fig = px.bar(
                 seg_demos, x="Demos", y="Segmento", orientation="h",
                 title="Distribución por Segmento",
+                color_discrete_sequence=[DS["brand_400"]],
             )
             fig.update_layout(yaxis=dict(autorange="reversed"), showlegend=False)
+            fig = apply_ds_layout(fig, "Distribución por Segmento")
             chart_tooltip("Número de demos únicas por segmento comercial en el recorte actual.")
             st.plotly_chart(fig, use_container_width=True)
 
 # ── Resumen de señales detectadas (Insights por Tipo) ─────────────────────────
 
-st.subheader("Resumen de señales detectadas")
+ds_section("Resumen de señales detectadas")
 st.caption(
     "Cantidad de insights únicos detectados en el período seleccionado. "
     "Una misma demo puede generar múltiples insights de distintos tipos."
@@ -175,8 +192,10 @@ type_counts.columns = ["Tipo", "Cantidad"]
 fig = px.bar(
     type_counts, x="Cantidad", y="Tipo", orientation="h",
     title="Insights por Tipo", color="Tipo",
+    color_discrete_sequence=DS["palette"],
 )
 fig.update_layout(yaxis=dict(autorange="reversed"), showlegend=False)
+fig = apply_ds_layout(fig, "Insights por Tipo")
 chart_tooltip(
     "Distribución del total de insights por tipo.",
     "Cada fila es una detección individual. Una demo puede generar múltiples insights del mismo tipo "
@@ -186,22 +205,28 @@ st.plotly_chart(fig, use_container_width=True)
 
 # ── 1️⃣ ¿Con qué problemas llegan los clientes? ───────────────────────────────
 
-st.subheader("¿Con qué problemas llegan los clientes?")
+ds_section("¿Con qué problemas llegan los clientes?")
 
 pains = df[df["insight_type"] == "pain"].copy()
 col_pains, col_pain_insights = st.columns([2, 3])
 
 with col_pains:
     if not pains.empty:
-        top_pains = cached_pains_with_pct(pains, n=10)
+        top_pains = cached_pains_with_pct(pains, n=10, total_transcripts=total_transcripts)
         fig = px.bar(
             top_pains, x="Demos", y="Pain", orientation="h",
             title="Top 10 Pains (demos únicas)",
             text="% del total",
             hover_data=["% del total"],
+            color_discrete_sequence=[DS["brand_400"]],
         )
         fig.update_traces(textposition="outside")
-        fig.update_layout(yaxis=dict(autorange="reversed"))
+        max_pain_demos = top_pains["Demos"].max() if not top_pains.empty else 0
+        fig.update_layout(
+            yaxis=dict(autorange="reversed"),
+            xaxis=dict(range=[0, max_pain_demos * 1.25]) if max_pain_demos > 0 else {},
+        )
+        fig = apply_ds_layout(fig, "Top 10 Pains (demos únicas)")
         chart_tooltip(
             "Ranking de los 10 pains más mencionados.",
             "Frecuencia = número de demos únicas donde se detectó el pain "
@@ -238,12 +263,48 @@ with col_pain_insights:
                         subset, x="Demos", y="Módulo", orientation="h",
                         title=f"Desglose: {pain_name}",
                         labels={"Módulo": "Módulo", "Demos": "Demos únicas"},
+                        color_discrete_sequence=[DS["brand_400"]],
                     )
-                    fig.update_layout(
-                        yaxis=dict(autorange="reversed"),
-                        height=240,
-                        margin=dict(t=40, b=20),
+                    fig.update_layout(yaxis=dict(autorange="reversed"), height=240, margin=dict(t=40, b=20))
+                    fig = apply_ds_layout(fig, f"Desglose: {pain_name}")
+                    st.plotly_chart(fig, use_container_width=True)
+
+        # ── Pain subtypes: pains relacionados del mismo tema ──
+        if top2_pain_names and "pain_theme" in pains.columns:
+            st.markdown("**Pains relacionados (por tema)**")
+            chart_tooltip(
+                "Otros pains detectados bajo el mismo tema para cada pain principal.",
+                "Responde '¿Qué tipo de problema es?' mostrando subcategorías del mismo tema.",
+            )
+            for pain_name in top2_pain_names:
+                theme_series = pains.loc[
+                    pains["insight_subtype_display"] == pain_name, "pain_theme"
+                ].dropna()
+                if theme_series.empty:
+                    continue
+                theme = theme_series.mode().iloc[0]
+                theme_label = humanize(theme)
+                siblings = (
+                    pains[
+                        (pains["pain_theme"] == theme)
+                        & (pains["insight_subtype_display"] != pain_name)
+                    ]
+                    .groupby("insight_subtype_display")["transcript_id"]
+                    .nunique()
+                    .sort_values(ascending=False)
+                    .head(6)
+                    .reset_index()
+                )
+                siblings.columns = ["Pain", "Demos"]
+                if not siblings.empty:
+                    fig = px.bar(
+                        siblings, x="Demos", y="Pain", orientation="h",
+                        title=f"Subtemas de {theme_label}: {pain_name}",
+                        labels={"Pain": "Pain relacionado", "Demos": "Demos únicas"},
+                        color_discrete_sequence=[DS["brand_400"]],
                     )
+                    fig.update_layout(yaxis=dict(autorange="reversed"), height=240, margin=dict(t=40, b=20))
+                    fig = apply_ds_layout(fig, f"Subtemas de {theme_label}: {pain_name}")
                     st.plotly_chart(fig, use_container_width=True)
 
 # Top 15 Pains × Segmento heatmap (full-width)
@@ -267,9 +328,10 @@ if not pains.empty and "segment" in pains.columns:
         fig = px.imshow(
             pivot, text_auto=False, aspect="auto",
             title="Top 15 Pains × Segmento",
-            color_continuous_scale="Blues",
+            color_continuous_scale=BRAND_SCALE,
             labels=dict(x="Segmento", y="Pain", color="Demos"),
         )
+        fig = apply_ds_layout(fig, "Top 15 Pains × Segmento")
         fig.update_layout(height=max(500, len(pivot) * 38), margin=dict(t=60, b=130, l=10, r=10))
         fig.update_xaxes(tickangle=-30, automargin=True)
         flattened = pivot.to_numpy().flatten().tolist()
@@ -283,7 +345,7 @@ if not pains.empty and "segment" in pains.columns:
 
 # ── 2️⃣ ¿Qué módulos buscan más? ──────────────────────────────────────────────
 
-st.subheader("¿Qué módulos buscan y qué les falta?")
+ds_section("¿Qué módulos buscan y qué les falta?")
 
 module_focus = df[df["insight_type"].isin(["pain", "product_gap"])].dropna(subset=["module_display"])
 if not module_focus.empty:
@@ -295,12 +357,26 @@ if not module_focus.empty:
         .reset_index()
     )
     mod_counts.columns = ["Modulo", "Demos"]
+    if total_transcripts > 0:
+        mod_counts["% del total"] = (mod_counts["Demos"] / total_transcripts * 100).round(1).astype(str) + "%"
+    else:
+        mod_counts["% del total"] = "0.0%"
     fig = px.bar(
         mod_counts, x="Demos", y="Modulo", orientation="h",
         title="Módulos más buscados en la primera Demo",
+        text="% del total",
+        hover_data=["% del total"],
         labels={"Modulo": "Módulo", "Demos": "Demos únicas"},
+        color_discrete_sequence=[DS["brand_400"]],
     )
-    fig.update_layout(yaxis=dict(autorange="reversed"), showlegend=False)
+    fig.update_traces(textposition="outside")
+    max_mod = mod_counts["Demos"].max() if not mod_counts.empty else 0
+    fig.update_layout(
+        yaxis=dict(autorange="reversed"),
+        xaxis=dict(range=[0, max_mod * 1.25]) if max_mod > 0 else {},
+        showlegend=False,
+    )
+    fig = apply_ds_layout(fig, "Módulos más buscados en la primera Demo")
     chart_tooltip(
         "Módulos más mencionados en pains y product gaps combinados, contando demos únicas.",
         "Refleja qué áreas de producto generan más interés o preguntas en las primeras demos.",
@@ -316,12 +392,26 @@ with col_gap_freq:
             group_col="feature_display", agg_func="size", n=10,
         )
         gap_counts.columns = ["feature_display", "frecuencia"]
+        total_gap_deals = gaps["deal_id"].dropna().nunique()
+        if total_gap_deals > 0:
+            gap_counts["% del total"] = (gap_counts["frecuencia"] / total_gap_deals * 100).round(1).astype(str) + "%"
+        else:
+            gap_counts["% del total"] = "0.0%"
         fig = px.bar(
             gap_counts, x="frecuencia", y="feature_display", orientation="h",
             title="Top 10 Feature Gaps — Frecuencia",
+            text="% del total",
+            hover_data=["% del total"],
             labels={"feature_display": "Feature", "frecuencia": "Frecuencia"},
+            color_discrete_sequence=[DS["brand_400"]],
         )
-        fig.update_layout(yaxis=dict(autorange="reversed"))
+        fig.update_traces(textposition="outside")
+        max_freq = gap_counts["frecuencia"].max() if not gap_counts.empty else 0
+        fig.update_layout(
+            yaxis=dict(autorange="reversed"),
+            xaxis=dict(range=[0, max_freq * 1.25]) if max_freq > 0 else {},
+        )
+        fig = apply_ds_layout(fig, "Top 10 Feature Gaps — Frecuencia")
         chart_tooltip("Top de features faltantes por frecuencia de aparición en deals únicos.")
         st.plotly_chart(fig, use_container_width=True)
 
@@ -339,12 +429,24 @@ with col_gap_rev:
             title="Top 10 Feature Gaps — Revenue Impact",
             text="Revenue_fmt",
             labels={"feature_display": "Feature", "amount": "Revenue en Riesgo"},
+            color_discrete_sequence=[DS["brand_400"]],
         )
         fig.update_traces(textposition="outside")
-        fig.update_layout(
-            yaxis=dict(autorange="reversed"),
-            xaxis=dict(tickformat="$,.2s"),
-        )
+        max_rev = gap_revenue["amount"].max() if not gap_revenue.empty else 0
+        if max_rev > 0:
+            n_ticks = 5
+            step = max_rev / (n_ticks - 1)
+            tick_vals = [round(step * i) for i in range(n_ticks)]
+            xaxis_cfg = dict(
+                tickmode="array",
+                tickvals=tick_vals,
+                ticktext=[format_currency(v) for v in tick_vals],
+                range=[0, max_rev * 1.25],
+            )
+        else:
+            xaxis_cfg = {}
+        fig.update_layout(yaxis=dict(autorange="reversed"), xaxis=xaxis_cfg)
+        fig = apply_ds_layout(fig, "Top 10 Feature Gaps — Revenue Impact")
         chart_tooltip(
             "Top de features faltantes por revenue asociado a los deals que las mencionan.",
             "Revenue asociado a deals en los que se mencionó esta feature como ausente.",
@@ -353,7 +455,7 @@ with col_gap_rev:
 
 # ── 3️⃣ ¿Qué competidores se mencionan más? ───────────────────────────────────
 
-st.subheader("¿Qué competidores se mencionan más?")
+ds_section("¿Qué competidores se mencionan más?")
 
 comp = df[df["insight_type"] == "competitive_signal"].copy()
 if "is_own_brand_competitor" in comp.columns:
@@ -380,7 +482,9 @@ if not comp.empty:
             "competitor_relationship_display": "Relación",
         },
         category_orders={"competitor_name": order[::1]},
+        color_discrete_sequence=DS["palette"],
     )
+    fig = apply_ds_layout(fig, "Top Competidores Mencionados")
     chart_tooltip(
         "Ranking de competidores más mencionados, desglosado por tipo de relación.",
         "Colores: usa actualmente, está evaluando, migrando, etc. Para análisis detallado, ir a Competitive Intelligence.",
@@ -389,7 +493,7 @@ if not comp.empty:
 
 # ── 4️⃣ ¿Cuáles son las fricciones más recurrentes? ───────────────────────────
 
-st.subheader("¿Cuáles son las fricciones más recurrentes en la primera demo?")
+ds_section("¿Cuáles son las fricciones más recurrentes en la primera demo?")
 
 friction_all = df[df["insight_type"] == "deal_friction"].copy()
 col_fric, col_fric_insights = st.columns(2)
@@ -407,8 +511,10 @@ with col_fric:
         fig = px.bar(
             top_frictions, x="Demos", y="Fricción", orientation="h",
             title="Top 10 Fricciones (demos únicas)",
+            color_discrete_sequence=[DS["brand_400"]],
         )
         fig.update_layout(yaxis=dict(autorange="reversed"))
+        fig = apply_ds_layout(fig, "Top 10 Fricciones (demos únicas)")
         chart_tooltip(
             "Ranking de las 10 fricciones más frecuentes.",
             "Frecuencia = demos únicas donde se detectó la fricción.",
@@ -450,12 +556,10 @@ with col_fric_insights:
                             fric_bd, x="Demos", y=breakdown_label, orientation="h",
                             title=f"Desglose: {fric_name}",
                             labels={breakdown_label: breakdown_label, "Demos": "Demos únicas"},
+                            color_discrete_sequence=[DS["brand_400"]],
                         )
-                        fig.update_layout(
-                            yaxis=dict(autorange="reversed"),
-                            height=240,
-                            margin=dict(t=40, b=20),
-                        )
+                        fig.update_layout(yaxis=dict(autorange="reversed"), height=240, margin=dict(t=40, b=20))
+                        fig = apply_ds_layout(fig, f"Desglose: {fric_name}")
                         st.plotly_chart(fig, use_container_width=True)
 
 # Fricciones por revenue (full-width)
@@ -474,8 +578,10 @@ if not friction_all.empty and "amount" in friction_all.columns:
             fric_rev, x="Revenue", y="Fricción", orientation="h",
             title="Fricciones — Revenue en Riesgo",
             labels={"Fricción": "Tipo de Fricción", "Revenue": "Revenue en Riesgo"},
+            color_discrete_sequence=[DS["brand_400"]],
         )
         fig.update_layout(yaxis=dict(autorange="reversed"))
+        fig = apply_ds_layout(fig, "Fricciones — Revenue en Riesgo")
         chart_tooltip(
             "Revenue total en riesgo asociado a cada tipo de fricción.",
             "Calculado como suma del monto de deals únicos afectados por cada fricción.",
@@ -484,7 +590,7 @@ if not friction_all.empty and "amount" in friction_all.columns:
 
 # ── 5️⃣ ¿Qué preguntas aparecen siempre? ──────────────────────────────────────
 
-st.subheader("¿Qué preguntas aparecen siempre?")
+ds_section("¿Qué preguntas aparecen siempre?")
 
 faq_all = df[df["insight_type"] == "faq"].copy()
 
@@ -509,8 +615,10 @@ with col_faq:
         fig = px.bar(
             top_faqs, x="Demos", y="Pregunta", orientation="h",
             title="Top 10 Preguntas Frecuentes (demos únicas)",
+            color_discrete_sequence=[DS["brand_400"]],
         )
         fig.update_layout(yaxis=dict(autorange="reversed"))
+        fig = apply_ds_layout(fig, "Top 10 Preguntas Frecuentes (demos únicas)")
         chart_tooltip(
             "Ranking de las 10 preguntas más frecuentes.",
             "Frecuencia = demos únicas donde apareció la pregunta.",
@@ -552,9 +660,10 @@ with col_faq_insights:
             fig = px.imshow(
                 pivot_faq, text_auto=False, aspect="auto",
                 title="FAQ Insights — Top Preguntas por Módulo",
-                color_continuous_scale="Blues",
+                color_continuous_scale=BRAND_SCALE,
                 labels=dict(x="Pregunta", y="Módulo", color="Demos"),
             )
+            fig = apply_ds_layout(fig, "FAQ Insights — Top Preguntas por Módulo")
             fig.update_layout(height=max(380, len(pivot_faq) * 38), margin=dict(t=60, b=130, l=10, r=10))
             fig.update_xaxes(tickangle=-30, automargin=True)
             faq_flat = pivot_faq.to_numpy().flatten().tolist()
@@ -594,17 +703,15 @@ if not faq_all.empty and not transcript_modules.empty:
                         faq_topic_modules, x="Demos", y="Módulo", orientation="h",
                         title=f"Módulos donde aparece: {topic}",
                         labels={"Módulo": "Módulo", "Demos": "Demos únicas"},
+                        color_discrete_sequence=[DS["brand_400"]],
                     )
-                    fig.update_layout(
-                        yaxis=dict(autorange="reversed"),
-                        height=280,
-                        margin=dict(t=40, b=20),
-                    )
+                    fig.update_layout(yaxis=dict(autorange="reversed"), height=280, margin=dict(t=40, b=20))
+                    fig = apply_ds_layout(fig, f"Módulos donde aparece: {topic}")
                     st.plotly_chart(fig, use_container_width=True)
 
 # ── Tendencia Mensual ─────────────────────────────────────────────────────────
 
-st.subheader("Tendencia Mensual")
+ds_section("Tendencia Mensual")
 if "call_date" in df.columns:
     trend = df.dropna(subset=["call_date"]).copy()
     if not trend.empty:
@@ -614,8 +721,10 @@ if "call_date" in df.columns:
             monthly, x="month", y="count", color="insight_type_display",
             title="Tendencia Mensual de Insights",
             labels={"month": "Mes", "count": "Cantidad", "insight_type_display": "Tipo"},
+            color_discrete_sequence=DS["palette"],
         )
         fig.update_layout(xaxis_tickangle=-45)
+        fig = apply_ds_layout(fig, "Tendencia Mensual de Insights")
         chart_tooltip(
             "Evolución mensual del volumen de insights por tipo.",
             "Ayuda a detectar tendencias, estacionalidades o cambios recientes en la demanda.",
