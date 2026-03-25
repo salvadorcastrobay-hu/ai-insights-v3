@@ -85,11 +85,11 @@ credentials:
       password: $2b$12$ltDv46FPA.9ubL/DoOzltukjEbzGFsJLNlujg0tzg7wO64ZRAQP0G
       roles:
       - viewer
-    melissa.gonzales:
-      email: melissa.gonzales@humand.co
+    melissa.gonzalez:
+      email: melissa.gonzalez@humand.co
       failed_login_attempts: 0
       first_name: Melissa
-      last_name: Gonzales
+      last_name: Gonzalez
       logged_in: false
       password: $2b$12$dqyWKM0Vik4k/oCt1Rb9.uRegO.xikGvC1xdYIjxmn/xY7T32lh0q
       roles:
