@@ -31,6 +31,15 @@ credentials:
       password: $2b$12$NamiW6VbImi8tAG/vV26uOn06JAWMXBtAb3BRTmqEg.3Luu/.Z6a.
       roles:
       - viewer
+    daniela.lopez:
+      email: daniela.lopez@humand.co
+      failed_login_attempts: 0
+      first_name: Daniela
+      last_name: Lopez
+      logged_in: false
+      password: $2b$12$.wh.xkCrPMOiabXH2SAXM.n/K.8.n404JPdclnwjdzDfv2DSSHe1S
+      roles:
+      - viewer
     juan.diego.alcocer:
       email: juan.diego.alcocer@humand.co
       failed_login_attempts: 0
@@ -74,6 +83,24 @@ credentials:
       last_name: Palacio
       logged_in: false
       password: $2b$12$ltDv46FPA.9ubL/DoOzltukjEbzGFsJLNlujg0tzg7wO64ZRAQP0G
+      roles:
+      - viewer
+    melissa.gonzales:
+      email: melissa.gonzales@humand.co
+      failed_login_attempts: 0
+      first_name: Melissa
+      last_name: Gonzales
+      logged_in: false
+      password: $2b$12$dqyWKM0Vik4k/oCt1Rb9.uRegO.xikGvC1xdYIjxmn/xY7T32lh0q
+      roles:
+      - viewer
+    mile:
+      email: mile@humand.co
+      failed_login_attempts: 0
+      first_name: Milena
+      last_name: Yuri
+      logged_in: false
+      password: $2b$12$QchJEoL6JE7Q.zc4UCxcLeT.iSM.FrBqnMRgB26mSdsON63sueCyO
       roles:
       - viewer
     nico.cordes:
