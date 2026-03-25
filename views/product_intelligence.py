@@ -1,6 +1,7 @@
 import streamlit as st
 import plotly.express as px
-from shared import humanize, chart_tooltip, render_inline_filters
+import pandas as pd
+from shared import humanize, chart_tooltip, render_inline_filters, format_currency
 from computations import cached_value_counts, cached_dedup_groupby, cached_pains_with_pct
 from exp_ds import inject_ds_css, DS, apply_ds_layout, BRAND_SCALE, ds_sub
 
@@ -27,23 +28,30 @@ else:
     pains["pain_theme"] = pains["pain_theme"].map(humanize)
 
     # Top 15 Pains (demos únicas + % del total) — side by side with Pain Breakdown
-    top_pains_pct = cached_pains_with_pct(pains, n=15)
+    top_pains_pct = cached_pains_with_pct(pains, n=15, total_transcripts=df["transcript_id"].nunique())
     # Also keep a simple list for the detail selector
     top_pain_names = top_pains_pct["Pain"].tolist()
 
     col_left, col_right = st.columns([3, 2])
     with col_left:
+        top_pains_pct["label"] = top_pains_pct["Demos"].apply(lambda v: f"{v:,}") + " (" + top_pains_pct["% del total"] + ")"
         fig = px.bar(
             top_pains_pct,
             x="Demos",
             y="Pain",
             orientation="h",
             title="Top 15 Pains",
+            text="label",
             hover_data={"% del total": True},
             labels={"Demos": "Demos únicas"},
             color_discrete_sequence=[DS["brand_400"]],
         )
-        fig.update_layout(yaxis=dict(autorange="reversed"))
+        fig.update_traces(textposition="outside")
+        max_pain_demos = top_pains_pct["Demos"].max() if not top_pains_pct.empty else 0
+        fig.update_layout(
+            yaxis=dict(autorange="reversed"),
+            xaxis=dict(range=[0, max_pain_demos * 1.35]) if max_pain_demos > 0 else {},
+        )
         fig = apply_ds_layout(fig, "Top 15 Pains")
         chart_tooltip(
             "Ranking de los pains más frecuentes. Cada barra = demos únicas donde se detectó el pain.",
@@ -52,32 +60,42 @@ else:
         st.plotly_chart(fig, use_container_width=True, key="pi_top15_pains")
 
     with col_right:
-        st.markdown("**Pain Breakdown — Top 2**")
-        for pain_name in top_pain_names[:2]:
-            pain_sub = pains[pains["insight_subtype_display"] == pain_name].dropna(subset=["module_display"])
-            if pain_sub.empty:
-                continue
-            mod_breakdown = (
-                pain_sub.groupby("module_display")["transcript_id"]
+        st.markdown("**Pain Breakdown — Top 2 Themes**")
+        top_themes = (
+            pains.groupby("pain_theme")["transcript_id"]
+            .nunique()
+            .sort_values(ascending=False)
+            .head(2)
+            .reset_index()
+        )
+        top_themes.columns = ["Theme", "Demos"]
+        total_pain_demos = pains["transcript_id"].nunique()
+        for _, theme_row in top_themes.iterrows():
+            theme_name = theme_row["Theme"]
+            theme_demos = theme_row["Demos"]
+            theme_pct = round(theme_demos / total_pain_demos * 100, 1) if total_pain_demos > 0 else 0.0
+            theme_sub = (
+                pains[pains["pain_theme"] == theme_name]
+                .groupby("insight_subtype_display")["transcript_id"]
                 .nunique()
                 .sort_values(ascending=False)
                 .head(6)
                 .reset_index()
             )
-            mod_breakdown.columns = ["Módulo", "Demos"]
-            total = mod_breakdown["Demos"].sum()
-            if total > 0:
-                mod_breakdown["% dentro del pain"] = (mod_breakdown["Demos"] / total * 100).round(1).astype(str) + "%"
+            theme_sub.columns = ["Subtype", "Demos"]
+            theme_total = theme_sub["Demos"].sum()
+            if theme_total > 0:
+                theme_sub["% dentro del theme"] = (theme_sub["Demos"] / theme_total * 100).round(1).astype(str) + "%"
             else:
-                mod_breakdown["% dentro del pain"] = "0%"
+                theme_sub["% dentro del theme"] = "0%"
             fig = px.bar(
-                mod_breakdown,
+                theme_sub,
                 x="Demos",
-                y="Módulo",
+                y="Subtype",
                 orientation="h",
-                title=f"📌 {pain_name}",
-                hover_data={"% dentro del pain": True},
-                labels={"Demos": "Demos únicas"},
+                title=f"📌 {theme_name} — {theme_demos:,} demos ({theme_pct}%)",
+                hover_data={"% dentro del theme": True},
+                labels={"Demos": "Demos únicas", "Subtype": "Pain"},
                 color_discrete_sequence=[DS["brand_400"]],
             )
             fig.update_layout(
@@ -85,8 +103,8 @@ else:
                 margin=dict(l=0, r=0, t=40, b=0),
                 height=220,
             )
-            fig = apply_ds_layout(fig, f"📌 {pain_name}")
-            st.plotly_chart(fig, use_container_width=True, key=f"pi_pain_breakdown_{pain_name}")
+            fig = apply_ds_layout(fig, f"📌 {theme_name}")
+            st.plotly_chart(fig, use_container_width=True, key=f"pi_pain_breakdown_{theme_name}")
 
     # Heatmap: Top 15 Pains × Segmento — full width
     if "segment" in pains.columns:
@@ -144,18 +162,6 @@ else:
             )
             st.plotly_chart(fig, use_container_width=True, key="pi_pains_industria")
 
-    # Pains por Theme — moved to bottom of Section A as context
-    theme_counts = pains["pain_theme"].value_counts().reset_index()
-    theme_counts.columns = ["Theme", "Cantidad"]
-    fig = px.bar(theme_counts, x="Theme", y="Cantidad", title="Pains por Theme", color="Theme", color_discrete_sequence=DS["palette"])
-    fig.update_layout(showlegend=False)
-    fig = apply_ds_layout(fig, "Pains por Theme")
-    chart_tooltip(
-        "Volumen de pains agrupados por tema macro (procesos, tecnología, comunicación, etc.).",
-        "Referencia adicional: muestra qué dimensión del problema domina en el total.",
-    )
-    st.plotly_chart(fig, use_container_width=True, key="pi_pains_theme")
-
     @st.fragment
     def _pain_detail_fragment():
         ds_sub("Detalle por Pain")
@@ -187,6 +193,25 @@ else:
         )
 
     _pain_detail_fragment()
+
+    with st.expander("Pains por Theme (referencia adicional)", expanded=False):
+        theme_counts = pains["pain_theme"].value_counts().reset_index()
+        theme_counts.columns = ["Theme", "Cantidad"]
+        fig = px.bar(
+            theme_counts,
+            x="Theme",
+            y="Cantidad",
+            title="Pains por Theme",
+            color="Theme",
+            color_discrete_sequence=DS["palette"],
+        )
+        fig.update_layout(showlegend=False)
+        fig = apply_ds_layout(fig, "Pains por Theme")
+        chart_tooltip(
+            "Volumen de pains agrupados por tema macro (procesos, tecnología, comunicación, etc.).",
+            "Referencia adicional: muestra qué dimensión del problema domina en el total.",
+        )
+        st.plotly_chart(fig, use_container_width=True, key="pi_pains_theme")
 
 # ============================================================
 # === Section B: ¿Qué módulos y features buscan los prospects? ===
@@ -328,6 +353,7 @@ else:
             "industry",
             "segment",
             "country",
+            "deal_owner",
             "module_display",
             "gap_priority",
             "amount",
@@ -387,6 +413,7 @@ if not gaps.empty and gap_rev["Revenue at Stake"].sum() > 0:
                 .agg(
                     Features=("feature_display", "nunique"),
                     Revenue=("amount", "sum"),
+                    Avg_Revenue_per_Deal=("amount", "mean"),
                 )
                 .reset_index()
                 .rename(columns={"gap_priority": "Prioridad"})
@@ -397,7 +424,15 @@ if not gaps.empty and gap_rev["Revenue at Stake"].sum() > 0:
             prio_summary["Revenue"] = prio_summary["Revenue"].apply(
                 lambda v: f"${v:,.0f}" if v > 0 else "—"
             )
+            prio_summary["Avg Revenue / Deal"] = prio_summary["Avg_Revenue_per_Deal"].apply(
+                lambda v: format_currency(v) if pd.notna(v) and v > 0 else "—"
+            )
             st.markdown("**Prioridad de gaps**")
-            st.dataframe(prio_summary[["Prioridad", "Features", "Revenue", "Descripción"]], width="stretch", hide_index=True)
+            st.dataframe(
+                prio_summary[["Prioridad", "Features", "Revenue", "Avg Revenue / Deal", "Descripción"]],
+                width="stretch",
+                hide_index=True,
+            )
+            st.caption("El revenue promedio por deal ayuda a comparar prioridades: Dealbreaker puede tener menos deals pero mayor ticket promedio.")
         else:
             st.info("No hay datos de prioridad disponibles para este filtro.")
