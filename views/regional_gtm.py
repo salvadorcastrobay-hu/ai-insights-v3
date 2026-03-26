@@ -2,7 +2,12 @@ import streamlit as st
 import plotly.express as px
 import pandas as pd
 try:
-    from shared import format_currency, chart_tooltip, render_inline_filters
+    from shared import (
+        format_currency,
+        chart_tooltip,
+        render_inline_filters,
+        annotate_heatmap,
+    )
 except ImportError:
     from shared import format_currency
 
@@ -12,7 +17,10 @@ except ImportError:
     def render_inline_filters(df, **_):
         return df
 
-from exp_ds import inject_ds_css, DS, apply_ds_layout, BRAND_SCALE, ds_sub
+    def annotate_heatmap(*_args, **_kwargs):
+        return None
+
+from exp_ds import inject_ds_css, DS, apply_ds_layout, ds_sub
 
 _REGION_ALIASES = {
     "Santa Fe Province": "HISPAM",
@@ -23,6 +31,13 @@ _REGION_ALIASES = {
     "Ciudad de Mexico": "HISPAM",
     "Ciudad de México": "HISPAM",
 }
+
+HEATMAP_ZERO_SCALE = [
+    [0.0, DS["neutral_100"]],
+    [0.001, DS["brand_50"]],
+    [0.5, DS["brand_400"]],
+    [1.0, DS["blueprimary_800"]],
+]
 
 raw_df = st.session_state.get("df")
 if raw_df is None or raw_df.empty:
@@ -58,10 +73,13 @@ if "country" in df.columns:
         )
 
         # Per-country % of total insights for Y-axis labels
-        country_sums = country_breakdown.groupby("country")["count"].sum()
-        country_order = country_sums.sort_values(ascending=False).index.tolist()
+        country_order = (
+            country_totals[country_totals.index.isin(top_countries)]
+            .sort_values(ascending=False)
+            .index.tolist()
+        )
         pct_map = {
-            c: f"{c}<br><sub>{round(country_sums[c] / grand_total * 100)}%</sub>"
+            c: f"{c}<br><sub>{round(country_totals[c] / grand_total * 100)}%</sub>"
             for c in country_order
         }
 
@@ -124,31 +142,41 @@ if not pains.empty and "region" in pains.columns:
 
         if top_pains_per_region:
             combined = pd.concat(top_pains_per_region, ignore_index=True)
-            fig = px.bar(
-                combined,
-                x="Pct",
-                y="Pain",
-                facet_col="Region",
-                orientation="h",
-                title="Top 3 Pains por Región (% de demos únicas en esa región)",
-                labels={
-                    "Pct": "% de demos en la región",
-                    "Pain": "Pain",
-                    "Region": "Región",
-                },
-                text="Pct",
-                color_discrete_sequence=[DS["brand_400"]],
-            )
-            fig.update_traces(texttemplate="%{text:.1f}%", textposition="inside")
-            fig.update_yaxes(autorange="reversed", matches=None)
-            fig.update_xaxes(matches=None)
-            fig.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
-            fig = apply_ds_layout(fig, "Top 3 Pains por Región (% de demos únicas en esa región)")
-            chart_tooltip(
-                "Top 3 pains por región medidos como % de demos únicas donde apareció ese pain.",
-                "Normalizado por volumen de demos en cada región — permite comparar mercados de distinto tamaño.",
-            )
-            st.plotly_chart(fig, use_container_width=True)
+            pivot = combined.pivot(index="Pain", columns="Region", values="Pct").fillna(0)
+            if not pivot.empty:
+                row_order = pivot.sum(axis=1).sort_values(ascending=False).index
+                col_order = pivot.sum(axis=0).sort_values(ascending=False).index
+                pivot = pivot.loc[row_order, col_order]
+
+                fig = px.imshow(
+                    pivot,
+                    text_auto=False,
+                    aspect="auto",
+                    title="Top 3 Pains por Región (% de demos únicas en esa región)",
+                    labels=dict(x="Región", y="Pain", color="% de demos en la región"),
+                    color_continuous_scale=HEATMAP_ZERO_SCALE,
+                    zmin=0,
+                )
+                fig.update_layout(height=max(320, len(pivot) * 42), margin=dict(t=60, b=120, l=10, r=10))
+                fig.update_xaxes(tickangle=-30, automargin=True)
+
+                pain_flat = pivot.to_numpy().flatten().tolist()
+                pain_max = float(max(pain_flat)) if pain_flat else 0.0
+                annotate_heatmap(fig, pivot, pain_max, 0.0)
+                for annotation in fig.layout.annotations:
+                    if annotation.text is not None and str(annotation.text).replace(".", "", 1).isdigit():
+                        annotation.text = f"{annotation.text}%"
+
+                fig = apply_ds_layout(fig, "Top 3 Pains por Región (% de demos únicas en esa región)")
+                chart_tooltip(
+                    "Top 3 pains por región medidos como % de demos únicas donde apareció ese pain.",
+                    "Normalizado por volumen de demos en cada región — permite comparar mercados de distinto tamaño.",
+                )
+                st.plotly_chart(fig, use_container_width=True)
+                st.caption(
+                    "Los 3 pains principales son consistentes en todas las regiones. "
+                    "Las diferencias están en la intensidad (%)."
+                )
 
 # Modules by region — heatmap (color intensity only)
 mod_region = df.dropna(subset=["module_display", "region"])
@@ -163,11 +191,16 @@ if not mod_region.empty:
     if not pivot.empty:
         fig = px.imshow(
             pivot,
+            text_auto=False,
             aspect="auto",
             title="Módulos Demandados por Región (Top 15)",
             labels=dict(x="Región", y="Módulo", color="Menciones"),
-            color_continuous_scale=BRAND_SCALE,
+            color_continuous_scale=HEATMAP_ZERO_SCALE,
+            zmin=0,
         )
+        mod_flat = pivot.to_numpy().flatten().tolist()
+        mod_max = float(max(mod_flat)) if mod_flat else 0.0
+        annotate_heatmap(fig, pivot, mod_max, 0.0)
         fig = apply_ds_layout(fig, "Módulos Demandados por Región (Top 15)")
         chart_tooltip(
             "Módulos más mencionados por región.",
@@ -261,9 +294,11 @@ if "region" in df.columns:
             highest_avg_row = avg_valid.loc[avg_valid["avg_ticket"].idxmax()]
             highest_avg_region = str(highest_avg_row["region"])
             highest_avg_value = format_currency(float(highest_avg_row["avg_ticket"]))
+            highest_avg_deals = int(highest_avg_row["deals"])
         else:
             highest_avg_region = "—"
             highest_avg_value = "—"
+            highest_avg_deals = 0
 
         kpi1, kpi2, kpi3 = st.columns(3)
         kpi1.metric(
@@ -280,9 +315,19 @@ if "region" in df.columns:
         kpi3.metric(
             "Mayor ticket promedio",
             highest_avg_value,
-            delta=highest_avg_region,
+            delta=f"{highest_avg_region} — {highest_avg_deals} deals",
             help="Región con el ticket promedio más alto (revenue / cantidad de deals únicos).",
         )
+        hispam_deals = (
+            int(region_rev.loc[region_rev["region"] == "HISPAM", "deals"].iloc[0])
+            if "HISPAM" in region_rev["region"].values
+            else 0
+        )
+        if top_region_name == "HISPAM" and hispam_deals < 15:
+            st.info(
+                "El pipeline de HISPAM está concentrado en pocos deals de ticket alto. "
+                "El volumen de datos es menor que el de Brasil."
+            )
 
         # Unified pipeline table: Revenue | Deals | Avg per Segment × Region
         chart_tooltip(
