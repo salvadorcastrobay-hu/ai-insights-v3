@@ -38,8 +38,15 @@ if "module_status" in pains.columns:
     pains["module_status"] = pains["module_status"].map(humanize)
 
 # ── A. KPIs de cabecera ──────────────────────────────────────────────────────
-general = pains[pains["pain_scope"] == "General"]
-module_linked = pains[pains["pain_scope"] == "Vinculado a Módulo"]
+# Split pains by linked module presence (source-of-truth), not pain_scope labels.
+if "module_display" in pains.columns:
+    module_display_clean = pains["module_display"].fillna("").astype(str).str.strip()
+    mask_linked = module_display_clean != ""
+    module_linked = pains[mask_linked]
+    general = pains[~mask_linked]
+else:
+    module_linked = pains.iloc[:0]
+    general = pains
 
 total_pains = len(pains)
 distinct_deals = pains["deal_id"].nunique() if "deal_id" in pains.columns else 0
