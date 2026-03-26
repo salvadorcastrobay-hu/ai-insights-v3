@@ -98,11 +98,16 @@ else:
         total_deals_pct = round(n_deals / deals_afectados * 100) if deals_afectados > 0 else 0
         st.markdown(f"**{fric_name}** — aparece en {n_deals} deals ({total_deals_pct}%)")
         if "summary" in fric_subset.columns:
-            top_summaries = fric_subset["summary"].dropna().value_counts().head(5)
-            if not top_summaries.empty:
-                total_s = top_summaries.sum()
-                for s_text, s_count in top_summaries.items():
-                    pct = round(s_count / total_s * 100) if total_s > 0 else 0
+            summary_deal_counts = (
+                fric_subset.dropna(subset=["summary"])
+                .groupby("summary")["deal_id"]
+                .nunique()
+                .sort_values(ascending=False)
+                .head(5)
+            )
+            if not summary_deal_counts.empty:
+                for s_text, s_count in summary_deal_counts.items():
+                    pct = round(s_count / n_deals * 100) if n_deals > 0 else 0
                     st.caption(f"• {s_text} → {pct}%")
             else:
                 st.caption("_(Sin datos de summary)_")
@@ -202,12 +207,14 @@ else:
                     title="¿Qué fricción predomina según la industria?",
                     labels=dict(x="Industria", y="Fricción", color="Deals"),
                 )
-                fig.update_layout(height=max(400, len(pivot_ind) * 38), margin=dict(t=60, b=140, l=10, r=10))
-                fig.update_xaxes(tickangle=-45, automargin=True)
+                fig.update_layout(height=max(400, len(pivot_ind) * 38), margin=dict(t=60, b=200, l=10, r=10))
+                fig.update_xaxes(tickangle=-60, automargin=True)
                 ind_flat = pivot_ind.to_numpy().flatten().tolist()
                 ind_max = float(max(ind_flat)) if ind_flat else 0.0
                 annotate_heatmap(fig, pivot_ind, ind_max, 0.0)
                 fig = apply_ds_layout(fig, "¿Qué fricción predomina según la industria?")
+                fig.update_layout(margin=dict(t=60, b=200, l=10, r=10))
+                fig.update_xaxes(tickangle=-60)
                 chart_tooltip(
                     "Heatmap de fricciones por industria (deals únicos).",
                     "Permite adaptar el pitch según el sector del prospect.",
@@ -296,20 +303,30 @@ if "deal_owner" in df.columns:
             "El AE con más fricciones/deal es quien más soporte de coaching necesita.",
         )
         st.caption("Ordenado por fricciones promedio por deal — el AE con más complejidad aparece primero")
-        st.dataframe(ae_table, use_container_width=True)
+        st.dataframe(
+            ae_table,
+            use_container_width=True,
+            column_config={
+                "Top Fricción": st.column_config.TextColumn("Top Fricción", width="medium"),
+                "Top Competidor": st.column_config.TextColumn("Top Competidor", width="medium"),
+            },
+        )
 
         # Bar chart: frictions per AE ordered by total frictions descending
         ae_fric_data = ae_data[ae_data["insight_type"] == "deal_friction"]
         if not ae_fric_data.empty:
             ae_fric_totals = ae_fric_data["deal_owner"].value_counts().head(10)
             top_aes = ae_fric_totals.index
+            ae_order = ae_fric_totals.index.tolist()
             fric_by_ae = (
                 ae_fric_data[ae_fric_data["deal_owner"].isin(top_aes)]
                 .groupby(["deal_owner", "insight_subtype_display"]).size()
                 .reset_index(name="count")
             )
-            # Sort y axis by total frictions descending
-            ae_order = ae_fric_totals.index.tolist()
+            fric_by_ae["deal_owner"] = pd.Categorical(
+                fric_by_ae["deal_owner"], categories=ae_order, ordered=True
+            )
+            fric_by_ae = fric_by_ae.sort_values("deal_owner")
             fig = px.bar(
                 fric_by_ae,
                 x="count",
@@ -317,9 +334,9 @@ if "deal_owner" in df.columns:
                 color="insight_subtype_display",
                 orientation="h",
                 title="¿Qué tipo de fricciones enfrenta cada AE?",
-                category_orders={"deal_owner": ae_order},
                 color_discrete_sequence=DS["palette"],
             )
+            fig.update_yaxes(categoryorder="array", categoryarray=ae_order)
             fig.update_layout(yaxis=dict(autorange="reversed"))
             fig = apply_ds_layout(fig, "¿Qué tipo de fricciones enfrenta cada AE?")
             chart_tooltip(
@@ -367,27 +384,31 @@ else:
         "Ranking de temas de FAQ más consultados (demos únicas).",
         "Se usa para priorizar materiales de enablement y battle cards.",
     )
-    st.plotly_chart(fig, use_container_width=True)
+    faq_col_left, faq_col_right = st.columns([3, 2])
 
-    st.markdown("**FAQ Breakdown — Top 2 topics**")
-    top2_topics = topic_counts["Topic"].head(2).tolist()
-    for i, topic_name in enumerate(top2_topics):
-        if i > 0:
-            st.divider()
-        topic_subset = faqs[faqs["insight_subtype_display"] == topic_name]
-        n_demos = topic_subset["transcript_id"].dropna().nunique()
-        st.markdown(f"**{topic_name}** — aparece en {n_demos} demos")
-        if "summary" in topic_subset.columns:
-            faq_questions = topic_subset["summary"].dropna().value_counts().head(5)
-            if not faq_questions.empty:
-                total_q = faq_questions.sum()
-                for q_text, q_count in faq_questions.items():
-                    pct = round(q_count / total_q * 100) if total_q > 0 else 0
-                    st.caption(f"• {q_text} → {pct}%")
+    with faq_col_left:
+        st.plotly_chart(fig, use_container_width=True)
+
+    with faq_col_right:
+        st.markdown("**FAQ Breakdown — Top 2 topics**")
+        top2_topics = topic_counts["Topic"].head(2).tolist()
+        for i, topic_name in enumerate(top2_topics):
+            if i > 0:
+                st.divider()
+            topic_subset = faqs[faqs["insight_subtype_display"] == topic_name]
+            n_demos = topic_subset["transcript_id"].dropna().nunique()
+            st.markdown(f"**{topic_name}** — aparece en {n_demos} demos")
+            if "summary" in topic_subset.columns:
+                faq_questions = topic_subset["summary"].dropna().value_counts().head(5)
+                if not faq_questions.empty:
+                    total_q = faq_questions.sum()
+                    for q_text, q_count in faq_questions.items():
+                        pct = round(q_count / total_q * 100) if total_q > 0 else 0
+                        st.caption(f"• {q_text} → {pct}%")
+                else:
+                    st.caption("_(Sin preguntas disponibles)_")
             else:
-                st.caption("_(Sin preguntas disponibles)_")
-        else:
-            st.caption("_(Sin datos de summary)_")
+                st.caption("_(Sin datos de summary)_")
 
     ds_sub("Preguntas y Respuestas por Topic")
     st.caption("Filtrá por topic para prepararte antes de una demo")
