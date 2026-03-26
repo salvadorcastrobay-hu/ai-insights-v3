@@ -215,13 +215,21 @@ if "country" in comp.columns:
             row_order = pivot.sum(axis=1).sort_values(ascending=False).index
             col_order = pivot.sum(axis=0).sort_values(ascending=False).index
             pivot = pivot.loc[row_order, col_order]
+            # Custom scale: 0 = neutral gray, positive values = blue gradient
+            heatmap_scale = [
+                [0.0, DS["neutral_100"]],      # 0 = #eeeef1 (neutral gray)
+                [0.001, DS["brand_50"]],       # just above 0 = very light blue
+                [0.5, DS["brand_400"]],        # mid = brand blue
+                [1.0, DS["blueprimary_800"]], # max = dark navy
+            ]
             fig = px.imshow(
                 pivot,
                 text_auto=False,
                 aspect="auto",
                 title="¿En qué países aparece cada competidor?",
                 labels=dict(x="País", y="Competidor", color="Deals únicos"),
-                color_continuous_scale=BRAND_SCALE,
+                color_continuous_scale=heatmap_scale,
+                zmin=0,
             )
             fig.update_layout(height=max(350, len(pivot) * 38), margin=dict(t=60, b=130, l=10, r=10))
             fig.update_xaxes(tickangle=-30, automargin=True)
@@ -307,7 +315,20 @@ with col_right:
                 labels={"competitor_name": "Competidor", "Deals únicos": "Deals únicos"},
                 color_discrete_sequence=DS["palette"],
             )
-            fig.update_layout(yaxis=dict(autorange="reversed"))
+            n_competitors = ind_data["competitor_name"].nunique()
+            fig.update_layout(
+                yaxis=dict(autorange="reversed"),
+                height=max(400, n_competitors * 42 + 130),
+                legend=dict(
+                    orientation="h",
+                    yanchor="top",
+                    y=-0.15,
+                    xanchor="left",
+                    x=0,
+                    font=dict(size=10),
+                ),
+                margin=dict(b=120),
+            )
             fig = apply_ds_layout(fig, "¿En qué industrias aparece cada competidor?")
             chart_tooltip(
                 "Presencia de competidores por industria (deals únicos).",
@@ -334,6 +355,16 @@ if "deal_stage" in comp.columns:
             .size()
             .reset_index(name="Deals únicos")
         )
+        # Explicit colors for Won/Lost — built dynamically to handle emojis/variants
+        _won_color = DS["palette"][3]   # #4bb69f (teal-green)
+        _lost_color = DS["palette"][8]  # #ea718b (red-pink)
+        STAGE_COLOR_MAP = {}
+        for _stage in stage_data["deal_stage"].unique():
+            _s = str(_stage)
+            if any(k in _s for k in ("Won", "Ganado", "won", "ganado")):
+                STAGE_COLOR_MAP[_stage] = _won_color
+            elif any(k in _s for k in ("Lost", "Perdido", "lost", "perdido")):
+                STAGE_COLOR_MAP[_stage] = _lost_color
         fig = px.bar(
             stage_data,
             x="Deals únicos",
@@ -342,13 +373,14 @@ if "deal_stage" in comp.columns:
             orientation="h",
             title="¿En qué etapa del deal aparece cada competidor?",
             labels={"competitor_name": "Competidor", "Deals únicos": "Deals únicos", "deal_stage": "Etapa del Deal"},
+            color_discrete_map=STAGE_COLOR_MAP,
             color_discrete_sequence=DS["palette"],
         )
         fig.update_layout(yaxis=dict(autorange="reversed"))
         fig = apply_ds_layout(fig, "¿En qué etapa del deal aparece cada competidor?")
         chart_tooltip(
             "Competidores por etapa del deal (deals únicos).",
-            "Si un competidor aparece mucho en etapas finales, necesitamos argumentos específicos para ese momento del proceso comercial.",
+            "Won (verde) y Lost (rojo) destacados. Si un competidor aparece seguido en etapas Lost, priorizar battle card.",
         )
         st.plotly_chart(fig, width="stretch")
 
@@ -386,8 +418,10 @@ if not migrating.empty:
     ]
     available_cols = [c for c in display_cols if c in migrating.columns]
     dedup_keys = [c for c in ["deal_id", "competitor_name"] if c in migrating.columns]
+    migrating = migrating.copy()
+    migrating["amount"] = pd.to_numeric(migrating["amount"], errors="coerce")
     display_df = (
-        migrating.sort_values("amount", ascending=False)
+        migrating.sort_values("amount", ascending=False, na_position="last")
         .drop_duplicates(subset=dedup_keys if dedup_keys else available_cols)
         [available_cols]
         .rename(
