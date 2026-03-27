@@ -49,6 +49,11 @@ col3.metric(
     help="Promedio de FAQs detectadas por demo. Un número alto señala gaps de contenido pre-demo.",
 )
 col3.caption("promedio por primera demo · ↓ ideal con el tiempo")
+st.info(
+    "Un número alto de preguntas puede indicar que el prospect no encontró respuestas "
+    "en materiales previos. Si baja con el tiempo, es señal de que el contenido de "
+    "pre-demo está funcionando."
+)
 
 # ── B. Gráfico: FAQs por Topic ────────────────────────────────────────────────
 if "deal_id" in faqs.columns:
@@ -91,6 +96,7 @@ fig = px.bar(
 )
 fig.update_traces(textposition="inside", insidetextanchor="start")
 fig.update_layout(yaxis=dict(autorange="reversed"))
+fig.update_layout(xaxis_title="Deals únicos con al menos 1 pregunta de ese topic")
 fig = apply_ds_layout(fig, "FAQs por Topic (deals únicos con al menos 1 pregunta de ese topic)")
 chart_tooltip(
     "Deals únicos que tuvieron al menos 1 FAQ de ese topic.",
@@ -100,11 +106,15 @@ st.plotly_chart(fig, use_container_width=True)
 
 # ── B2. Top 5 preguntas por Topic (Battle Cards) ─────────────────────────────
 ds_sub("Top 5 preguntas por Topic")
-topic_options = ["(Seleccionar Topic)"] + sorted(
-    faqs["insight_subtype_display"].dropna().unique().tolist()
+topic_options = sorted(faqs["insight_subtype_display"].dropna().unique().tolist())
+default_topic = topic_counts.iloc[0]["Topic"] if not topic_counts.empty else None
+default_idx = topic_options.index(default_topic) if default_topic and default_topic in topic_options else 0
+selected_topic = (
+    st.selectbox("Seleccionar Topic", topic_options, index=default_idx, key="faq_battle_topic")
+    if topic_options
+    else None
 )
-selected_topic = st.selectbox("Seleccionar Topic", topic_options, key="faq_battle_topic")
-if selected_topic != "(Seleccionar Topic)" and "summary" in faqs.columns:
+if selected_topic and "summary" in faqs.columns:
     topic_df = faqs[faqs["insight_subtype_display"] == selected_topic]
     if "deal_id" in topic_df.columns:
         q_counts = (
