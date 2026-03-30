@@ -40,6 +40,15 @@ credentials:
       password: $2b$12$.wh.xkCrPMOiabXH2SAXM.n/K.8.n404JPdclnwjdzDfv2DSSHe1S
       roles:
       - viewer
+    daniel.moreno:
+      email: daniel.moreno@humand.co
+      failed_login_attempts: 0
+      first_name: Daniel
+      last_name: Moreno
+      logged_in: false
+      password: $2b$12$DqiTbXIamO4xCOu/DiaeauWxK8OpBrq/KIUGpaLn8Cftd1N8dxeb.
+      roles:
+      - user
     juan.diego.alcocer:
       email: juan.diego.alcocer@humand.co
       failed_login_attempts: 0
