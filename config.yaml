@@ -139,6 +139,15 @@ credentials:
       password: $2b$12$MgnOVLaK9uRYOKfbTXhb1eYpkIGvd28O40C7qem5Xu1N9fkjIRuA6
       roles:
       - admin
+    sofia.esposito:
+      email: sofia.esposito@humand.co
+      failed_login_attempts: 0
+      first_name: Sofía
+      last_name: Esposito
+      logged_in: false
+      password: $2b$12$GZbTTzWwLDimBRcnoeRJlu6nvWIxZtq0XFQ0fHTJFaXVK9B65E1cu
+      roles:
+      - user
     soledad.barca:
       email: soledad.barca@humand.co
       failed_login_attempts: 0
