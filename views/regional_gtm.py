@@ -79,7 +79,7 @@ if "country" in df.columns:
             .index.tolist()
         )
         pct_map = {
-            c: f"{c}<br><sub>{round(country_totals[c] / grand_total * 100)}%</sub>"
+            c: round(country_totals[c] / grand_total * 100)
             for c in country_order
         }
 
@@ -99,12 +99,17 @@ if "country" in df.columns:
             category_orders={"country": country_order},
             color_discrete_sequence=DS["palette"],
         )
+        fig = apply_ds_layout(fig, "¿En qué países tenemos más señales de venta?")
         fig.update_yaxes(
             tickmode="array",
             tickvals=country_order,
-            ticktext=[pct_map[c] for c in country_order],
+            ticktext=[f"{c} ({pct_map[c]}%)" for c in country_order],
+            automargin=True,
         )
-        fig = apply_ds_layout(fig, "¿En qué países tenemos más señales de venta?")
+        fig.update_layout(
+            height=max(480, len(country_order) * 42),
+            margin=dict(t=60, b=30, l=180, r=16),
+        )
         chart_tooltip(
             "Top 15 países por cantidad de insights, con desglose por tipo de insight.",
             "El porcentaje indica la proporción del total de señales detectadas.",
