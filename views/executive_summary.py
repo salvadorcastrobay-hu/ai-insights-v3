@@ -180,6 +180,27 @@ with col_seg:
             chart_tooltip("Número de demos únicas por segmento comercial en el recorte actual.")
             st.plotly_chart(fig, use_container_width=True)
 
+if "country" in df.columns:
+    country_demos = (
+        df.dropna(subset=["country"])
+        .groupby("country")["transcript_id"]
+        .nunique()
+        .sort_values(ascending=False)
+        .head(15)
+        .reset_index()
+    )
+    country_demos.columns = ["País", "Demos"]
+    if not country_demos.empty:
+        fig = px.bar(
+            country_demos, x="Demos", y="País", orientation="h",
+            title="Distribución por País",
+            color_discrete_sequence=[DS["brand_400"]],
+        )
+        fig.update_layout(yaxis=dict(autorange="reversed"), showlegend=False)
+        fig = apply_ds_layout(fig, "Distribución por País")
+        chart_tooltip("Número de demos únicas por país en el recorte actual.")
+        st.plotly_chart(fig, use_container_width=True)
+
 # ── Resumen de señales detectadas (Insights por Tipo) ─────────────────────────
 
 ds_section("Resumen de señales detectadas")
@@ -208,104 +229,99 @@ st.plotly_chart(fig, use_container_width=True)
 ds_section("¿Con qué problemas llegan los clientes?")
 
 pains = df[df["insight_type"] == "pain"].copy()
-col_pains, col_pain_insights = st.columns([2, 3])
+if not pains.empty:
+    top_pains = cached_pains_with_pct(pains, n=10, total_transcripts=total_transcripts)
+    fig = px.bar(
+        top_pains, x="Demos", y="Pain", orientation="h",
+        title="Top 10 Pains (demos únicas)",
+        text="% del total",
+        hover_data=["% del total"],
+        color_discrete_sequence=[DS["brand_400"]],
+    )
+    fig.update_traces(textposition="outside")
+    max_pain_demos = top_pains["Demos"].max() if not top_pains.empty else 0
+    fig.update_layout(
+        yaxis=dict(autorange="reversed"),
+        xaxis=dict(range=[0, max_pain_demos * 1.25]) if max_pain_demos > 0 else {},
+    )
+    fig = apply_ds_layout(fig, "Top 10 Pains (demos únicas)")
+    chart_tooltip(
+        "Ranking de los 10 pains más mencionados.",
+        "Frecuencia = número de demos únicas donde se detectó el pain "
+        "(no el total de detecciones). El % indica qué porción del total de demos lo mencionó.",
+    )
+    st.plotly_chart(fig, use_container_width=True)
 
-with col_pains:
-    if not pains.empty:
-        top_pains = cached_pains_with_pct(pains, n=10, total_transcripts=total_transcripts)
-        fig = px.bar(
-            top_pains, x="Demos", y="Pain", orientation="h",
-            title="Top 10 Pains (demos únicas)",
-            text="% del total",
-            hover_data=["% del total"],
-            color_discrete_sequence=[DS["brand_400"]],
-        )
-        fig.update_traces(textposition="outside")
-        max_pain_demos = top_pains["Demos"].max() if not top_pains.empty else 0
-        fig.update_layout(
-            yaxis=dict(autorange="reversed"),
-            xaxis=dict(range=[0, max_pain_demos * 1.25]) if max_pain_demos > 0 else {},
-        )
-        fig = apply_ds_layout(fig, "Top 10 Pains (demos únicas)")
+    top2_pain_names = pains["insight_subtype_display"].value_counts().head(2).index.tolist()
+
+    if top2_pain_names and "pain_theme" in pains.columns:
+        st.markdown("**Pains relacionados (por tema)**")
         chart_tooltip(
-            "Ranking de los 10 pains más mencionados.",
-            "Frecuencia = número de demos únicas donde se detectó el pain "
-            "(no el total de detecciones). El % indica qué porción del total de demos lo mencionó.",
+            "Otros pains detectados bajo el mismo tema para cada pain principal.",
+            "Responde '¿Qué tipo de problema es?' mostrando subcategorías del mismo tema.",
         )
-        st.plotly_chart(fig, use_container_width=True)
+        for pain_name in top2_pain_names:
+            theme_series = pains.loc[
+                pains["insight_subtype_display"] == pain_name, "pain_theme"
+            ].dropna()
+            if theme_series.empty:
+                continue
+            theme = theme_series.mode().iloc[0]
+            theme_label = humanize(theme)
+            siblings = (
+                pains[
+                    (pains["pain_theme"] == theme)
+                    & (pains["insight_subtype_display"] != pain_name)
+                ]
+                .groupby("insight_subtype_display")["transcript_id"]
+                .nunique()
+                .sort_values(ascending=False)
+                .head(6)
+                .reset_index()
+            )
+            siblings.columns = ["Pain", "Demos"]
+            if not siblings.empty:
+                fig = px.bar(
+                    siblings, x="Demos", y="Pain", orientation="h",
+                    title=f"Subtemas de {theme_label}: {pain_name}",
+                    labels={"Pain": "Pain relacionado", "Demos": "Demos únicas"},
+                    color_discrete_sequence=[DS["brand_400"]],
+                )
+                fig.update_layout(yaxis=dict(autorange="reversed"), height=260, margin=dict(t=40, b=20))
+                fig = apply_ds_layout(fig, f"Subtemas de {theme_label}: {pain_name}")
+                st.plotly_chart(fig, use_container_width=True)
 
-with col_pain_insights:
-    if not pains.empty:
-        pain_module = (
-            pains.dropna(subset=["module_display"])
-            .groupby(["insight_subtype_display", "module_display"])["transcript_id"]
-            .nunique()
-            .reset_index(name="Demos")
+    pain_module = (
+        pains.dropna(subset=["module_display"])
+        .groupby(["insight_subtype_display", "module_display"])["transcript_id"]
+        .nunique()
+        .reset_index(name="Demos")
+    )
+    if pain_module.empty or not top2_pain_names:
+        st.info("Sin datos de módulos asociados a los pains.")
+    else:
+        st.markdown("**Pain Insights — Desglose de los 2 principales pains**")
+        chart_tooltip(
+            "Para cada uno de los 2 pains más frecuentes, los módulos donde más aparece.",
+            "Muestra en qué áreas de producto se concentra cada pain principal.",
         )
-        top2_pain_names = pains["insight_subtype_display"].value_counts().head(2).index.tolist()
-        if pain_module.empty or not top2_pain_names:
-            st.info("Sin datos de módulos asociados a los pains.")
-        else:
-            st.markdown("**Pain Insights — Desglose de los 2 principales pains**")
-            chart_tooltip(
-                "Para cada uno de los 2 pains más frecuentes, los módulos donde más aparece.",
-                "Muestra en qué áreas de producto se concentra cada pain principal.",
+        for pain_name in top2_pain_names:
+            subset = (
+                pain_module[pain_module["insight_subtype_display"] == pain_name]
+                .nlargest(6, "Demos")
+                .reset_index(drop=True)
             )
-            for pain_name in top2_pain_names:
-                subset = (
-                    pain_module[pain_module["insight_subtype_display"] == pain_name]
-                    .nlargest(6, "Demos")
-                    .reset_index(drop=True)
+            subset.columns = ["Pain", "Módulo", "Demos"]
+            if not subset.empty:
+                fig = px.bar(
+                    subset, x="Demos", y="Módulo", orientation="h",
+                    title=f"Desglose: {pain_name}",
+                    labels={"Módulo": "Módulo", "Demos": "Demos únicas"},
+                    color_discrete_sequence=[DS["brand_400"]],
                 )
-                subset.columns = ["Pain", "Módulo", "Demos"]
-                if not subset.empty:
-                    fig = px.bar(
-                        subset, x="Demos", y="Módulo", orientation="h",
-                        title=f"Desglose: {pain_name}",
-                        labels={"Módulo": "Módulo", "Demos": "Demos únicas"},
-                        color_discrete_sequence=[DS["brand_400"]],
-                    )
-                    fig.update_layout(yaxis=dict(autorange="reversed"), height=240, margin=dict(t=40, b=20))
-                    fig = apply_ds_layout(fig, f"Desglose: {pain_name}")
-                    st.plotly_chart(fig, use_container_width=True)
-
-        # ── Pain subtypes: pains relacionados del mismo tema ──
-        if top2_pain_names and "pain_theme" in pains.columns:
-            st.markdown("**Pains relacionados (por tema)**")
-            chart_tooltip(
-                "Otros pains detectados bajo el mismo tema para cada pain principal.",
-                "Responde '¿Qué tipo de problema es?' mostrando subcategorías del mismo tema.",
-            )
-            for pain_name in top2_pain_names:
-                theme_series = pains.loc[
-                    pains["insight_subtype_display"] == pain_name, "pain_theme"
-                ].dropna()
-                if theme_series.empty:
-                    continue
-                theme = theme_series.mode().iloc[0]
-                theme_label = humanize(theme)
-                siblings = (
-                    pains[
-                        (pains["pain_theme"] == theme)
-                        & (pains["insight_subtype_display"] != pain_name)
-                    ]
-                    .groupby("insight_subtype_display")["transcript_id"]
-                    .nunique()
-                    .sort_values(ascending=False)
-                    .head(6)
-                    .reset_index()
-                )
-                siblings.columns = ["Pain", "Demos"]
-                if not siblings.empty:
-                    fig = px.bar(
-                        siblings, x="Demos", y="Pain", orientation="h",
-                        title=f"Subtemas de {theme_label}: {pain_name}",
-                        labels={"Pain": "Pain relacionado", "Demos": "Demos únicas"},
-                        color_discrete_sequence=[DS["brand_400"]],
-                    )
-                    fig.update_layout(yaxis=dict(autorange="reversed"), height=240, margin=dict(t=40, b=20))
-                    fig = apply_ds_layout(fig, f"Subtemas de {theme_label}: {pain_name}")
-                    st.plotly_chart(fig, use_container_width=True)
+                fig.update_layout(yaxis=dict(autorange="reversed"), height=260, margin=dict(t=40, b=20))
+                fig = apply_ds_layout(fig, f"Desglose: {pain_name}")
+                st.plotly_chart(fig, use_container_width=True)
 
 # Top 15 Pains × Segmento heatmap (full-width)
 if not pains.empty and "segment" in pains.columns:

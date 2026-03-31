@@ -299,7 +299,13 @@ if {"segment", "feature_display", "deal_id"}.issubset(gaps.columns):
             title="Feature Gaps por Segmento (Top 15)",
             color_continuous_scale=BRAND_SCALE,
         )
-        fig.update_layout(yaxis_title="Feature", xaxis_title="Segmento")
+        fig.update_layout(
+            yaxis_title="Feature",
+            xaxis_title="Segmento",
+            height=max(620, len(top15) * 38),
+            margin=dict(t=60, b=130, l=10, r=10),
+        )
+        fig.update_xaxes(tickangle=-30, automargin=True)
         fig.update_xaxes(categoryorder="array", categoryarray=segment_order)
         fig.update_yaxes(categoryorder="array", categoryarray=list(reversed(top15)))
         fig.update_coloraxes(colorbar_title="% del segmento", colorbar_ticksuffix="%")
@@ -314,9 +320,9 @@ if {"segment", "feature_display", "deal_id"}.issubset(gaps.columns):
             fig.add_annotation(
                 x=row["segment"],
                 y=row["feature_display"],
-                text=f"{int(row['deals_feature_segment'])}<br>({pct_label})",
+                text=f"{int(row['deals_feature_segment'])} ({pct_label})",
                 showarrow=False,
-                font=dict(size=11, color=font_color),
+                font=dict(size=9, color=font_color),
             )
 
         fig = apply_ds_layout(fig, "Feature Gaps por Segmento (Top 15)")
@@ -476,13 +482,22 @@ column_config = {
     for col, label in column_labels.items()
     if col in available_cols
 }
-st.dataframe(
-    styled_table,
-    use_container_width=True,
-    height=400,
-    hide_index=True,
-    column_config=column_config,
-)
+try:
+    st.dataframe(
+        styled_table,
+        use_container_width=True,
+        height=400,
+        hide_index=True,
+        column_config=column_config,
+    )
+except Exception:
+    st.dataframe(
+        table_display,
+        use_container_width=True,
+        height=400,
+        hide_index=True,
+        column_config=column_config,
+    )
 
 # Streamlit currently prioritizes column_config rendering over Styler row backgrounds.
 # Keep the Styler logic above for data intent and apply a lightweight client-side tint as fallback.
