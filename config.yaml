@@ -48,6 +48,7 @@ credentials:
       logged_in: false
       password: $2b$12$.wh.xkCrPMOiabXH2SAXM.n/K.8.n404JPdclnwjdzDfv2DSSHe1S
       roles:
+      - campaign_advisor
       - viewer
     juan.diego.alcocer:
       email: juan.diego.alcocer@humand.co
@@ -102,6 +103,7 @@ credentials:
       logged_in: false
       password: $2b$12$dqyWKM0Vik4k/oCt1Rb9.uRegO.xikGvC1xdYIjxmn/xY7T32lh0q
       roles:
+      - campaign_advisor
       - viewer
     mile:
       email: mile@humand.co
@@ -111,6 +113,7 @@ credentials:
       logged_in: false
       password: $2b$12$QchJEoL6JE7Q.zc4UCxcLeT.iSM.FrBqnMRgB26mSdsON63sueCyO
       roles:
+      - campaign_advisor
       - viewer
     nico.cordes:
       email: nico.cordes@humand.co
@@ -129,6 +132,7 @@ credentials:
       logged_in: false
       password: $2b$12$c/1n09t29UpAYtu5EgFgde0PDXAJL9j.xnXQKf0rfKb1Gqs7r7rYe
       roles:
+      - campaign_advisor
       - viewer
     raphael.montressor:
       email: raphael.montressor@humand.co
@@ -138,6 +142,7 @@ credentials:
       logged_in: false
       password: $2b$12$sEYDjzIjRmbpB7hTymTIBu/oPbkOjo4BXIjFXxlYr8ZoW2Nmvfype
       roles:
+      - campaign_advisor
       - viewer
     salvador.castrobay:
       email: salvador.castrobay@humand.co

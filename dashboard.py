@@ -63,6 +63,7 @@ if not st.session_state.get("authentication_status"):
 current_user = st.session_state.get("username", "")
 user_roles = config["credentials"]["usernames"].get(current_user, {}).get("roles", [])
 is_admin = "admin" in user_roles
+can_access_campaign_advisor = is_admin or "campaign_advisor" in user_roles
 
 # ── Navigation (views/ dir avoids Streamlit auto-detection) ──
 
@@ -86,7 +87,7 @@ pages = {
     ],
 }
 
-if is_admin:
+if can_access_campaign_advisor:
     pages["Marketing"] = [
         st.Page("views/marketing_actions.py", title="Campaign Advisor", icon="🚀"),
     ]
