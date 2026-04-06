@@ -10,7 +10,13 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 import streamlit_authenticator as stauth
-from shared import load_auth_config, save_auth_config, load_data
+from shared import (
+    get_dashboard_prompt_version,
+    load_auth_config,
+    load_data,
+    load_total_transcripts_count,
+    save_auth_config,
+)
 
 # ── Page config (must be first Streamlit call) ──
 
@@ -52,6 +58,12 @@ except OSError:
 if not st.session_state.get("authentication_status"):
     st.stop()
 
+# ── Role check (admin = acceso a features experimentales) ──
+
+current_user = st.session_state.get("username", "")
+user_roles = config["credentials"]["usernames"].get(current_user, {}).get("roles", [])
+is_admin = "admin" in user_roles
+
 # ── Navigation (views/ dir avoids Streamlit auto-detection) ──
 
 pages = {
@@ -74,6 +86,11 @@ pages = {
     ],
 }
 
+if is_admin:
+    pages["Marketing"] = [
+        st.Page("views/marketing_actions.py", title="Campaign Advisor", icon="🚀"),
+    ]
+
 nav = st.navigation(pages)
 
 # ── Load data & sidebar filters ──
@@ -91,9 +108,16 @@ pages_with_data = {
 }
 needs_data = nav.title in pages_with_data
 
+with st.sidebar:
+    if needs_data and st.button("Actualizar datos", use_container_width=True):
+        load_data.clear()
+        load_total_transcripts_count.clear()
+        st.rerun()
+
 if needs_data:
     with st.spinner("Cargando datos..."):
-        df = load_data()
+        prompt_version = get_dashboard_prompt_version()
+        df = load_data(prompt_version)
     st.session_state["df"] = df
     filtered_df = df
 else:

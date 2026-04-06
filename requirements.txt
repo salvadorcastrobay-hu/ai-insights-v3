@@ -9,3 +9,4 @@ streamlit-authenticator==0.4.2
 plotly>=5.18.0
 psycopg2-binary>=2.9.0
 mcp>=1.2.0
+anthropic>=0.27.0

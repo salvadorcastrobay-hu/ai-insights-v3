@@ -1,0 +1,91 @@
+name: AI Insights Exact Rerun Finalize
+
+on:
+  workflow_dispatch:
+    inputs:
+      batch_id:
+        description: "OpenAI batch ID to finalize"
+        required: true
+        type: string
+      since_date:
+        description: "Inclusive start date (YYYY-MM-DD)"
+        required: true
+        type: string
+      until_date:
+        description: "Inclusive end date (YYYY-MM-DD)"
+        required: true
+        type: string
+      team:
+        description: "Fathom team filter"
+        required: false
+        default: "Account Executives"
+        type: string
+      model:
+        description: "OpenAI model used for extraction"
+        required: false
+        default: "gpt-4o-mini"
+        type: string
+      timezone:
+        description: "Timezone used to build day boundaries"
+        required: false
+        default: "America/Argentina/Cordoba"
+        type: string
+      wait_for_completion:
+        description: "Poll until the batch completes"
+        required: false
+        default: true
+        type: boolean
+
+concurrency:
+  group: ai-insights-exact-rerun-finalize-${{ inputs.batch_id }}
+  cancel-in-progress: false
+
+jobs:
+  finalize-rerun:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      FATHOM_API_KEY: ${{ secrets.FATHOM_API_KEY }}
+      HUBSPOT_API_KEY: ${{ secrets.HUBSPOT_API_KEY }}
+      FATHOM_TEAM_FILTER: ${{ inputs.team }}
+      OPENAI_MODEL: ${{ inputs.model }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Finalize exact rerun batch
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ inputs.wait_for_completion }}" == "true" ]]; then
+            python scripts/exact_rerun.py finalize \
+              --batch-id "${{ inputs.batch_id }}" \
+              --since-date "${{ inputs.since_date }}" \
+              --until-date "${{ inputs.until_date }}" \
+              --team "${{ inputs.team }}" \
+              --model "${{ inputs.model }}" \
+              --timezone "${{ inputs.timezone }}" \
+              --wait
+          else
+            python scripts/exact_rerun.py finalize \
+              --batch-id "${{ inputs.batch_id }}" \
+              --since-date "${{ inputs.since_date }}" \
+              --until-date "${{ inputs.until_date }}" \
+              --team "${{ inputs.team }}" \
+              --model "${{ inputs.model }}" \
+              --timezone "${{ inputs.timezone }}"
+          fi

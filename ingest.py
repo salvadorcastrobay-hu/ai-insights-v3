@@ -26,6 +26,7 @@ def run_ingestion(
     source: str | None = None,
     match_only: bool = False,
     since: str | None = None,
+    until: str | None = None,
 ) -> dict:
     """
     Run the full ingestion pipeline.
@@ -35,6 +36,7 @@ def run_ingestion(
         source: 'fathom', 'hubspot', or None (both)
         match_only: Skip fetching, only re-run deal matching
         since: ISO date string for incremental Fathom fetch
+        until: ISO date string, fetch meetings before this date
 
     Returns:
         Summary stats dict.
@@ -56,7 +58,7 @@ def run_ingestion(
         logger.info("=" * 50)
         logger.info("FATHOM: Fetching meetings...")
         logger.info("=" * 50)
-        _ingest_fathom(supabase, since, stats)
+        _ingest_fathom(supabase, since, until, stats)
 
     # ── HubSpot ingestion ──
     if source in (None, "hubspot"):
@@ -78,10 +80,11 @@ def run_ingestion(
 def _ingest_fathom(
     supabase: SupabaseClient,
     since: str | None,
+    until: str | None,
     stats: dict,
 ) -> None:
     """Fetch Fathom meetings and store in raw_transcripts."""
-    meetings = fetch_meetings(since=since)
+    meetings = fetch_meetings(since=since, until=until)
     stats["fathom_meetings"] = len(meetings)
 
     if not meetings:

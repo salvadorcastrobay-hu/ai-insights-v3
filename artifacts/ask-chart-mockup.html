@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ask This Chart Mockup</title>
+  <style>
+    :root {
+      --text: #303036;
+      --muted: #636271;
+      --brand-400: #6f93eb;
+      --brand-500: #496be3;
+      --brand-100: #dee5fb;
+      --brand-50: #f1f4fd;
+      --page: #f5f6f8;
+      --card: #ffffff;
+      --line: #dfe0e6;
+      --deep: #213478;
+      --shadow-sm: -1px 4px 8px 0px rgba(233, 233, 244, 1);
+      --shadow-lg: -1px 8px 16px 0px rgba(170, 170, 186, 0.45);
+      --radius-s: 8px;
+      --radius-m: 16px;
+      --radius-l: 22px;
+      --font: Roboto, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at top left, rgba(111, 147, 235, 0.14), transparent 28%),
+        radial-gradient(circle at bottom right, rgba(73, 107, 227, 0.08), transparent 32%),
+        var(--page);
+      color: var(--text);
+      font-family: var(--font);
+    }
+
+    .frame {
+      width: 1560px;
+      margin: 0 auto;
+      padding: 36px 36px 48px;
+    }
+
+    .header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      margin-bottom: 24px;
+    }
+
+    .eyebrow {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--brand-500);
+      margin-bottom: 8px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 36px;
+      line-height: 1.1;
+      font-weight: 700;
+    }
+
+    .header p {
+      margin: 10px 0 0;
+      max-width: 780px;
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.45;
+    }
+
+    .legend {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 13px;
+      background: rgba(255,255,255,0.72);
+      border: 1px solid rgba(223, 224, 230, 0.75);
+      border-radius: 999px;
+      padding: 10px 14px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .panels {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+
+    .panel {
+      position: relative;
+      min-height: 860px;
+      background: rgba(255,255,255,0.56);
+      border: 1px solid rgba(223, 224, 230, 0.7);
+      border-radius: 28px;
+      padding: 22px;
+      box-shadow: var(--shadow-sm);
+      overflow: hidden;
+      backdrop-filter: blur(8px);
+    }
+
+    .panel-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--brand-50);
+      color: var(--deep);
+      border: 1px solid var(--brand-100);
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+
+    .panel h2 {
+      margin: 0 0 6px;
+      font-size: 28px;
+      line-height: 1.15;
+    }
+
+    .panel .sub {
+      margin: 0 0 18px;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.45;
+    }
+
+    .dashboard-shell {
+      position: relative;
+      background: linear-gradient(180deg, #f8f9fb 0%, #f4f6fb 100%);
+      border-radius: 22px;
+      padding: 18px;
+      min-height: 730px;
+      border: 1px solid rgba(223, 224, 230, 0.8);
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .topbar-title {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+    }
+
+    .chip-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .chip {
+      background: #fff;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .metric-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .metric {
+      background: var(--card);
+      border-radius: var(--radius-m);
+      box-shadow: var(--shadow-sm);
+      padding: 16px 18px;
+      border: 1px solid rgba(223, 224, 230, 0.6);
+    }
+
+    .metric .label {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .metric .value {
+      font-size: 30px;
+      font-weight: 700;
+      line-height: 1;
+      margin-bottom: 6px;
+    }
+
+    .metric .meta {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .chart-card {
+      position: relative;
+      background: var(--card);
+      border-radius: 20px;
+      box-shadow: var(--shadow-sm);
+      padding: 20px 20px 22px;
+      border: 1px solid rgba(223, 224, 230, 0.65);
+      min-height: 520px;
+    }
+
+    .card-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+
+    .card-header h3 {
+      margin: 0;
+      font-size: 22px;
+      line-height: 1.2;
+    }
+
+    .card-header p {
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.4;
+      max-width: 420px;
+    }
+
+    .ask-pill {
+      flex-shrink: 0;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border-radius: 999px;
+      background: linear-gradient(180deg, #ffffff, #f7faff);
+      border: 1px solid var(--brand-100);
+      color: var(--deep);
+      padding: 10px 14px;
+      font-size: 14px;
+      font-weight: 700;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .bars {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      margin-top: 8px;
+    }
+
+    .bar-row {
+      display: grid;
+      grid-template-columns: 190px 1fr 64px;
+      gap: 14px;
+      align-items: center;
+    }
+
+    .bar-label {
+      font-size: 14px;
+      color: var(--text);
+      font-weight: 500;
+    }
+
+    .track {
+      height: 18px;
+      background: #eef1f7;
+      border-radius: 999px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .fill {
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--brand-400), var(--brand-500));
+    }
+
+    .bar-value {
+      font-size: 14px;
+      color: var(--muted);
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .axis-note {
+      margin-top: 18px;
+      display: flex;
+      justify-content: space-between;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .note-box {
+      margin-top: 18px;
+      background: var(--brand-50);
+      border: 1px solid var(--brand-100);
+      color: var(--deep);
+      border-radius: 14px;
+      padding: 12px 14px;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .modal-dim {
+      position: absolute;
+      inset: 0;
+      background: rgba(29, 40, 72, 0.16);
+      border-radius: 20px;
+    }
+
+    .modal {
+      position: absolute;
+      right: 18px;
+      top: 82px;
+      width: 370px;
+      background: rgba(255,255,255,0.98);
+      border: 1px solid rgba(223, 224, 230, 0.88);
+      border-radius: 22px;
+      box-shadow: 0 22px 50px rgba(33, 52, 120, 0.18);
+      padding: 18px;
+    }
+
+    .modal .kicker,
+    .sheet .kicker {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--brand-500);
+      margin-bottom: 8px;
+    }
+
+    .modal h4,
+    .sheet h4 {
+      margin: 0 0 8px;
+      font-size: 21px;
+      line-height: 1.2;
+    }
+
+    .modal p,
+    .sheet p {
+      margin: 0 0 14px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .prompt {
+      background: #fbfcff;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 13px 14px;
+      font-size: 14px;
+      color: var(--text);
+      margin-bottom: 14px;
+    }
+
+    .quick-grid {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .quick {
+      border: 1px solid var(--brand-100);
+      background: var(--brand-50);
+      color: var(--deep);
+      border-radius: 14px;
+      padding: 11px 12px;
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .footer-row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .mini-text {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .action {
+      background: linear-gradient(180deg, var(--brand-400), var(--brand-500));
+      color: #fff;
+      border-radius: 999px;
+      padding: 11px 14px;
+      font-size: 13px;
+      font-weight: 700;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .floating-trigger {
+      position: absolute;
+      right: 26px;
+      bottom: 24px;
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: linear-gradient(180deg, var(--brand-400), var(--brand-500));
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      box-shadow: 0 18px 30px rgba(73, 107, 227, 0.32);
+      border: 4px solid rgba(255,255,255,0.92);
+      z-index: 2;
+    }
+
+    .floating-trigger span:first-child {
+      font-size: 20px;
+      line-height: 1;
+      margin-bottom: 2px;
+    }
+
+    .sheet {
+      position: absolute;
+      right: 24px;
+      bottom: 104px;
+      width: 400px;
+      background: rgba(255,255,255,0.98);
+      border: 1px solid rgba(223, 224, 230, 0.9);
+      border-radius: 24px;
+      box-shadow: 0 22px 50px rgba(33, 52, 120, 0.18);
+      padding: 18px;
+    }
+
+    .sheet .context {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--brand-50);
+      border: 1px solid var(--brand-100);
+      color: var(--deep);
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+
+    .sheet .quick-grid {
+      margin-top: 10px;
+    }
+
+    .recommend {
+      position: absolute;
+      left: 22px;
+      bottom: 22px;
+      right: 22px;
+      background: rgba(255,255,255,0.82);
+      border: 1px solid rgba(223, 224, 230, 0.75);
+      border-radius: 18px;
+      padding: 12px 14px;
+      font-size: 13px;
+      line-height: 1.45;
+      color: var(--text);
+      backdrop-filter: blur(6px);
+    }
+
+    .recommend strong {
+      color: var(--deep);
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <div class="header">
+      <div>
+        <div class="eyebrow">Concept Preview</div>
+        <h1>Ask This Chart Without Using a Dropdown</h1>
+        <p>Two low-friction interaction patterns for the dashboard. Both keep the question grounded in the chart context, like <strong>Top 10 Pains → Manual Processes</strong>, without forcing the user into a selectbox flow.</p>
+      </div>
+      <div class="legend">
+        <span class="dot" style="background:#496be3"></span> anchored to chart context
+        <span class="dot" style="background:#6f93eb"></span> minimal visual noise
+      </div>
+    </div>
+
+    <div class="panels">
+      <section class="panel">
+        <div class="panel-tag">Option A • Button on the chart card</div>
+        <h2>Open a focused pop-up from the chart itself</h2>
+        <p class="sub">The action lives exactly where the user is looking. Clicking it opens a light modal with the chart already selected, quick prompts, and a free-text input.</p>
+
+        <div class="dashboard-shell">
+          <div class="topbar">
+            <div class="topbar-title">Executive Summary</div>
+            <div class="chip-row">
+              <div class="chip">LATAM</div>
+              <div class="chip">Enterprise</div>
+              <div class="chip">Last 90 days</div>
+            </div>
+          </div>
+
+          <div class="metric-row">
+            <div class="metric">
+              <div class="label">Total Insights</div>
+              <div class="value">14,372</div>
+              <div class="meta">across 2,684 demos</div>
+            </div>
+            <div class="metric">
+              <div class="label">Pain Coverage</div>
+              <div class="value">68%</div>
+              <div class="meta">of demos mention at least one pain</div>
+            </div>
+            <div class="metric">
+              <div class="label">Top Pain Share</div>
+              <div class="value">31%</div>
+              <div class="meta">manual processes</div>
+            </div>
+          </div>
+
+          <div class="chart-card">
+            <div class="card-header">
+              <div>
+                <h3>Top 10 Pains (unique demos)</h3>
+                <p>Each bar represents how many unique demos mention that pain. This is the kind of chart where a follow-up question naturally appears.</p>
+              </div>
+              <div class="ask-pill">Ask this chart</div>
+            </div>
+
+            <div class="bars">
+              <div class="bar-row">
+                <div class="bar-label">Manual processes</div>
+                <div class="track"><div class="fill" style="width:100%"></div></div>
+                <div class="bar-value">831</div>
+              </div>
+              <div class="bar-row">
+                <div class="bar-label">Scattered information</div>
+                <div class="track"><div class="fill" style="width:82%"></div></div>
+                <div class="bar-value">682</div>
+              </div>
+              <div class="bar-row">
+                <div class="bar-label">Poor employee adoption</div>
+                <div class="track"><div class="fill" style="width:73%"></div></div>
+                <div class="bar-value">603</div>
+              </div>
+              <div class="bar-row">
+                <div class="bar-label">Internal comms friction</div>
+                <div class="track"><div class="fill" style="width:61%"></div></div>
+                <div class="bar-value">507</div>
+              </div>
+              <div class="bar-row">
+                <div class="bar-label">Weak analytics visibility</div>
+                <div class="track"><div class="fill" style="width:55%"></div></div>
+                <div class="bar-value">460</div>
+              </div>
+              <div class="bar-row">
+                <div class="bar-label">Onboarding complexity</div>
+                <div class="track"><div class="fill" style="width:51%"></div></div>
+                <div class="bar-value">425</div>
+              </div>
+            </div>
+
+            <div class="axis-note">
+              <span>0</span>
+              <span>Unique demos mentioning the pain</span>
+              <span>900</span>
+            </div>
+
+            <div class="note-box">
+              Hovering or clicking a bar could prefill the selected item. Example: <strong>Manual processes</strong>.
+            </div>
+
+            <div class="modal-dim"></div>
+            <div class="modal">
+              <div class="kicker">Ask This Chart</div>
+              <h4>Top 10 Pains</h4>
+              <p>The assistant already knows this question comes from the chart and from the selected bar: <strong>Manual processes</strong>.</p>
+              <div class="prompt">What specific manual processes are coming up most often in the quotes and meeting notes?</div>
+              <div class="quick-grid">
+                <div class="quick">Which processes are manual most often, and in which companies?</div>
+                <div class="quick">Show quotes that explain what “manual processes” means here.</div>
+                <div class="quick">Is this pain stronger in Enterprise, LATAM, or a specific industry?</div>
+              </div>
+              <div class="footer-row">
+                <div class="mini-text">Grounded in chart filters, verbatim quotes, transcript chunks, and company data.</div>
+                <div class="action">Ask</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="recommend">
+          <strong>Feel:</strong> very explicit and easy to understand. Best if we want “ask chart” to be discoverable without training the user.
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-tag">Option B • Subtle corner assistant</div>
+        <h2>Keep the chart clean and open a bottom-right sheet</h2>
+        <p class="sub">The entry point stays out of the way until the user wants it. It feels lighter, but still needs clear context so it is obvious the assistant is answering about this chart.</p>
+
+        <div class="dashboard-shell">
+          <div class="topbar">
+            <div class="topbar-title">Executive Summary</div>
+            <div class="chip-row">
+              <div class="chip">LATAM</div>
+              <div class="chip">Enterprise</div>
+              <div class="chip">Last 90 days</div>
+            </div>
+          </div>
+
+          <div class="metric-row">
+            <div class="metric">
+              <div class="label">Total Insights</div>
+              <div class="value">14,372</div>
+              <div class="meta">across 2,684 demos</div>
+            </div>
+            <div class="metric">
+              <div class="label">Pain Coverage</div>
+              <div class="value">68%</div>
+              <div class="meta">of demos mention at least one pain</div>
+            </div>
+            <div class="metric">
+              <div class="label">Top Pain Share</div>
+              <div class="value">31%</div>
+              <div class="meta">manual processes</div>
+            </div>
+          </div>
+
+          <div class="chart-card">
+            <div class="card-header">
+              <div>
+                <h3>Top 10 Pains (unique demos)</h3>
+                <p>No extra button inside the card. The chart stays visually clean, and the helper enters only from the corner.</p>
+              </div>
+            </div>
+
+            <div class="bars">
+              <div class="bar-row">
+                <div class="bar-label">Manual processes</div>
+                <div class="track"><div class="fill" style="width:100%"></div></div>
+                <div class="bar-value">831</div>
+              </div>
+              <div class="bar-row">
+                <div class="bar-label">Scattered information</div>
+                <div class="track"><div class="fill" style="width:82%"></div></div>
+                <div class="bar-value">682</div>
+              </div>
+              <div class="bar-row">
+                <div class="bar-label">Poor employee adoption</div>
+                <div class="track"><div class="fill" style="width:73%"></div></div>
+                <div class="bar-value">603</div>
+              </div>
+              <div class="bar-row">
+                <div class="bar-label">Internal comms friction</div>
+                <div class="track"><div class="fill" style="width:61%"></div></div>
+                <div class="bar-value">507</div>
+              </div>
+              <div class="bar-row">
+                <div class="bar-label">Weak analytics visibility</div>
+                <div class="track"><div class="fill" style="width:55%"></div></div>
+                <div class="bar-value">460</div>
+              </div>
+              <div class="bar-row">
+                <div class="bar-label">Onboarding complexity</div>
+                <div class="track"><div class="fill" style="width:51%"></div></div>
+                <div class="bar-value">425</div>
+              </div>
+            </div>
+
+            <div class="axis-note">
+              <span>0</span>
+              <span>Unique demos mentioning the pain</span>
+              <span>900</span>
+            </div>
+
+            <div class="sheet">
+              <div class="kicker">Ask From Context</div>
+              <div class="context">Context: Executive Summary → Top 10 Pains → Manual processes</div>
+              <h4>What do you want to know about this chart?</h4>
+              <p>This slide-up sheet stays in the bottom-right corner so it feels more like a helper than a modal interruption.</p>
+              <div class="prompt">What specific processes are still manual, and what evidence appears most often in verbatim quotes?</div>
+              <div class="quick-grid">
+                <div class="quick">Break this pain into recurring workflows</div>
+                <div class="quick">Summarize quotes behind this bar</div>
+                <div class="quick">Compare Manual processes vs Scattered information</div>
+              </div>
+              <div class="footer-row">
+                <div class="mini-text">Could stay open across charts, but should always show active context.</div>
+                <div class="action">Ask</div>
+              </div>
+            </div>
+
+            <div class="floating-trigger">
+              <span>✦</span>
+              <span>Ask</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="recommend">
+          <strong>Feel:</strong> less intrusive day to day. Best if we want the feature to exist quietly and not compete with the charts visually.
+        </div>
+      </section>
+    </div>
+  </div>
+</body>
+</html>
