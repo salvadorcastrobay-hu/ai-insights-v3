@@ -1,0 +1,213 @@
+<svg width="1560" height="1040" viewBox="0 0 1560 1040" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1560" y2="1040" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F7F9FE"/>
+      <stop offset="1" stop-color="#F2F4F8"/>
+    </linearGradient>
+    <linearGradient id="bar" x1="0" y1="0" x2="1" y2="0">
+      <stop stop-color="#6F93EB"/>
+      <stop offset="1" stop-color="#496BE3"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="160%">
+      <feDropShadow dx="-1" dy="8" stdDeviation="10" flood-color="#A9ABBB" flood-opacity="0.28"/>
+    </filter>
+    <style>
+      .title { font: 700 36px Roboto, Arial, sans-serif; fill: #303036; }
+      .eyebrow { font: 700 13px Roboto, Arial, sans-serif; letter-spacing: 1.8px; text-transform: uppercase; fill: #496BE3; }
+      .body { font: 400 16px Roboto, Arial, sans-serif; fill: #636271; }
+      .panelTitle { font: 700 28px Roboto, Arial, sans-serif; fill: #303036; }
+      .panelBody { font: 400 15px Roboto, Arial, sans-serif; fill: #636271; }
+      .chip { font: 500 13px Roboto, Arial, sans-serif; fill: #636271; }
+      .metricLabel { font: 400 12px Roboto, Arial, sans-serif; fill: #636271; }
+      .metricValue { font: 700 30px Roboto, Arial, sans-serif; fill: #303036; }
+      .metricMeta { font: 400 12px Roboto, Arial, sans-serif; fill: #636271; }
+      .cardTitle { font: 700 22px Roboto, Arial, sans-serif; fill: #303036; }
+      .cardBody { font: 400 14px Roboto, Arial, sans-serif; fill: #636271; }
+      .smallCaps { font: 700 12px Roboto, Arial, sans-serif; letter-spacing: 1.4px; fill: #496BE3; }
+      .modalTitle { font: 700 21px Roboto, Arial, sans-serif; fill: #303036; }
+      .label { font: 500 14px Roboto, Arial, sans-serif; fill: #303036; }
+      .value { font: 400 14px Roboto, Arial, sans-serif; fill: #636271; }
+      .tiny { font: 400 12px Roboto, Arial, sans-serif; fill: #636271; }
+      .buttonText { font: 700 14px Roboto, Arial, sans-serif; fill: #213478; }
+      .whiteButtonText { font: 700 13px Roboto, Arial, sans-serif; fill: white; }
+      .tagText { font: 700 13px Roboto, Arial, sans-serif; fill: #213478; }
+    </style>
+  </defs>
+
+  <rect width="1560" height="1040" fill="url(#bg)"/>
+
+  <text x="60" y="64" class="eyebrow">CONCEPT PREVIEW</text>
+  <text x="60" y="112" class="title">Ask This Chart Without Using a Dropdown</text>
+  <text x="60" y="144" class="body">Two low-friction patterns for the dashboard: a button on the chart card that opens a pop-up,</text>
+  <text x="60" y="168" class="body">or a subtle corner assistant that opens a bottom-right sheet with chart context already attached.</text>
+
+  <rect x="1180" y="58" rx="26" ry="26" width="310" height="54" fill="white" stroke="#DFE0E6"/>
+  <circle cx="1209" cy="85" r="5" fill="#496BE3"/>
+  <text x="1225" y="89" class="chip">anchored to chart context</text>
+  <circle cx="1374" cy="85" r="5" fill="#6F93EB"/>
+  <text x="1390" y="89" class="chip">minimal visual noise</text>
+
+  <!-- Left panel -->
+  <rect x="40" y="208" rx="28" ry="28" width="720" height="790" fill="#FFFFFF" fill-opacity="0.62" stroke="#DFE0E6" filter="url(#shadow)"/>
+  <rect x="64" y="232" rx="18" ry="18" width="190" height="36" fill="#F1F4FD" stroke="#DEE5FB"/>
+  <text x="84" y="255" class="tagText">Option A • Button on chart card</text>
+  <text x="64" y="308" class="panelTitle">Open a focused pop-up from the chart itself</text>
+  <text x="64" y="338" class="panelBody">The action lives exactly where the user is looking. Clicking it opens</text>
+  <text x="64" y="360" class="panelBody">a light modal with quick prompts and the selected chart context.</text>
+
+  <rect x="64" y="392" rx="22" ry="22" width="672" height="540" fill="#F8F9FB" stroke="#DFE0E6"/>
+  <text x="88" y="425" class="cardTitle">Executive Summary</text>
+  <rect x="532" y="404" rx="16" ry="16" width="66" height="28" fill="white" stroke="#DFE0E6"/>
+  <text x="549" y="422" class="chip">LATAM</text>
+  <rect x="606" y="404" rx="16" ry="16" width="84" height="28" fill="white" stroke="#DFE0E6"/>
+  <text x="623" y="422" class="chip">Enterprise</text>
+
+  <rect x="88" y="446" rx="16" ry="16" width="198" height="96" fill="white" stroke="#DFE0E6" filter="url(#shadow)"/>
+  <text x="106" y="474" class="metricLabel">Total Insights</text>
+  <text x="106" y="512" class="metricValue">14,372</text>
+  <text x="106" y="532" class="metricMeta">across 2,684 demos</text>
+
+  <rect x="300" y="446" rx="16" ry="16" width="198" height="96" fill="white" stroke="#DFE0E6" filter="url(#shadow)"/>
+  <text x="318" y="474" class="metricLabel">Pain Coverage</text>
+  <text x="318" y="512" class="metricValue">68%</text>
+  <text x="318" y="532" class="metricMeta">of demos mention at least one pain</text>
+
+  <rect x="512" y="446" rx="16" ry="16" width="198" height="96" fill="white" stroke="#DFE0E6" filter="url(#shadow)"/>
+  <text x="530" y="474" class="metricLabel">Top Pain Share</text>
+  <text x="530" y="512" class="metricValue">31%</text>
+  <text x="530" y="532" class="metricMeta">manual processes</text>
+
+  <rect x="88" y="562" rx="20" ry="20" width="622" height="328" fill="white" stroke="#DFE0E6" filter="url(#shadow)"/>
+  <text x="112" y="598" class="cardTitle">Top 10 Pains (unique demos)</text>
+  <text x="112" y="620" class="cardBody">Each bar represents how many unique demos mention that pain.</text>
+  <rect x="538" y="580" rx="18" ry="18" width="148" height="38" fill="white" stroke="#DEE5FB" filter="url(#shadow)"/>
+  <text x="566" y="603" class="buttonText">Ask this chart</text>
+
+  <!-- Left bars -->
+  <text x="112" y="662" class="label">Manual processes</text>
+  <rect x="270" y="649" rx="9" ry="9" width="300" height="18" fill="#EEF1F7"/>
+  <rect x="270" y="649" rx="9" ry="9" width="300" height="18" fill="url(#bar)"/>
+  <text x="596" y="663" class="value">831</text>
+
+  <text x="112" y="706" class="label">Scattered information</text>
+  <rect x="270" y="693" rx="9" ry="9" width="300" height="18" fill="#EEF1F7"/>
+  <rect x="270" y="693" rx="9" ry="9" width="246" height="18" fill="url(#bar)"/>
+  <text x="596" y="707" class="value">682</text>
+
+  <text x="112" y="750" class="label">Poor employee adoption</text>
+  <rect x="270" y="737" rx="9" ry="9" width="300" height="18" fill="#EEF1F7"/>
+  <rect x="270" y="737" rx="9" ry="9" width="218" height="18" fill="url(#bar)"/>
+  <text x="596" y="751" class="value">603</text>
+
+  <text x="112" y="794" class="label">Internal comms friction</text>
+  <rect x="270" y="781" rx="9" ry="9" width="300" height="18" fill="#EEF1F7"/>
+  <rect x="270" y="781" rx="9" ry="9" width="183" height="18" fill="url(#bar)"/>
+  <text x="596" y="795" class="value">507</text>
+
+  <text x="112" y="838" class="label">Weak analytics visibility</text>
+  <rect x="270" y="825" rx="9" ry="9" width="300" height="18" fill="#EEF1F7"/>
+  <rect x="270" y="825" rx="9" ry="9" width="166" height="18" fill="url(#bar)"/>
+  <text x="596" y="839" class="value">460</text>
+
+  <rect x="118" y="858" rx="14" ry="14" width="402" height="22" fill="#F1F4FD" stroke="#DEE5FB"/>
+  <text x="132" y="873" class="tiny">Clicking or hovering a bar could prefill the selected item, like “Manual processes”.</text>
+
+  <!-- Left modal -->
+  <rect x="352" y="626" rx="22" ry="22" width="330" height="236" fill="white" stroke="#DFE0E6" filter="url(#shadow)"/>
+  <text x="374" y="654" class="smallCaps">ASK THIS CHART</text>
+  <text x="374" y="684" class="modalTitle">Top 10 Pains</text>
+  <text x="374" y="708" class="cardBody">The assistant already knows the active bar:</text>
+  <text x="374" y="728" class="cardBody">Manual processes.</text>
+  <rect x="374" y="744" rx="14" ry="14" width="286" height="54" fill="#FBFCFF" stroke="#DFE0E6"/>
+  <text x="388" y="766" class="cardBody">What specific manual processes are</text>
+  <text x="388" y="784" class="cardBody">coming up most often in quotes?</text>
+  <rect x="374" y="808" rx="14" ry="14" width="286" height="24" fill="#F1F4FD" stroke="#DEE5FB"/>
+  <text x="387" y="824" class="tiny">Which workflows are manual most often?</text>
+  <rect x="374" y="838" rx="14" ry="14" width="192" height="24" fill="#496BE3"/>
+  <text x="430" y="855" class="whiteButtonText">Ask</text>
+
+  <rect x="64" y="944" rx="18" ry="18" width="672" height="38" fill="white" fill-opacity="0.82" stroke="#DFE0E6"/>
+  <text x="84" y="968" class="chip">Recommended if you want the feature to be immediately understandable and tightly tied to each chart.</text>
+
+  <!-- Right panel -->
+  <rect x="800" y="208" rx="28" ry="28" width="720" height="790" fill="#FFFFFF" fill-opacity="0.62" stroke="#DFE0E6" filter="url(#shadow)"/>
+  <rect x="824" y="232" rx="18" ry="18" width="196" height="36" fill="#F1F4FD" stroke="#DEE5FB"/>
+  <text x="844" y="255" class="tagText">Option B • Corner assistant</text>
+  <text x="824" y="308" class="panelTitle">Keep the chart clean and use a bottom-right sheet</text>
+  <text x="824" y="338" class="panelBody">The entry point stays out of the way until the user wants it. It feels</text>
+  <text x="824" y="360" class="panelBody">lighter, but still needs clear context so it is obvious which chart is active.</text>
+
+  <rect x="824" y="392" rx="22" ry="22" width="672" height="540" fill="#F8F9FB" stroke="#DFE0E6"/>
+  <text x="848" y="425" class="cardTitle">Executive Summary</text>
+  <rect x="1292" y="404" rx="16" ry="16" width="66" height="28" fill="white" stroke="#DFE0E6"/>
+  <text x="1309" y="422" class="chip">LATAM</text>
+  <rect x="1366" y="404" rx="16" ry="16" width="84" height="28" fill="white" stroke="#DFE0E6"/>
+  <text x="1383" y="422" class="chip">Enterprise</text>
+
+  <rect x="848" y="446" rx="16" ry="16" width="198" height="96" fill="white" stroke="#DFE0E6" filter="url(#shadow)"/>
+  <text x="866" y="474" class="metricLabel">Total Insights</text>
+  <text x="866" y="512" class="metricValue">14,372</text>
+  <text x="866" y="532" class="metricMeta">across 2,684 demos</text>
+
+  <rect x="1060" y="446" rx="16" ry="16" width="198" height="96" fill="white" stroke="#DFE0E6" filter="url(#shadow)"/>
+  <text x="1078" y="474" class="metricLabel">Pain Coverage</text>
+  <text x="1078" y="512" class="metricValue">68%</text>
+  <text x="1078" y="532" class="metricMeta">of demos mention at least one pain</text>
+
+  <rect x="1272" y="446" rx="16" ry="16" width="198" height="96" fill="white" stroke="#DFE0E6" filter="url(#shadow)"/>
+  <text x="1290" y="474" class="metricLabel">Top Pain Share</text>
+  <text x="1290" y="512" class="metricValue">31%</text>
+  <text x="1290" y="532" class="metricMeta">manual processes</text>
+
+  <rect x="848" y="562" rx="20" ry="20" width="622" height="328" fill="white" stroke="#DFE0E6" filter="url(#shadow)"/>
+  <text x="872" y="598" class="cardTitle">Top 10 Pains (unique demos)</text>
+  <text x="872" y="620" class="cardBody">No extra button inside the chart. The helper enters only from the corner.</text>
+
+  <!-- Right bars -->
+  <text x="872" y="662" class="label">Manual processes</text>
+  <rect x="1030" y="649" rx="9" ry="9" width="300" height="18" fill="#EEF1F7"/>
+  <rect x="1030" y="649" rx="9" ry="9" width="300" height="18" fill="url(#bar)"/>
+  <text x="1356" y="663" class="value">831</text>
+
+  <text x="872" y="706" class="label">Scattered information</text>
+  <rect x="1030" y="693" rx="9" ry="9" width="300" height="18" fill="#EEF1F7"/>
+  <rect x="1030" y="693" rx="9" ry="9" width="246" height="18" fill="url(#bar)"/>
+  <text x="1356" y="707" class="value">682</text>
+
+  <text x="872" y="750" class="label">Poor employee adoption</text>
+  <rect x="1030" y="737" rx="9" ry="9" width="300" height="18" fill="#EEF1F7"/>
+  <rect x="1030" y="737" rx="9" ry="9" width="218" height="18" fill="url(#bar)"/>
+  <text x="1356" y="751" class="value">603</text>
+
+  <text x="872" y="794" class="label">Internal comms friction</text>
+  <rect x="1030" y="781" rx="9" ry="9" width="300" height="18" fill="#EEF1F7"/>
+  <rect x="1030" y="781" rx="9" ry="9" width="183" height="18" fill="url(#bar)"/>
+  <text x="1356" y="795" class="value">507</text>
+
+  <text x="872" y="838" class="label">Weak analytics visibility</text>
+  <rect x="1030" y="825" rx="9" ry="9" width="300" height="18" fill="#EEF1F7"/>
+  <rect x="1030" y="825" rx="9" ry="9" width="166" height="18" fill="url(#bar)"/>
+  <text x="1356" y="839" class="value">460</text>
+
+  <!-- Bottom right sheet -->
+  <rect x="1042" y="650" rx="24" ry="24" width="392" height="218" fill="white" stroke="#DFE0E6" filter="url(#shadow)"/>
+  <text x="1064" y="678" class="smallCaps">ASK FROM CONTEXT</text>
+  <rect x="1064" y="692" rx="14" ry="14" width="348" height="26" fill="#F1F4FD" stroke="#DEE5FB"/>
+  <text x="1076" y="709" class="tiny">Context: Executive Summary → Top 10 Pains → Manual processes</text>
+  <text x="1064" y="744" class="modalTitle">What do you want to know about this chart?</text>
+  <text x="1064" y="768" class="cardBody">This slide-up sheet stays in the corner so it feels lighter</text>
+  <text x="1064" y="786" class="cardBody">than a modal interruption.</text>
+  <rect x="1064" y="798" rx="14" ry="14" width="348" height="46" fill="#FBFCFF" stroke="#DFE0E6"/>
+  <text x="1078" y="818" class="cardBody">What specific processes are still manual, and</text>
+  <text x="1078" y="836" class="cardBody">what evidence appears most often in quotes?</text>
+  <rect x="1064" y="848" rx="14" ry="14" width="160" height="24" fill="#496BE3"/>
+  <text x="1117" y="865" class="whiteButtonText">Ask</text>
+
+  <!-- Floating trigger -->
+  <circle cx="1440" cy="874" r="34" fill="#496BE3" stroke="white" stroke-width="4" filter="url(#shadow)"/>
+  <text x="1429" y="869" style="font:700 18px Roboto, Arial, sans-serif; fill:white;">✦</text>
+  <text x="1425" y="889" style="font:700 11px Roboto, Arial, sans-serif; fill:white;">Ask</text>
+
+  <rect x="824" y="944" rx="18" ry="18" width="672" height="38" fill="white" fill-opacity="0.82" stroke="#DFE0E6"/>
+  <text x="844" y="968" class="chip">Recommended if you want the feature to exist quietly and not compete with charts for attention.</text>
+</svg>

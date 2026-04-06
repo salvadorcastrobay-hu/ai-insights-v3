@@ -31,15 +31,6 @@ credentials:
       password: $2b$12$NamiW6VbImi8tAG/vV26uOn06JAWMXBtAb3BRTmqEg.3Luu/.Z6a.
       roles:
       - viewer
-    daniela.lopez:
-      email: daniela.lopez@humand.co
-      failed_login_attempts: 0
-      first_name: Daniela
-      last_name: Lopez
-      logged_in: false
-      password: $2b$12$.wh.xkCrPMOiabXH2SAXM.n/K.8.n404JPdclnwjdzDfv2DSSHe1S
-      roles:
-      - viewer
     daniel.moreno:
       email: daniel.moreno@humand.co
       failed_login_attempts: 0
@@ -49,6 +40,15 @@ credentials:
       password: $2b$12$DqiTbXIamO4xCOu/DiaeauWxK8OpBrq/KIUGpaLn8Cftd1N8dxeb.
       roles:
       - user
+    daniela.lopez:
+      email: daniela.lopez@humand.co
+      failed_login_attempts: 0
+      first_name: Daniela
+      last_name: Lopez
+      logged_in: false
+      password: $2b$12$.wh.xkCrPMOiabXH2SAXM.n/K.8.n404JPdclnwjdzDfv2DSSHe1S
+      roles:
+      - viewer
     juan.diego.alcocer:
       email: juan.diego.alcocer@humand.co
       failed_login_attempts: 0
@@ -151,7 +151,7 @@ credentials:
     sofia.esposito:
       email: sofia.esposito@humand.co
       failed_login_attempts: 0
-      first_name: Sofía
+      first_name: "Sof\xEDa"
       last_name: Esposito
       logged_in: false
       password: $2b$12$GZbTTzWwLDimBRcnoeRJlu6nvWIxZtq0XFQ0fHTJFaXVK9B65E1cu

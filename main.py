@@ -78,6 +78,7 @@ def cmd_ingest(args: argparse.Namespace) -> None:
         source=args.source,
         match_only=args.match_only,
         since=args.since,
+        until=args.until,
     )
 
     logger.info("Ingestion complete.")
@@ -247,7 +248,11 @@ Examples:
     )
     p_ingest.add_argument(
         "--since", type=str, default=None,
-        help="Fetch Fathom meetings created after this date (ISO 8601, e.g. 2024-01-01)",
+        help="Fetch Fathom meetings created after this date (ISO 8601, e.g. 2024-01-01T00:00:00Z)",
+    )
+    p_ingest.add_argument(
+        "--until", type=str, default=None,
+        help="Fetch Fathom meetings created before this date (ISO 8601, e.g. 2025-10-01T00:00:00Z)",
     )
 
     # run

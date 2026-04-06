@@ -189,6 +189,11 @@ def get_supabase():
     )
 
 
+def get_dashboard_prompt_version() -> str:
+    """Return the prompt version the dashboard should display."""
+    return os.environ.get("PROMPT_VERSION", "v3.0")
+
+
 def ensure_dashboard_schema(df: pd.DataFrame) -> pd.DataFrame:
     """Ensure DataFrame has required columns to prevent KeyError on empty results."""
     if df is None or df.empty:
@@ -201,11 +206,10 @@ def ensure_dashboard_schema(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-@st.cache_data(show_spinner=False, max_entries=1, persist="disk")
-def load_data() -> pd.DataFrame:
+@st.cache_data(show_spinner=False, ttl=300, max_entries=4, persist="disk")
+def load_data(prompt_version: str) -> pd.DataFrame:
     """Load insights from the dashboard view, filtered by prompt_version."""
     client = get_supabase()
-    prompt_version = os.environ.get("PROMPT_VERSION", "v3.0")
     all_data = []
     offset = 0
     page_size = 1000

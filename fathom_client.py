@@ -56,6 +56,7 @@ def fetch_summary(recording_id: str) -> str | None:
 def fetch_meetings(
     team: str | None = None,
     since: str | None = None,
+    until: str | None = None,
     include_transcript: bool = True,
 ) -> list[dict]:
     """
@@ -64,6 +65,7 @@ def fetch_meetings(
     Args:
         team: Team name filter (default: from config)
         since: ISO 8601 date string, fetch meetings after this date
+        until: ISO 8601 date string, fetch meetings before this date
         include_transcript: Include full transcript in response
 
     Returns:
@@ -82,6 +84,8 @@ def fetch_meetings(
         }
         if since:
             params["created_after"] = since
+        if until:
+            params["created_before"] = until
         if cursor:
             params["cursor"] = cursor
 
