@@ -11,7 +11,10 @@ import pandas as pd
 import streamlit as st
 import streamlit_authenticator as stauth
 from shared import (
+    apply_global_filters,
+    get_dashboard_data_version,
     get_dashboard_prompt_version,
+    initialize_global_filters,
     load_auth_config,
     load_data,
     save_auth_config,
@@ -131,12 +134,14 @@ needs_data = nav.title in pages_with_data
 if needs_data:
     with st.spinner("Cargando datos..."):
         prompt_version = get_dashboard_prompt_version()
-        df = load_data(prompt_version)
+        data_version = get_dashboard_data_version()
+        df = load_data(prompt_version, data_version)
     st.session_state["df"] = df
-    filtered_df = df
+    initialize_global_filters(df)
+    filtered_df = apply_global_filters(df)
 else:
     df = st.session_state.get("df", pd.DataFrame())
-    filtered_df = df
+    filtered_df = apply_global_filters(df) if not df.empty else df
 
 st.session_state["filtered_df"] = filtered_df
 

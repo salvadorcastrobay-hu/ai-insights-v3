@@ -4,7 +4,14 @@ import pandas as pd
 from exp_ds import inject_ds_css, DS, apply_ds_layout, BRAND_SCALE, ds_section
 
 try:
-    from shared import format_currency, chart_tooltip, load_total_transcripts_count, annotate_heatmap, humanize
+    from shared import (
+        annotate_heatmap,
+        chart_tooltip,
+        format_currency,
+        humanize,
+        load_total_transcripts_count,
+        render_inline_filters,
+    )
 except ImportError:
     from shared import format_currency, chart_tooltip, load_total_transcripts_count
     def humanize(v):
@@ -12,6 +19,9 @@ except ImportError:
 
     def annotate_heatmap(*_args, **_kwargs):
         return None
+
+    def render_inline_filters(df, **_):
+        return df
 from computations import (
     cached_value_counts,
     cached_dedup_groupby,
@@ -35,53 +45,7 @@ st.markdown(
 
 # ── Top-of-page filters ──────────────────────────────────────────────────────
 
-with st.expander("Filtros", expanded=False):
-    opts_types = sorted(raw_df["insight_type_display"].dropna().unique())
-    opts_regions = sorted(raw_df["region"].dropna().unique())
-    opts_segments = sorted(raw_df["segment"].dropna().unique()) if "segment" in raw_df.columns else []
-    opts_countries = sorted(raw_df["country"].dropna().unique()) if "country" in raw_df.columns else []
-    opts_industries = sorted(raw_df["industry"].dropna().unique()) if "industry" in raw_df.columns else []
-    opts_owners = sorted(raw_df["deal_owner"].dropna().unique()) if "deal_owner" in raw_df.columns else []
-
-    fr1, fr2, fr3 = st.columns(3)
-    sel_types = fr1.multiselect("Tipo de Insight", opts_types, default=opts_types, key="es_types")
-    sel_regions = fr2.multiselect("Region", opts_regions, default=opts_regions, key="es_regions")
-    sel_segments = fr3.multiselect("Segmento", opts_segments, key="es_segments")
-
-    fr4, fr5, fr6 = st.columns(3)
-    sel_countries = fr4.multiselect("País", opts_countries, key="es_countries")
-    sel_industries = fr5.multiselect("Industria", opts_industries, key="es_industries")
-    sel_owners = fr6.multiselect("Deal Owner (AE)", opts_owners, key="es_owners")
-
-    date_range = None
-    if "call_date" in raw_df.columns:
-        valid_dates = raw_df["call_date"].dropna()
-        if not valid_dates.empty:
-            min_d, max_d = valid_dates.min().date(), valid_dates.max().date()
-            fd1, fd2 = st.columns([1, 2])
-            date_range = fd1.date_input(
-                "Rango de fechas",
-                value=(min_d, max_d),
-                min_value=min_d,
-                max_value=max_d,
-                key="es_dates",
-            )
-
-# Apply filters
-mask = raw_df["insight_type_display"].isin(sel_types) & raw_df["region"].isin(sel_regions)
-if sel_segments:
-    mask &= raw_df["segment"].isin(sel_segments)
-if sel_countries:
-    mask &= raw_df["country"].isin(sel_countries)
-if sel_industries:
-    mask &= raw_df["industry"].isin(sel_industries)
-if sel_owners:
-    mask &= raw_df["deal_owner"].isin(sel_owners)
-if date_range and isinstance(date_range, tuple) and len(date_range) == 2:
-    start, end = date_range
-    mask &= (raw_df["call_date"].dt.date >= start) & (raw_df["call_date"].dt.date <= end)
-
-df = raw_df[mask].copy()
+df = render_inline_filters(raw_df, key_prefix="es").copy()
 
 if df.empty:
     st.warning("No hay datos para los filtros seleccionados.")

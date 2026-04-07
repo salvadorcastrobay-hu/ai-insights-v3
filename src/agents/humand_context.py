@@ -45,18 +45,18 @@ HUMAND_BRAND_BRIEF = {
 
 
 MARKET_LABELS = {
-    "latam": "LATAM",
+    "latam": "HISPAM / Brazil",
     "emea": "EMEA",
-    "north_america": "North America",
+    "north_america": "ANGLO AMERICA",
     "apac": "APAC",
 }
 
 
 REGION_TO_COMPETITOR_MARKET = {
-    "LATAM": "latam",
+    "HISPAM": "latam",
     "Brazil": "latam",
     "EMEA": "emea",
-    "North America": "north_america",
+    "ANGLO AMERICA": "north_america",
     "APAC": "apac",
     "MENA": "emea",
 }
@@ -135,7 +135,7 @@ def _resolve_competitor_market(filters: dict) -> tuple[str | None, str]:
         market_code = REGION_TO_COMPETITOR_MARKET.get(region)
         if market_code:
             if region == "Brazil":
-                return market_code, "Brazil (within LATAM)"
+                return market_code, "Brazil (within HISPAM / Brazil)"
             return market_code, region
 
     country = (filters.get("country") or "").strip().lower()

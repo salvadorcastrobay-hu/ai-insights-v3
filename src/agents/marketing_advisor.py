@@ -234,7 +234,7 @@ class MarketingAdvisorAgent:
                 "pt-BR",
                 "Direto, operacional, simples, orientado a frontline e adocao. Evita jargoes e overclaim.",
             )
-        if region == "North America" or country in {"united states", "usa", "canada"}:
+        if region == "ANGLO AMERICA" or country in {"united states", "usa", "canada"}:
             return (
                 "en-US",
                 "Clear, concise, proof-driven, operational, and low-hype.",

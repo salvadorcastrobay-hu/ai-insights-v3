@@ -27,10 +27,10 @@ SEGMENT_OPTIONS = ["", "SMB", "Mid Market", "Enterprise"]
 DEFAULT_LOOKBACK_DAYS = 180
 REGION_LABELS = {
     "": "Todas",
-    "LATAM": "LATAM (HISPAM)",
+    "HISPAM": "HISPAM",
     "Brazil": "Brazil",
     "EMEA": "EMEA",
-    "North America": "North America",
+    "ANGLO AMERICA": "Anglo America",
     "APAC": "APAC",
     "MENA": "MENA",
 }
@@ -57,10 +57,10 @@ QUESTION_COUNTRY_ALIASES = {
 }
 
 QUESTION_REGION_ALIASES = {
-    "LATAM": ["latam", "hispam"],
+    "HISPAM": ["latam", "hispam"],
     "Brazil": ["brazil region", "brasil region"],
     "EMEA": ["emea"],
-    "North America": ["north america", "na"],
+    "ANGLO AMERICA": ["north america", "namer", "anglo america", "na"],
     "APAC": ["apac"],
     "MENA": ["mena"],
 }

@@ -5,28 +5,30 @@ from __future__ import annotations
 
 CANONICAL_REGION_OPTIONS = [
     "",
-    "LATAM",
+    "HISPAM",
+    "ANGLO AMERICA",
     "Brazil",
     "EMEA",
-    "North America",
     "APAC",
     "MENA",
 ]
 
 REGION_FILTER_MAP = {
-    "LATAM": [
+    "HISPAM": [
         "HISPAM",
         "LATAM",
         "Santa Fe Province",
         "Mendoza Province",
+        "Mendoza",
         "Cordoba",
         "Córdoba",
         "Ciudad de Mexico",
         "Ciudad de México",
+        "Mexico City",
     ],
     "Brazil": ["Brazil", "Brasil"],
-    "EMEA": ["EMEA", "Community of Madrid"],
-    "North America": ["ANGLO AMERICA", "NORTH AMERICA", "North America"],
+    "EMEA": ["EMEA", "Community of Madrid", "Madrid", "Spain", "Espana", "España"],
+    "ANGLO AMERICA": ["ANGLO AMERICA", "NORTH AMERICA", "North America", "NAMER"],
     "APAC": ["APAC"],
     "MENA": ["MENA"],
 }

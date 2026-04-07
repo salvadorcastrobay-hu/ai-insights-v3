@@ -24,6 +24,15 @@ DEAL_PROPERTIES = [
     "hs_object_id", "segment_v2", "region", "pais",
     "users_by_contract", "sales_lost_reason", "industria_hu",
     "who_closed_the_lead",  # Account Executive (owner ID)
+    "hs_analytics_source",
+    "hs_analytics_latest_source",
+    "hs_analytics_source_data_1",
+    "hs_analytics_latest_source_data_1",
+    "inbound_source",
+    "origen_del_contacto__from_where_we_got_the_call_",
+    "deal_source__bdr_",
+    "sqo_source_channel",
+    "partner_name",
 ]
 
 COMPANY_PROPERTIES = [
