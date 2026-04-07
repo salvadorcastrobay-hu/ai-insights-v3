@@ -14,7 +14,6 @@ from shared import (
     get_dashboard_prompt_version,
     load_auth_config,
     load_data,
-    load_total_transcripts_count,
     save_auth_config,
 )
 
@@ -24,6 +23,26 @@ st.set_page_config(
     page_title="Humand Sales Insights",
     page_icon="📊",
     layout="wide",
+)
+
+st.markdown(
+    """
+    <style>
+    [data-testid="stSidebar"] {
+        height: 100vh;
+    }
+
+    [data-testid="stSidebar"] > div:first-child {
+        height: 100vh;
+    }
+
+    [data-testid="stSidebarContent"] {
+        height: 100vh;
+        overflow: hidden;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
 )
 
 # ── Auth ──
@@ -108,12 +127,6 @@ pages_with_data = {
     "Dashboards Personalizados",
 }
 needs_data = nav.title in pages_with_data
-
-with st.sidebar:
-    if needs_data and st.button("Actualizar datos", use_container_width=True):
-        load_data.clear()
-        load_total_transcripts_count.clear()
-        st.rerun()
 
 if needs_data:
     with st.spinner("Cargando datos..."):
