@@ -22,16 +22,6 @@ except ImportError:
 
 from exp_ds import inject_ds_css, DS, apply_ds_layout, ds_sub
 
-_REGION_ALIASES = {
-    "Santa Fe Province": "HISPAM",
-    "Mendoza Province": "HISPAM",
-    "Cordoba": "HISPAM",
-    "Córdoba": "HISPAM",
-    "Community of Madrid": "EMEA",
-    "Ciudad de Mexico": "HISPAM",
-    "Ciudad de México": "HISPAM",
-}
-
 HEATMAP_ZERO_SCALE = [
     [0.0, DS["neutral_100"]],
     [0.001, DS["brand_50"]],
@@ -50,10 +40,6 @@ df = render_inline_filters(raw_df, key_prefix="rg")
 if df.empty:
     st.warning("No hay datos para los filtros seleccionados.")
     st.stop()
-
-if "region" in df.columns:
-    df = df.copy()
-    df["region"] = df["region"].map(lambda r: _REGION_ALIASES.get(r, r) if pd.notna(r) else r)
 
 # ── A. ¿Dónde estamos teniendo más conversaciones? ────────────────────────────
 ds_sub("A. ¿Dónde estamos teniendo más conversaciones?")

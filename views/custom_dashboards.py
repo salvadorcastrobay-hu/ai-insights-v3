@@ -70,6 +70,11 @@ FIELD_LABELS = {
     "call_date": "Fecha de llamada",
     "amount": "Revenue",
     "confidence": "Confianza",
+    "deal_source": "Fuente del deal",
+    "deal_source_detail": "Detalle de fuente",
+    "acquisition_channel": "Canal de adquisición",
+    "inbound_source": "Marketing source",
+    "partner_name": "Partner",
 }
 X_AGG_FIELDS = [
     "insight_type_display",
@@ -87,6 +92,11 @@ X_AGG_FIELDS = [
     "feature_display",
     "gap_priority",
     "deal_stage",
+    "deal_source",
+    "deal_source_detail",
+    "acquisition_channel",
+    "inbound_source",
+    "partner_name",
     "call_date",
 ]
 X_SCATTER_FIELDS = [
@@ -115,6 +125,11 @@ Y_DISTINCT_FIELDS = [
     "feature_display",
     "insight_subtype_display",
     "insight_type_display",
+    "deal_source",
+    "deal_source_detail",
+    "acquisition_channel",
+    "inbound_source",
+    "partner_name",
 ]
 COLOR_FIELDS = [
     "insight_type_display",
@@ -131,6 +146,11 @@ COLOR_FIELDS = [
     "gap_priority",
     "deal_stage",
     "pain_theme",
+    "deal_source",
+    "deal_source_detail",
+    "acquisition_channel",
+    "inbound_source",
+    "partner_name",
 ]
 QUICK_TEMPLATES = [
     {
@@ -424,22 +444,33 @@ def _apply_optional_filters(df: pd.DataFrame, spec: dict) -> pd.DataFrame:
     out = df.copy()
     region_filter = spec.get("region_filter") or []
     country_filter = spec.get("country_filter") or []
+    start_date = spec.get("start_date")
+    end_date = spec.get("end_date")
 
     if region_filter and "region" in out.columns:
         out = out[out["region"].isin(region_filter)]
     if country_filter and "country" in out.columns:
         out = out[out["country"].isin(country_filter)]
+    if "call_date" in out.columns:
+        if start_date:
+            out = out[out["call_date"].dt.date >= pd.to_datetime(start_date).date()]
+        if end_date:
+            out = out[out["call_date"].dt.date <= pd.to_datetime(end_date).date()]
     return out
 
 
 def _filter_summary(spec: dict) -> str:
     region_filter = spec.get("region_filter") or []
     country_filter = spec.get("country_filter") or []
+    start_date = spec.get("start_date")
+    end_date = spec.get("end_date")
     parts = []
     if region_filter:
         parts.append(f"Región ({len(region_filter)})")
     if country_filter:
         parts.append(f"País ({len(country_filter)})")
+    if start_date or end_date:
+        parts.append(f"Fechas ({start_date or '...'} a {end_date or '...'})")
     if not parts:
         return "Sin filtros locales"
     return " | ".join(parts)
@@ -503,10 +534,18 @@ def _render_chart_block(
 def _render_region_country_filters(
     df: pd.DataFrame,
     key_prefix: str,
-) -> tuple[list[str], list[str]]:
+) -> tuple[list[str], list[str], str | None, str | None]:
     regions = sorted(df["region"].dropna().unique()) if "region" in df.columns else []
     countries = sorted(df["country"].dropna().unique()) if "country" in df.columns else []
-    f1, f2 = st.columns(2)
+    min_date = None
+    max_date = None
+    if "call_date" in df.columns:
+        valid_dates = df["call_date"].dropna()
+        if not valid_dates.empty:
+            min_date = valid_dates.min().date()
+            max_date = valid_dates.max().date()
+
+    f1, f2, f3, f4 = st.columns(4)
     with f1:
         selected_regions = st.multiselect(
             "Regiones (opcional)",
@@ -521,7 +560,33 @@ def _render_region_country_filters(
             key=f"{key_prefix}_countries",
             help="Si dejás vacío, incluye todos los países.",
         )
-    return selected_regions, selected_countries
+    with f3:
+        if min_date is None:
+            st.text_input("Desde (opcional)", value="", key=f"{key_prefix}_start_date_disabled", disabled=True)
+            start_date = None
+        else:
+            start_date = st.date_input(
+                "Desde (opcional)",
+                value=min_date,
+                min_value=min_date,
+                max_value=max_date,
+                key=f"{key_prefix}_start_date",
+            )
+    with f4:
+        if max_date is None:
+            st.text_input("Hasta (opcional)", value="", key=f"{key_prefix}_end_date_disabled", disabled=True)
+            end_date = None
+        else:
+            end_date = st.date_input(
+                "Hasta (opcional)",
+                value=max_date,
+                min_value=min_date,
+                max_value=max_date,
+                key=f"{key_prefix}_end_date",
+            )
+    start_iso = start_date.isoformat() if hasattr(start_date, "isoformat") and min_date else None
+    end_iso = end_date.isoformat() if hasattr(end_date, "isoformat") and max_date else None
+    return selected_regions, selected_countries, start_iso, end_iso
 
 
 def _chart_intent(spec: dict) -> tuple[str, str]:
@@ -717,6 +782,8 @@ def _new_chart_spec(
     sort_desc: bool,
     region_filter: list[str] | None = None,
     country_filter: list[str] | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
 ) -> dict:
     return {
         "id": str(uuid.uuid4()),
@@ -731,6 +798,8 @@ def _new_chart_spec(
         "sort_desc": bool(sort_desc),
         "region_filter": list(region_filter or []),
         "country_filter": list(country_filter or []),
+        "start_date": start_date,
+        "end_date": end_date,
         "created_at": datetime.utcnow().isoformat() + "Z",
     }
 
@@ -856,7 +925,7 @@ with tabs[0]:
                 )
 
             st.caption("Filtros opcionales del gráfico")
-            selected_regions, selected_countries = _render_region_country_filters(data_df, key_prefix="guided")
+            selected_regions, selected_countries, start_date, end_date = _render_region_country_filters(data_df, key_prefix="guided")
 
             dashboard_name = _render_save_destination(
                 dashboard_names=builder_dashboard_names,
@@ -876,6 +945,8 @@ with tabs[0]:
                 sort_desc=bool(selected_template.get("sort_desc", True)),
                 region_filter=selected_regions,
                 country_filter=selected_countries,
+                start_date=start_date,
+                end_date=end_date,
             )
 
             filtered_data_df = _apply_optional_filters(data_df, spec)
@@ -939,7 +1010,7 @@ with tabs[1]:
             )
 
             st.caption("Filtros opcionales del gráfico")
-            selected_regions, selected_countries = _render_region_country_filters(data_df, key_prefix="advanced")
+            selected_regions, selected_countries, start_date, end_date = _render_region_country_filters(data_df, key_prefix="advanced")
 
             chart_col, x_col_container, color_col_container = st.columns(3)
             with chart_col:
@@ -1083,6 +1154,8 @@ with tabs[1]:
                     sort_desc=sort_desc,
                     region_filter=selected_regions,
                     country_filter=selected_countries,
+                    start_date=start_date,
+                    end_date=end_date,
                 )
 
                 filtered_data_df = _apply_optional_filters(data_df, spec)

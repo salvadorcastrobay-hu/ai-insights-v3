@@ -7,6 +7,8 @@ from pathlib import Path
 import re
 import textwrap
 import unicodedata
+import json
+from datetime import date
 
 import streamlit as st
 import yaml
@@ -55,6 +57,11 @@ DASHBOARD_COLUMNS = [
     "deal_stage",
     "competitor_relationship_display",
     "is_own_brand_competitor",
+    "deal_source",
+    "deal_source_detail",
+    "acquisition_channel",
+    "inbound_source",
+    "partner_name",
 ]
 
 # Columns fetched from v_insights_dashboard.
@@ -111,6 +118,107 @@ COMPETITOR_NORMALIZATION = {
     "totvs": "Totvs",
 }
 OWN_BRAND_COMPETITOR_ALIASES = {"humand", "human", "human d"}
+FILTER_PREFS_PATH = Path(__file__).parent / ".filter_prefs.json"
+OFFICIAL_REGION_OPTIONS = [
+    "HISPAM",
+    "ANGLO AMERICA",
+    "APAC",
+    "Brazil",
+    "EMEA",
+    "MENA",
+]
+REGION_ALIASES = {
+    "latam": "HISPAM",
+    "hispam": "HISPAM",
+    "santa fe province": "HISPAM",
+    "mendoza province": "HISPAM",
+    "mendoza": "HISPAM",
+    "cordoba": "HISPAM",
+    "cordoba province": "HISPAM",
+    "cordoba capital": "HISPAM",
+    "ciudad de mexico": "HISPAM",
+    "ciudad de mexico cdmx": "HISPAM",
+    "mexico city": "HISPAM",
+    "community of madrid": "EMEA",
+    "madrid": "EMEA",
+    "espana": "EMEA",
+    "spain": "EMEA",
+    "emea": "EMEA",
+    "anglo america": "ANGLO AMERICA",
+    "north america": "ANGLO AMERICA",
+    "namer": "ANGLO AMERICA",
+    "na region": "ANGLO AMERICA",
+    "apac": "APAC",
+    "mena": "MENA",
+    "brazil": "Brazil",
+    "brasil": "Brazil",
+}
+HUBSPOT_DEAL_SOURCE_PROPERTY = "origen_del_contacto__from_where_we_got_the_call_"
+HUBSPOT_DEAL_SOURCE_FALLBACKS = [
+    "deal_source__bdr_",
+    "sqo_source_channel",
+    "hs_analytics_source",
+    "hs_object_source_label",
+]
+HUBSPOT_DEAL_SOURCE_DETAIL_PROPERTY = "inbound_source"
+HUBSPOT_DEAL_SOURCE_DETAIL_FALLBACKS = [
+    "partner_name",
+    "hs_analytics_source_data_1",
+    "hs_analytics_latest_source_data_1",
+]
+ACQUISITION_CHANNEL_ALIASES = {
+    "marketing": "Inbound",
+    "inbound": "Inbound",
+    "event": "Inbound",
+    "prensa": "Inbound",
+    "webinar": "Inbound",
+    "google ads": "Inbound",
+    "meta ads": "Inbound",
+    "landing": "Inbound",
+    "linkedin": "Inbound",
+    "referrals": "Inbound",
+    "organic search": "Inbound",
+    "paid search": "Inbound",
+    "email marketing": "Inbound",
+    "organic social": "Inbound",
+    "paid social": "Inbound",
+    "direct traffic": "Inbound",
+    "offline sources": "Inbound",
+    "other campaigns": "Inbound",
+    "ai referrals": "Inbound",
+    "bdr": "Outbound",
+    "ae": "Outbound",
+    "cx": "Outbound",
+    "external bdr": "Outbound",
+    "outbound partner": "Outbound",
+    "partner": "Partner / Referral",
+    "referral partner": "Partner / Referral",
+    "business partner": "Partner / Referral",
+    "alliance": "Partner / Referral",
+    "hu referral": "Partner / Referral",
+    "standard cx referral": "Partner / Referral",
+    "hu coins admin panel": "Partner / Referral",
+    "offline": "Otros",
+    "social_media": "Otros",
+    "other campaigns": "Otros",
+    "other": "Otros",
+    "otros": "Otros",
+    "alianza": "Otros",
+}
+GLOBAL_FILTER_DEFAULTS = {
+    "types": "__all__",
+    "regions": "__all__",
+    "segments": [],
+    "countries": [],
+    "industries": [],
+    "owners": [],
+    "modules": [],
+    "categories": [],
+    "channels": [],
+    "sources": [],
+    "date_start": None,
+    "date_end": None,
+}
 
 
 def _normalize_competitor_key(value: str) -> str:
@@ -118,6 +226,10 @@ def _normalize_competitor_key(value: str) -> str:
     return "".join(
         ch for ch in unicodedata.normalize("NFKD", collapsed) if not unicodedata.combining(ch)
     )
+
+
+def _normalize_text_key(value: str) -> str:
+    return _normalize_competitor_key(value)
 
 
 def normalize_competitor_name(value):
@@ -135,6 +247,69 @@ def is_own_brand_competitor(value) -> bool:
         return False
     normalized = _normalize_competitor_key(value)
     return normalized in OWN_BRAND_COMPETITOR_ALIASES
+
+
+def normalize_region_name(value):
+    if not isinstance(value, str):
+        return value
+    cleaned = " ".join(value.strip().split())
+    if not cleaned:
+        return None
+    normalized_key = _normalize_text_key(cleaned)
+    return REGION_ALIASES.get(normalized_key, cleaned)
+
+
+def _extract_first_property(props: dict, keys: list[str]) -> str | None:
+    for key in keys:
+        value = props.get(key)
+        if isinstance(value, str):
+            cleaned = " ".join(value.strip().split())
+            if cleaned and cleaned.lower() != "n/a":
+                return cleaned
+        elif value not in (None, "", []):
+            return str(value)
+    return None
+
+
+def derive_deal_source_fields(props: dict | None) -> dict[str, str | None]:
+    props = props or {}
+    deal_source = _extract_first_property(
+        props,
+        [HUBSPOT_DEAL_SOURCE_PROPERTY, *HUBSPOT_DEAL_SOURCE_FALLBACKS],
+    )
+    detail = _extract_first_property(
+        props,
+        [HUBSPOT_DEAL_SOURCE_DETAIL_PROPERTY, *HUBSPOT_DEAL_SOURCE_DETAIL_FALLBACKS],
+    )
+    partner_name = _extract_first_property(props, ["partner_name"])
+    inbound_source = _extract_first_property(props, [HUBSPOT_DEAL_SOURCE_DETAIL_PROPERTY])
+    acquisition_channel = normalize_acquisition_channel(deal_source or detail)
+    if acquisition_channel is None and inbound_source:
+        acquisition_channel = normalize_acquisition_channel(inbound_source)
+    return {
+        "deal_source": deal_source,
+        "deal_source_detail": detail,
+        "acquisition_channel": acquisition_channel,
+        "inbound_source": inbound_source,
+        "partner_name": partner_name,
+    }
+
+
+def normalize_acquisition_channel(value):
+    if not isinstance(value, str):
+        return value
+    cleaned = " ".join(value.strip().split())
+    if not cleaned:
+        return None
+    normalized = _normalize_text_key(cleaned)
+    return ACQUISITION_CHANNEL_ALIASES.get(normalized, "Otros")
+
+
+def _filter_owner() -> str | None:
+    owner = st.session_state.get("username") or st.session_state.get("name")
+    if not owner:
+        return None
+    return str(owner).strip() or None
 
 # ── Auth helpers ──
 
@@ -194,6 +369,11 @@ def get_dashboard_prompt_version() -> str:
     return os.environ.get("PROMPT_VERSION", "v3.0")
 
 
+def get_dashboard_data_version() -> str:
+    """Bump this when cached dashboard payload shape/derivations change."""
+    return "2026-04-07-source-filters-v3"
+
+
 def ensure_dashboard_schema(df: pd.DataFrame) -> pd.DataFrame:
     """Ensure DataFrame has required columns to prevent KeyError on empty results."""
     if df is None or df.empty:
@@ -206,8 +386,53 @@ def ensure_dashboard_schema(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+@st.cache_data(show_spinner=False, ttl=300, max_entries=2, persist="disk")
+def load_deal_properties(data_version: str) -> pd.DataFrame:
+    client = get_supabase()
+    all_rows = []
+    offset = 0
+    page_size = 1000
+    while True:
+        response = (
+            client.table("raw_deals")
+            .select("deal_id,properties")
+            .order("deal_id")
+            .range(offset, offset + page_size - 1)
+            .execute()
+        )
+        rows = response.data or []
+        if not rows:
+            break
+        all_rows.extend(rows)
+        if len(rows) < page_size:
+            break
+        offset += len(rows)
+
+    if not all_rows:
+        return pd.DataFrame(columns=["deal_id", "deal_source", "deal_source_detail", "acquisition_channel", "inbound_source", "partner_name"])
+
+    enriched_rows = []
+    for row in all_rows:
+        props = row.get("properties") or {}
+        if isinstance(props, str):
+            try:
+                props = json.loads(props)
+            except json.JSONDecodeError:
+                props = {}
+        deal_id = row.get("deal_id")
+        if deal_id is None:
+            continue
+        enriched_rows.append({"deal_id": str(deal_id), **derive_deal_source_fields(props)})
+    if not enriched_rows:
+        return pd.DataFrame(columns=["deal_id", "deal_source", "deal_source_detail", "acquisition_channel", "inbound_source", "partner_name"])
+    deal_props = pd.DataFrame(enriched_rows)
+    deal_props["deal_id"] = deal_props["deal_id"].astype(str)
+    deal_props = deal_props.drop_duplicates(subset=["deal_id"], keep="last")
+    return deal_props
+
+
 @st.cache_data(show_spinner=False, ttl=300, max_entries=4, persist="disk")
-def load_data(prompt_version: str) -> pd.DataFrame:
+def load_data(prompt_version: str, data_version: str) -> pd.DataFrame:
     """Load insights from the dashboard view, filtered by prompt_version."""
     client = get_supabase()
     all_data = []
@@ -235,13 +460,29 @@ def load_data(prompt_version: str) -> pd.DataFrame:
 
     df = pd.DataFrame(all_data)
     df = ensure_dashboard_schema(df)
+    if "deal_id" in df.columns:
+        df["deal_id"] = df["deal_id"].astype(str)
+        deal_props = load_deal_properties(data_version)
+        if not deal_props.empty:
+            deal_props["deal_id"] = deal_props["deal_id"].astype(str)
+            df = df.merge(deal_props, how="left", on="deal_id", suffixes=("", "_deal"))
+            for column in ["deal_source", "deal_source_detail", "acquisition_channel", "inbound_source", "partner_name"]:
+                enriched_col = f"{column}_deal"
+                if enriched_col in df.columns:
+                    df[column] = df[column].combine_first(df[enriched_col])
+                    df = df.drop(columns=[enriched_col])
     if "call_date" in df.columns:
         df["call_date"] = pd.to_datetime(df["call_date"], errors="coerce")
     if "amount" in df.columns:
         df["amount"] = pd.to_numeric(df["amount"], errors="coerce")
+    if "region" in df.columns:
+        df["region"] = df["region"].map(normalize_region_name)
     if "competitor_name" in df.columns:
         df["competitor_name"] = df["competitor_name"].map(normalize_competitor_name)
         df["is_own_brand_competitor"] = df["competitor_name"].map(is_own_brand_competitor)
+    if "acquisition_channel" in df.columns:
+        df["acquisition_channel"] = df["acquisition_channel"].map(normalize_acquisition_channel)
+    df = ensure_dashboard_schema(df)
     return df
 
 
@@ -260,13 +501,15 @@ def _compute_filter_options(df: pd.DataFrame) -> dict:
     """Precompute sorted unique values for sidebar filters (cached)."""
     options: dict = {}
     options["types"] = sorted(df["insight_type_display"].dropna().unique())
-    options["regions"] = sorted(df["region"].dropna().unique())
+    options["regions"] = [region for region in OFFICIAL_REGION_OPTIONS if region in set(df["region"].dropna().unique())]
     options["segments"] = sorted(df["segment"].dropna().unique()) if "segment" in df.columns else []
     options["countries"] = sorted(df["country"].dropna().unique()) if "country" in df.columns else []
     options["industries"] = sorted(df["industry"].dropna().unique()) if "industry" in df.columns else []
     options["owners"] = sorted(df["deal_owner"].dropna().unique()) if "deal_owner" in df.columns else []
     options["modules"] = sorted(df["module_display"].dropna().unique())
     options["categories"] = sorted(df["hr_category_display"].dropna().unique())
+    options["channels"] = sorted(df["acquisition_channel"].dropna().unique()) if "acquisition_channel" in df.columns else []
+    options["sources"] = sorted(df["deal_source"].dropna().unique()) if "deal_source" in df.columns else []
     if "call_date" in df.columns:
         valid_dates = df["call_date"].dropna()
         if not valid_dates.empty:
@@ -275,65 +518,198 @@ def _compute_filter_options(df: pd.DataFrame) -> dict:
     return options
 
 
+def _load_filter_preferences() -> dict:
+    if not FILTER_PREFS_PATH.exists():
+        return {}
+    try:
+        with open(FILTER_PREFS_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _save_filter_preferences(owner: str | None, payload: dict) -> None:
+    if not owner:
+        return
+    data = _load_filter_preferences()
+    data[owner] = payload
+    try:
+        with open(FILTER_PREFS_PATH, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=True, indent=2)
+    except OSError:
+        pass
+
+
+def _coerce_saved_date(value):
+    if not value:
+        return None
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str):
+        try:
+            return date.fromisoformat(value)
+        except ValueError:
+            return None
+    return None
+
+
+def _resolve_default_selection(options: list, saved_value, all_by_default: bool) -> list:
+    if all_by_default and saved_value == "__all__":
+        return list(options)
+    if isinstance(saved_value, list):
+        return [item for item in saved_value if item in options]
+    return list(options) if all_by_default else []
+
+
+def initialize_global_filters(df: pd.DataFrame) -> None:
+    if df.empty:
+        return
+
+    opts = _compute_filter_options(df)
+    owner = _filter_owner()
+    saved = _load_filter_preferences().get(owner or "", {})
+
+    for field, default in GLOBAL_FILTER_DEFAULTS.items():
+        state_key = f"global_filter_{field}"
+        if field in {"types", "regions"}:
+            options = opts[field]
+            if state_key not in st.session_state:
+                st.session_state[state_key] = _resolve_default_selection(
+                    options,
+                    saved.get(field, default),
+                    all_by_default=True,
+                )
+            else:
+                st.session_state[state_key] = [item for item in st.session_state[state_key] if item in options]
+            continue
+        if field in {"segments", "countries", "industries", "owners", "modules", "categories", "channels", "sources"}:
+            options = opts.get(field, [])
+            if state_key not in st.session_state:
+                st.session_state[state_key] = _resolve_default_selection(
+                    options,
+                    saved.get(field, default),
+                    all_by_default=False,
+                )
+            else:
+                st.session_state[state_key] = [item for item in st.session_state[state_key] if item in options]
+            continue
+        if field in {"date_start", "date_end"}:
+            if state_key not in st.session_state:
+                coerced = _coerce_saved_date(saved.get(field, default))
+                if coerced is None:
+                    coerced = opts.get("min_date") if field == "date_start" else opts.get("max_date")
+                st.session_state[state_key] = coerced
+            else:
+                current = _coerce_saved_date(st.session_state.get(state_key))
+                if current is None:
+                    current = opts.get("min_date") if field == "date_start" else opts.get("max_date")
+                min_allowed = opts.get("min_date")
+                max_allowed = opts.get("max_date")
+                if min_allowed and current < min_allowed:
+                    current = min_allowed
+                if max_allowed and current > max_allowed:
+                    current = max_allowed
+                st.session_state[state_key] = current
+
+
+def _current_filter_payload() -> dict:
+    payload = {}
+    for field, default in GLOBAL_FILTER_DEFAULTS.items():
+        value = st.session_state.get(f"global_filter_{field}", default)
+        if field in {"date_start", "date_end"} and isinstance(value, date):
+            payload[field] = value.isoformat()
+        else:
+            payload[field] = value
+    return payload
+
+
+def apply_global_filters(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty:
+        return df
+    mask = pd.Series(True, index=df.index)
+
+    selected_types = st.session_state.get("global_filter_types") or []
+    if selected_types:
+        mask &= df["insight_type_display"].isin(selected_types)
+
+    selected_regions = st.session_state.get("global_filter_regions") or []
+    if selected_regions and "region" in df.columns:
+        mask &= df["region"].isin(selected_regions)
+
+    selected_segments = st.session_state.get("global_filter_segments") or []
+    if selected_segments and "segment" in df.columns:
+        mask &= df["segment"].isin(selected_segments)
+
+    selected_countries = st.session_state.get("global_filter_countries") or []
+    if selected_countries and "country" in df.columns:
+        mask &= df["country"].isin(selected_countries)
+
+    selected_industries = st.session_state.get("global_filter_industries") or []
+    if selected_industries and "industry" in df.columns:
+        mask &= df["industry"].isin(selected_industries)
+
+    selected_owners = st.session_state.get("global_filter_owners") or []
+    if selected_owners and "deal_owner" in df.columns:
+        mask &= df["deal_owner"].isin(selected_owners)
+
+    selected_modules = st.session_state.get("global_filter_modules") or []
+    if selected_modules and "module_display" in df.columns:
+        mask &= df["module_display"].isin(selected_modules)
+
+    selected_categories = st.session_state.get("global_filter_categories") or []
+    if selected_categories and "hr_category_display" in df.columns:
+        mask &= df["hr_category_display"].isin(selected_categories)
+
+    selected_channels = st.session_state.get("global_filter_channels") or []
+    if selected_channels and "acquisition_channel" in df.columns:
+        mask &= df["acquisition_channel"].isin(selected_channels)
+
+    selected_sources = st.session_state.get("global_filter_sources") or []
+    if selected_sources and "deal_source" in df.columns:
+        mask &= df["deal_source"].isin(selected_sources)
+
+    start = st.session_state.get("global_filter_date_start")
+    end = st.session_state.get("global_filter_date_end")
+    if "call_date" in df.columns and (start or end):
+        call_dates = df["call_date"].dt.date
+        if start:
+            mask &= call_dates >= start
+        if end:
+            mask &= call_dates <= end
+
+    _save_filter_preferences(_filter_owner(), _current_filter_payload())
+    return df[mask]
+
+
 def render_sidebar(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         return df
 
     opts = _compute_filter_options(df)
+    initialize_global_filters(df)
 
-    # Insight type filter
-    selected_types = st.sidebar.multiselect("Tipo de Insight", opts["types"], default=opts["types"])
-
-    # Region filter
-    selected_regions = st.sidebar.multiselect("Region", opts["regions"], default=opts["regions"])
-
-    # Segment filter
-    selected_segments = st.sidebar.multiselect("Segmento", opts["segments"]) if opts["segments"] else []
-
-    # Country filter
-    selected_countries = st.sidebar.multiselect("Pais", opts["countries"]) if opts["countries"] else []
-
-    # Industry filter
-    selected_industries = st.sidebar.multiselect("Industria", opts["industries"]) if opts["industries"] else []
-
-    # Deal Owner (AE) filter
-    selected_owners = st.sidebar.multiselect("Deal Owner (AE)", opts["owners"]) if opts["owners"] else []
-
-    # Date range filter
-    date_range = None
+    st.sidebar.multiselect("Tipo de Insight", opts["types"], key="global_filter_types")
+    st.sidebar.multiselect("Region", opts["regions"], key="global_filter_regions")
+    if opts["segments"]:
+        st.sidebar.multiselect("Segmento", opts["segments"], key="global_filter_segments")
+    if opts["countries"]:
+        st.sidebar.multiselect("Pais", opts["countries"], key="global_filter_countries")
+    if opts["industries"]:
+        st.sidebar.multiselect("Industria", opts["industries"], key="global_filter_industries")
+    if opts["owners"]:
+        st.sidebar.multiselect("Deal Owner (AE)", opts["owners"], key="global_filter_owners")
+    if opts["channels"]:
+        st.sidebar.multiselect("Canal de adquisición", opts["channels"], key="global_filter_channels")
+    if opts["sources"]:
+        st.sidebar.multiselect("Fuente del deal", opts["sources"], key="global_filter_sources")
+    st.sidebar.multiselect("Modulo", opts["modules"], key="global_filter_modules")
+    st.sidebar.multiselect("Categoria HR", opts["categories"], key="global_filter_categories")
     if "min_date" in opts:
-        date_range = st.sidebar.date_input(
-            "Rango de fechas",
-            value=(opts["min_date"], opts["max_date"]),
-            min_value=opts["min_date"],
-            max_value=opts["max_date"],
-        )
+        st.sidebar.date_input("Desde", key="global_filter_date_start", min_value=opts["min_date"], max_value=opts["max_date"])
+        st.sidebar.date_input("Hasta", key="global_filter_date_end", min_value=opts["min_date"], max_value=opts["max_date"])
 
-    # Module filter
-    selected_modules = st.sidebar.multiselect("Modulo", opts["modules"])
-
-    # HR Category filter
-    selected_categories = st.sidebar.multiselect("Categoria HR", opts["categories"])
-
-    # Apply filters
-    mask = df["insight_type_display"].isin(selected_types) & df["region"].isin(selected_regions)
-    if selected_segments:
-        mask &= df["segment"].isin(selected_segments)
-    if selected_countries:
-        mask &= df["country"].isin(selected_countries)
-    if selected_industries:
-        mask &= df["industry"].isin(selected_industries)
-    if selected_owners:
-        mask &= df["deal_owner"].isin(selected_owners)
-    if date_range and isinstance(date_range, tuple) and len(date_range) == 2:
-        start, end = date_range
-        mask &= (df["call_date"].dt.date >= start) & (df["call_date"].dt.date <= end)
-    if selected_modules:
-        mask &= df["module_display"].isin(selected_modules)
-    if selected_categories:
-        mask &= df["hr_category_display"].isin(selected_categories)
-
-    return df[mask]
+    return apply_global_filters(df)
 
 
 def render_inline_filters(df: pd.DataFrame, key_prefix: str = "page") -> pd.DataFrame:
@@ -342,54 +718,33 @@ def render_inline_filters(df: pd.DataFrame, key_prefix: str = "page") -> pd.Data
         return df
 
     opts = _compute_filter_options(df)
+    initialize_global_filters(df)
 
     with st.expander("Filtros", expanded=False):
         fr1, fr2, fr3 = st.columns(3)
-        sel_types = fr1.multiselect(
-            "Tipo de Insight", opts["types"], default=opts["types"], key=f"{key_prefix}_types"
-        )
-        sel_regions = fr2.multiselect(
-            "Region", opts["regions"], default=opts["regions"], key=f"{key_prefix}_regions"
-        )
-        sel_segments = fr3.multiselect("Segmento", opts["segments"], key=f"{key_prefix}_segments")
+        fr1.multiselect("Tipo de Insight", opts["types"], key="global_filter_types")
+        fr2.multiselect("Region", opts["regions"], key="global_filter_regions")
+        fr3.multiselect("Segmento", opts["segments"], key="global_filter_segments")
 
         fr4, fr5, fr6 = st.columns(3)
-        sel_countries = fr4.multiselect("País", opts["countries"], key=f"{key_prefix}_countries")
-        sel_industries = fr5.multiselect("Industria", opts["industries"], key=f"{key_prefix}_industries")
-        sel_owners = fr6.multiselect("Deal Owner (AE)", opts["owners"], key=f"{key_prefix}_owners")
+        fr4.multiselect("País", opts["countries"], key="global_filter_countries")
+        fr5.multiselect("Industria", opts["industries"], key="global_filter_industries")
+        fr6.multiselect("Deal Owner (AE)", opts["owners"], key="global_filter_owners")
 
         fr7, fr8, fr9 = st.columns(3)
-        sel_modules = fr7.multiselect("Módulo", opts["modules"], key=f"{key_prefix}_modules")
-        sel_categories = fr8.multiselect("Categoría HR", opts["categories"], key=f"{key_prefix}_categories")
+        fr7.multiselect("Módulo", opts["modules"], key="global_filter_modules")
+        fr8.multiselect("Categoría HR", opts["categories"], key="global_filter_categories")
+        if opts["channels"]:
+            fr9.multiselect("Canal de adquisición", opts["channels"], key="global_filter_channels")
 
-        date_range = None
+        fr10, fr11, fr12 = st.columns(3)
+        if opts["sources"]:
+            fr10.multiselect("Fuente del deal", opts["sources"], key="global_filter_sources")
         if "min_date" in opts:
-            date_range = fr9.date_input(
-                "Rango de fechas",
-                value=(opts["min_date"], opts["max_date"]),
-                min_value=opts["min_date"],
-                max_value=opts["max_date"],
-                key=f"{key_prefix}_dates",
-            )
+            fr11.date_input("Desde", key="global_filter_date_start", min_value=opts["min_date"], max_value=opts["max_date"])
+            fr12.date_input("Hasta", key="global_filter_date_end", min_value=opts["min_date"], max_value=opts["max_date"])
 
-    mask = df["insight_type_display"].isin(sel_types) & df["region"].isin(sel_regions)
-    if sel_segments:
-        mask &= df["segment"].isin(sel_segments)
-    if sel_countries:
-        mask &= df["country"].isin(sel_countries)
-    if sel_industries:
-        mask &= df["industry"].isin(sel_industries)
-    if sel_owners:
-        mask &= df["deal_owner"].isin(sel_owners)
-    if date_range and isinstance(date_range, tuple) and len(date_range) == 2:
-        start, end = date_range
-        mask &= (df["call_date"].dt.date >= start) & (df["call_date"].dt.date <= end)
-    if sel_modules:
-        mask &= df["module_display"].isin(sel_modules)
-    if sel_categories:
-        mask &= df["hr_category_display"].isin(sel_categories)
-
-    return df[mask]
+    return apply_global_filters(df)
 
 
 # ── Formatting helpers ──

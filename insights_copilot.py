@@ -93,8 +93,8 @@ METRIC_TO_ORDER_EXPR = {
 REGION_HINTS: list[tuple[str, str]] = [
     (r"\bemea\b", "EMEA"),
     (r"\bapac\b", "APAC"),
-    (r"\blatam\b", "LATAM"),
-    (r"\bnorth america\b|\bna region\b|\bnamer\b", "NORTH AMERICA"),
+    (r"\blatam\b|\bhispam\b", "HISPAM"),
+    (r"\bnorth america\b|\bna region\b|\bnamer\b|\banglo america\b", "ANGLO AMERICA"),
 ]
 
 INTENT_TO_INSIGHT_TYPE: dict[Intent, str | None] = {
