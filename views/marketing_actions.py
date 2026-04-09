@@ -274,12 +274,83 @@ def _get_filter_options(filter_key: str) -> list[str]:
     if filter_key == "segment":
         return [value for value in SEGMENT_OPTIONS if value]
 
-    df = st.session_state.get("df")
+    df = st.session_state.get("filtered_df")
+    if not isinstance(df, pd.DataFrame):
+        df = st.session_state.get("df")
     column = FILTER_COLUMNS.get(filter_key)
     if df is None or getattr(df, "empty", True) or not column or column not in df.columns:
         return []
     values = sorted({str(value).strip() for value in df[column].dropna().tolist() if str(value).strip()})
     return values
+
+
+def _list_saved_conversations() -> tuple[list[str], list[dict]]:
+    owner_candidates = _get_current_user_candidates()
+    conversations = list_conversations(owner_candidates)
+    return owner_candidates, conversations
+
+
+def _load_selected_conversation(owner_candidates: list[str], conversation_id: str) -> str | None:
+    if conversation_id == "__new__":
+        return None
+    active_conversation_id = st.session_state.get("ma_active_conversation_id")
+    if conversation_id == active_conversation_id:
+        return None
+    payload = load_conversation(owner_candidates, conversation_id)
+    if payload is None:
+        return "No se pudo cargar esa conversación."
+    _apply_loaded_conversation(payload)
+    return "loaded"
+
+
+def _render_chat_selector(owner_candidates: list[str], conversations: list[dict]) -> None:
+    if st.session_state.pop("ma_force_new_chat", False):
+        st.session_state["ma_conversation_choice"] = "__new__"
+        st.session_state["ma_chat_selector_mode"] = "new"
+
+    chat_col, btn_col = st.columns([4, 1], vertical_alignment="bottom")
+    active_conversation_id = st.session_state.get("ma_active_conversation_id")
+    conversation_options = ["__new__"] + [conversation["id"] for conversation in conversations]
+    default_choice = active_conversation_id if active_conversation_id in conversation_options else "__new__"
+    current_choice = st.session_state.get("ma_conversation_choice", default_choice)
+    if current_choice not in conversation_options:
+        current_choice = default_choice
+
+    labels = {"__new__": "Seleccionar chat..."}
+    for conversation in conversations:
+        labels[conversation["id"]] = conversation.get("title") or "Campaign Advisor"
+
+    with chat_col:
+        selected_conversation_id = st.selectbox(
+            "Chat activo",
+            options=conversation_options,
+            key="ma_conversation_choice",
+            index=conversation_options.index(current_choice),
+            label_visibility="collapsed",
+            format_func=lambda conversation_id: labels.get(conversation_id, conversation_id),
+        )
+    with btn_col:
+        if st.button("＋ Nuevo", key="ma-main-new-chat", use_container_width=True):
+            _reset_conversation_state()
+            st.session_state["ma_force_new_chat"] = True
+            st.rerun()
+
+    load_status = _load_selected_conversation(owner_candidates, selected_conversation_id)
+    if load_status == "loaded":
+        st.session_state["ma_chat_selector_mode"] = "existing"
+        st.rerun()
+    if load_status and load_status != "loaded":
+        st.warning(load_status)
+
+
+def _is_chat_ready() -> bool:
+    if st.session_state.get("ma_chat_selector_mode") == "new":
+        return True
+    if st.session_state.get("ma_active_conversation_id"):
+        return True
+    if st.session_state.get("ma_recommendation"):
+        return True
+    return False
 
 
 def _slugify_filename(value: str) -> str:
@@ -413,7 +484,7 @@ def _recommendation_to_full_answer(rec) -> str:
 def _render_title() -> None:
     st.header("Campaign Advisor")
     st.caption(
-        "OpenAI-based advisor para traducir pains, FAQs, gaps y senales competitivas en una campana priorizada."
+        "OpenAI-based advisor para traducir pains, FAQs, gaps y señales competitivas en una campaña priorizada."
     )
 
 
@@ -505,7 +576,8 @@ def _render_followup_chat(display_rec, base_rec, pipeline, insights) -> None:
 def _reset_conversation_state() -> None:
     keys = (
         "ma_active_conversation_id",
-        "ma_sidebar_conversation_choice",
+        "ma_chat_selector_mode",
+        "ma_initial_user_message",
         "ma_question",
         "ma_methodology",
         "ma_filters_snapshot",
@@ -536,7 +608,9 @@ def _apply_loaded_conversation(payload: dict) -> None:
         )
 
     st.session_state["ma_active_conversation_id"] = payload["conversation"]["id"]
-    st.session_state["ma_question"] = snapshot.get("question") or payload["conversation"].get("initial_question", "")
+    initial_question = snapshot.get("question") or payload["conversation"].get("initial_question", "")
+    st.session_state["ma_question"] = initial_question
+    st.session_state["ma_initial_user_message"] = initial_question
     st.session_state["ma_filters_snapshot"] = dict(snapshot.get("filters") or {})
     st.session_state["ma_inferred_filters"] = dict(snapshot.get("inferred_filters") or {})
     st.session_state["ma_answer_language"] = snapshot.get("answer_language") or "original"
@@ -744,6 +818,7 @@ def _run_generation() -> None:
     st.session_state["ma_insights"] = insights
     st.session_state["ma_translations"] = {}
     st.session_state["ma_chat_history"] = []
+    st.session_state["ma_initial_user_message"] = question
     st.session_state["ma_answer_language"] = "original"
     st.session_state["ma_recommendation"] = agent.generate_recommendations(
         filters, question, pipeline, insights
@@ -811,7 +886,7 @@ st.markdown(
     f"""
     <style>
       div[data-testid="stVerticalBlock"].st-key-ma-content-area {{
-        min-height: 56vh;
+        min-height: 40vh;
       }}
     </style>
     """,
@@ -839,6 +914,7 @@ with st.expander("Filtros", expanded=False):
             options=_get_filter_options("region"),
             key="ma_region",
             format_func=lambda value: REGION_LABELS.get(value, value),
+            placeholder="Elegí una o más regiones",
         )
 
     row2_col1, row2_col2, row2_col3 = st.columns(3)
@@ -847,6 +923,7 @@ with st.expander("Filtros", expanded=False):
             "Segmento",
             options=_get_filter_options("segment"),
             key="ma_segment",
+            placeholder="Elegí uno o más segmentos",
         )
     with row2_col2:
         st.multiselect(
@@ -858,26 +935,31 @@ with st.expander("Filtros", expanded=False):
     with row2_col3:
         st.empty()
 
-    date_left, date_right = st.columns(2)
-    with date_left:
-        st.date_input(
-            "Desde",
-            key="ma_start_date",
-            value=_date_widget_value("ma_start_date"),
-            format="YYYY-MM-DD",
-        )
-    with date_right:
-        st.date_input(
-            "Hasta",
-            key="ma_end_date",
-            value=_date_widget_value("ma_end_date"),
-            format="YYYY-MM-DD",
-        )
+    current_range = (
+        _date_widget_value("ma_start_date"),
+        _date_widget_value("ma_end_date"),
+    )
+    selected_range = st.date_input(
+        "Período",
+        value=current_range,
+        format="DD/MM/YYYY",
+    )
+    if isinstance(selected_range, (tuple, list)) and len(selected_range) == 2:
+        st.session_state["ma_start_date"], st.session_state["ma_end_date"] = selected_range
+    elif isinstance(selected_range, date):
+        st.session_state["ma_start_date"] = selected_range
+        st.session_state["ma_end_date"] = selected_range
 
-_render_saved_conversations()
-
-status_placeholder = st.empty()
 content_container = st.container(key="ma-content-area")
+
+try:
+    owner_candidates, saved_conversations = _list_saved_conversations()
+except Exception as exc:
+    owner_candidates, saved_conversations = [], []
+    st.caption(f"Historial no disponible: {exc}")
+render_chat_input = _is_chat_ready()
+if not render_chat_input:
+    _render_chat_selector(owner_candidates, saved_conversations)
 
 rec = st.session_state.get("ma_recommendation")
 pipeline = st.session_state.get("ma_pipeline")
@@ -894,10 +976,10 @@ with content_container:
         st.error(rec.error)
     elif rec:
         history = st.session_state.setdefault("ma_chat_history", [])
-        current_question = (st.session_state.get("ma_question") or "").strip()
-        if current_question and not history:
+        initial_user_message = (st.session_state.get("ma_initial_user_message") or "").strip()
+        if initial_user_message:
             with st.chat_message("user"):
-                st.markdown(current_question)
+                st.markdown(initial_user_message)
 
         selector_col, action_col1, action_col2, spacer_col = st.columns(
             [0.24, 0.16, 0.16, 0.44],
@@ -932,25 +1014,27 @@ with content_container:
         _render_recommendation(display_rec)
         _render_followup_chat(display_rec, rec, pipeline, insights)
 
-prompt = st.chat_input("Escribí tu pregunta sobre la campaña, por ejemplo: Retail Brasil")
-if prompt:
-    try:
-        with content_container:
-            with st.chat_message("user"):
-                st.markdown(prompt)
-        if rec and not rec.error and display_rec:
-            with status_placeholder.container():
-                with st.spinner("Pensando la respuesta sobre el plan..."):
-                    _run_followup(prompt, display_rec, rec, pipeline, insights)
+if render_chat_input:
+    chat_status_container = st.container()
+    prompt = st.chat_input("Escribí tu pregunta sobre la campaña, por ejemplo: Retail Brasil", key="ma_chat_input")
+    if prompt:
+        try:
+            with content_container:
+                with st.chat_message("user"):
+                    st.markdown(prompt)
+            if rec and not rec.error and display_rec:
+                with chat_status_container:
+                    with st.spinner("Pensando la respuesta sobre el plan..."):
+                        _run_followup(prompt, display_rec, rec, pipeline, insights)
+                st.rerun()
+            st.session_state["ma_question"] = prompt
+            with chat_status_container:
+                with st.spinner("Analizando el segmento y generando la recomendacion..."):
+                    _run_generation()
             st.rerun()
-        st.session_state["ma_question"] = prompt
-        with status_placeholder.container():
-            with st.spinner("Analizando el segmento y generando la recomendacion..."):
-                _run_generation()
-        st.rerun()
-    except ValueError as exc:
-        st.warning(str(exc))
-    except RuntimeError as exc:
-        st.error(f"Error de configuracion: {exc}")
-    except Exception as exc:
-        st.error(f"Error inesperado: {exc}")
+        except ValueError as exc:
+            st.warning(str(exc))
+        except RuntimeError as exc:
+            st.error(f"Error de configuracion: {exc}")
+        except Exception as exc:
+            st.error(f"Error inesperado: {exc}")
