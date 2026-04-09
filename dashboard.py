@@ -28,25 +28,35 @@ st.set_page_config(
     layout="wide",
 )
 
-st.markdown(
-    """
-    <style>
-    [data-testid="stSidebar"] {
-        height: 100vh;
-    }
+def _apply_sidebar_layout(page_title: str) -> None:
+    is_campaign_advisor = page_title == "Campaign Advisor"
+    sidebar_height = "auto" if is_campaign_advisor else "100vh"
+    sidebar_max_height = "100vh" if is_campaign_advisor else "100vh"
+    content_overflow_y = "auto" if is_campaign_advisor else "hidden"
+    st.markdown(
+        f"""
+        <style>
+        [data-testid="stSidebar"] {{
+            height: {sidebar_height};
+            max-height: {sidebar_max_height};
+            overflow-y: {content_overflow_y};
+        }}
 
-    [data-testid="stSidebar"] > div:first-child {
-        height: 100vh;
-    }
+        [data-testid="stSidebar"] > div:first-child {{
+            height: {sidebar_height};
+            max-height: {sidebar_max_height};
+        }}
 
-    [data-testid="stSidebarContent"] {
-        height: 100vh;
-        overflow: hidden;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+        [data-testid="stSidebarContent"] {{
+            height: {sidebar_height};
+            max-height: {sidebar_max_height};
+            overflow-y: {content_overflow_y};
+            overflow-x: visible;
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
 # ── Auth ──
 
@@ -115,6 +125,7 @@ if can_access_campaign_advisor:
     ]
 
 nav = st.navigation(pages)
+_apply_sidebar_layout(nav.title)
 
 # ── Load data & sidebar filters ──
 

@@ -241,6 +241,54 @@ CREATE TABLE IF NOT EXISTS qa_results (
 
 CREATE INDEX IF NOT EXISTS idx_qa_results_transcript ON qa_results(transcript_id);
 
+-- 4b. Campaign Advisor chat history (append-only)
+
+CREATE TABLE IF NOT EXISTS campaign_advisor_conversations (
+    id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    owner            TEXT NOT NULL,
+    title            TEXT NOT NULL,
+    initial_question TEXT NOT NULL,
+    filters          JSONB DEFAULT '{}'::jsonb,
+    inferred_filters JSONB DEFAULT '{}'::jsonb,
+    created_at       TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS campaign_advisor_messages (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    conversation_id UUID NOT NULL REFERENCES campaign_advisor_conversations(id),
+    owner           TEXT NOT NULL,
+    role            TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
+    message_kind    TEXT NOT NULL CHECK (message_kind IN ('initial_question', 'recommendation', 'followup')),
+    content         TEXT NOT NULL,
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS campaign_advisor_snapshots (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    conversation_id UUID NOT NULL REFERENCES campaign_advisor_conversations(id),
+    owner           TEXT NOT NULL,
+    question        TEXT NOT NULL,
+    filters         JSONB DEFAULT '{}'::jsonb,
+    inferred_filters JSONB DEFAULT '{}'::jsonb,
+    answer_language TEXT NOT NULL DEFAULT 'original',
+    recommendation  JSONB NOT NULL,
+    pipeline        JSONB NOT NULL,
+    insights        JSONB NOT NULL,
+    snapshot_kind   TEXT NOT NULL CHECK (snapshot_kind IN ('recommendation', 'followup')),
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_campaign_advisor_conversations_owner
+    ON campaign_advisor_conversations(owner, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_campaign_advisor_messages_conversation
+    ON campaign_advisor_messages(conversation_id, created_at ASC);
+CREATE INDEX IF NOT EXISTS idx_campaign_advisor_messages_owner
+    ON campaign_advisor_messages(owner, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_campaign_advisor_snapshots_conversation
+    ON campaign_advisor_snapshots(conversation_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_campaign_advisor_snapshots_owner
+    ON campaign_advisor_snapshots(owner, created_at DESC);
+
 -- 5. Dashboard View
 
 CREATE OR REPLACE VIEW v_insights_dashboard AS
