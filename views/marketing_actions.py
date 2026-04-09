@@ -18,6 +18,13 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 from exp_ds import DS, ds_sub, inject_ds_css
+from src.connectors.campaign_advisor_store import (
+    create_conversation,
+    insert_message,
+    insert_snapshot,
+    list_conversations,
+    load_conversation,
+)
 from src.skills.market_filters import CANONICAL_REGION_OPTIONS
 
 inject_ds_css()
@@ -87,6 +94,25 @@ def _get_agent():
     from src.agents.marketing_advisor import MarketingAdvisorAgent
 
     return MarketingAdvisorAgent()
+
+
+def _get_current_user() -> str:
+    user = st.session_state.get("username") or st.session_state.get("name")
+    if not user:
+        raise RuntimeError("No se encontro el usuario autenticado para guardar historial.")
+    return str(user).strip()
+
+
+def _get_current_user_candidates() -> list[str]:
+    values = []
+    for key in ("username", "name"):
+        value = st.session_state.get(key)
+        cleaned = str(value or "").strip()
+        if cleaned and cleaned not in values:
+            values.append(cleaned)
+    if not values:
+        raise RuntimeError("No se encontro el usuario autenticado para cargar historial.")
+    return values
 
 
 def _resolve_model_label() -> str:
@@ -476,6 +502,162 @@ def _render_followup_chat(display_rec, base_rec, pipeline, insights) -> None:
             st.markdown(item.get("content", ""))
 
 
+def _reset_conversation_state() -> None:
+    keys = (
+        "ma_active_conversation_id",
+        "ma_sidebar_conversation_choice",
+        "ma_question",
+        "ma_methodology",
+        "ma_filters_snapshot",
+        "ma_inferred_filters",
+        "ma_recommendation",
+        "ma_pipeline",
+        "ma_insights",
+        "ma_translations",
+        "ma_chat_history",
+        "ma_answer_language",
+    )
+    for key in keys:
+        st.session_state.pop(key, None)
+
+
+def _apply_loaded_conversation(payload: dict) -> None:
+    snapshot = payload["snapshot"]
+    messages = payload["messages"]
+    followups = []
+    for item in messages:
+        if item.get("message_kind") != "followup":
+            continue
+        followups.append(
+            {
+                "role": item.get("role", "assistant"),
+                "content": item.get("content", ""),
+            }
+        )
+
+    st.session_state["ma_active_conversation_id"] = payload["conversation"]["id"]
+    st.session_state["ma_question"] = snapshot.get("question") or payload["conversation"].get("initial_question", "")
+    st.session_state["ma_filters_snapshot"] = dict(snapshot.get("filters") or {})
+    st.session_state["ma_inferred_filters"] = dict(snapshot.get("inferred_filters") or {})
+    st.session_state["ma_answer_language"] = snapshot.get("answer_language") or "original"
+    st.session_state["ma_recommendation"] = payload["recommendation"]
+    st.session_state["ma_pipeline"] = payload["pipeline"]
+    st.session_state["ma_insights"] = payload["insights"]
+    st.session_state["ma_chat_history"] = followups
+    st.session_state["ma_translations"] = {}
+
+
+def _render_saved_conversations() -> None:
+    try:
+        owner_candidates = _get_current_user_candidates()
+        conversations = list_conversations(owner_candidates)
+    except Exception as exc:
+        st.sidebar.caption(f"Historial no disponible: {exc}")
+        return
+
+    st.markdown(
+        """
+        <style>
+        div[data-testid="stVerticalBlock"].st-key-ma-sidebar-history {
+            margin-left: 0.5rem;
+            padding-left: 0.55rem;
+            border-left: 1px solid rgba(49, 51, 63, 0.18);
+        }
+
+        div[data-testid="stVerticalBlock"].st-key-ma-sidebar-history [data-testid="stExpander"] {
+            border: 0;
+            box-shadow: none;
+            background: transparent;
+        }
+
+        div[data-testid="stVerticalBlock"].st-key-ma-sidebar-history [data-testid="stExpander"] details {
+            border: 0;
+            background: transparent;
+        }
+
+        div[data-testid="stVerticalBlock"].st-key-ma-sidebar-history [data-testid="stExpander"] summary {
+            padding-top: 0.1rem;
+            padding-bottom: 0.1rem;
+        }
+
+        div[data-testid="stVerticalBlock"].st-key-ma-sidebar-history [data-testid="stExpander"] summary p {
+            font-size: 0.88rem;
+            font-weight: 500;
+        }
+
+        div[data-testid="stVerticalBlock"].st-key-ma-sidebar-history .stButton button {
+            min-height: 1.95rem;
+            font-size: 0.84rem;
+            padding-top: 0.2rem;
+            padding-bottom: 0.2rem;
+        }
+
+        div[data-testid="stVerticalBlock"].st-key-ma-sidebar-history [data-testid="stExpanderDetails"] {
+            padding-top: 0.15rem;
+        }
+
+        div[data-testid="stVerticalBlock"].st-key-ma-sidebar-history .stSelectbox > div[data-baseweb="select"] > div {
+            min-height: 2.15rem;
+            font-size: 0.84rem;
+        }
+
+        div[data-testid="stVerticalBlock"].st-key-ma-sidebar-history .stMarkdown,
+        div[data-testid="stVerticalBlock"].st-key-ma-sidebar-history .stCaption {
+            margin-bottom: 0.2rem;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    with st.sidebar.container(key="ma-sidebar-history"):
+        with st.expander("Chats", expanded=False):
+            if st.button("Nuevo chat", key="ma-sidebar-new-chat", use_container_width=True):
+                _reset_conversation_state()
+                st.session_state["ma_sidebar_conversation_choice"] = "__new__"
+                st.rerun()
+
+            if not conversations:
+                st.caption("Todavía no hay conversaciones guardadas.")
+                return
+
+            conversation_options = ["__new__"] + [conversation["id"] for conversation in conversations]
+            active_conversation_id = st.session_state.get("ma_active_conversation_id")
+            default_choice = active_conversation_id if active_conversation_id in conversation_options else "__new__"
+            current_choice = st.session_state.get("ma_sidebar_conversation_choice", default_choice)
+            if current_choice not in conversation_options:
+                current_choice = default_choice
+
+            labels = {
+                "__new__": "Seleccionar chat...",
+            }
+            for conversation in conversations:
+                title = conversation.get("title") or "Campaign Advisor"
+                labels[conversation["id"]] = title
+
+            selected_conversation_id = st.selectbox(
+                "Abrir chat",
+                options=conversation_options,
+                key="ma_sidebar_conversation_choice",
+                index=conversation_options.index(current_choice),
+                label_visibility="collapsed",
+                format_func=lambda conversation_id: labels.get(conversation_id, conversation_id),
+            )
+
+            if selected_conversation_id == "__new__":
+                return
+
+            if selected_conversation_id == active_conversation_id:
+                return
+
+            payload = load_conversation(owner_candidates, selected_conversation_id)
+            if payload is None:
+                st.warning("No se pudo cargar esa conversación.")
+                return
+            _apply_loaded_conversation(payload)
+            st.rerun()
+
+
 def _render_evidence(pipeline, insights) -> None:
     ds_sub("Evidence pack")
 
@@ -536,17 +718,26 @@ def _run_methodology() -> None:
     st.session_state["ma_methodology"] = agent.expose_methodology(filters)
     st.session_state["ma_filters_snapshot"] = filters
     st.session_state["ma_inferred_filters"] = inferred
-    for key in ("ma_recommendation", "ma_pipeline", "ma_insights", "ma_translations", "ma_chat_history"):
+    for key in (
+        "ma_active_conversation_id",
+        "ma_recommendation",
+        "ma_pipeline",
+        "ma_insights",
+        "ma_translations",
+        "ma_chat_history",
+    ):
         st.session_state.pop(key, None)
 
 
 def _run_generation() -> None:
+    owner = _get_current_user()
     question = st.session_state.get("ma_question", "")
     filters = st.session_state.get("ma_filters_snapshot")
     if not filters:
         filters, inferred = _merge_question_filters(_read_filters(), question)
         st.session_state["ma_filters_snapshot"] = filters
         st.session_state["ma_inferred_filters"] = inferred
+    inferred = st.session_state.get("ma_inferred_filters", {})
     agent = _get_agent()
     pipeline, insights = agent.build_context(filters)
     st.session_state["ma_pipeline"] = pipeline
@@ -557,11 +748,38 @@ def _run_generation() -> None:
     st.session_state["ma_recommendation"] = agent.generate_recommendations(
         filters, question, pipeline, insights
     )
+    conversation_id = create_conversation(owner, question, filters, inferred)
+    st.session_state["ma_active_conversation_id"] = conversation_id
+    insert_message(conversation_id, owner, "user", question, "initial_question")
+    insert_message(
+        conversation_id,
+        owner,
+        "assistant",
+        _recommendation_to_full_answer(st.session_state["ma_recommendation"]),
+        "recommendation",
+    )
+    insert_snapshot(
+        conversation_id=conversation_id,
+        owner=owner,
+        question=question,
+        filters=filters,
+        inferred_filters=inferred,
+        answer_language="original",
+        recommendation=st.session_state["ma_recommendation"],
+        pipeline=pipeline,
+        insights=insights,
+        snapshot_kind="recommendation",
+    )
 
 
 def _run_followup(prompt: str, display_rec, rec, pipeline, insights) -> None:
+    owner = _get_current_user()
+    conversation_id = st.session_state.get("ma_active_conversation_id")
+    if not conversation_id:
+        raise RuntimeError("No hay una conversación activa para guardar el follow-up.")
     history = st.session_state.setdefault("ma_chat_history", [])
     history.append({"role": "user", "content": prompt})
+    insert_message(conversation_id, owner, "user", prompt, "followup")
     agent = _get_agent()
     answer = agent.answer_followup(
         prompt,
@@ -572,7 +790,20 @@ def _run_followup(prompt: str, display_rec, rec, pipeline, insights) -> None:
         chat_history=history[:-1],
     )
     history.append({"role": "assistant", "content": answer})
+    insert_message(conversation_id, owner, "assistant", answer, "followup")
     st.session_state["ma_chat_history"] = history
+    insert_snapshot(
+        conversation_id=conversation_id,
+        owner=owner,
+        question=st.session_state.get("ma_question", ""),
+        filters=st.session_state.get("ma_filters_snapshot", {}),
+        inferred_filters=st.session_state.get("ma_inferred_filters", {}),
+        answer_language=st.session_state.get("ma_answer_language", "original"),
+        recommendation=rec,
+        pipeline=pipeline,
+        insights=insights,
+        snapshot_kind="followup",
+    )
 
 
 _render_title()
@@ -642,6 +873,8 @@ with st.expander("Filtros", expanded=False):
             value=_date_widget_value("ma_end_date"),
             format="YYYY-MM-DD",
         )
+
+_render_saved_conversations()
 
 status_placeholder = st.empty()
 content_container = st.container(key="ma-content-area")
