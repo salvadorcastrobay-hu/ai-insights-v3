@@ -33,7 +33,7 @@ except Exception:  # pragma: no cover - optional fallback
 # Constants
 # ---------------------------------------------------------------------------
 
-SEARCH_RESULTS_LIMIT = 15
+SEARCH_RESULTS_LIMIT = 50
 _DATA_QUESTION_PATTERN = re.compile(
     r"\b("
     r"top|pain|pains|gap|gaps|faq|competidor|competidor(es)?|competitor|competitors|"
@@ -69,6 +69,8 @@ _DIMENSION_HINT_PATTERN = re.compile(
     r"(pain|tipo|subtype|region|country|segment|owner|competitor|module|feature|stage|categoria|category)",
     re.IGNORECASE,
 )
+SEMANTIC_EMBEDDING_MODEL = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-large")
+SEMANTIC_EMBEDDING_DIMENSIONS = int(os.getenv("OPENAI_EMBEDDING_DIMENSIONS", "2000"))
 
 # ---------------------------------------------------------------------------
 # System prompt
@@ -94,14 +96,15 @@ SELECT ... (agregaciones)
 ---CUALITATIVO---
 SELECT ... (summary, verbatim_quote, LIMIT 25)
 
-**Modo SEARCH** — busqueda semantica en los resumenes de llamadas de ventas (Fathom summaries). \
+**Modo SEARCH** — busqueda semantica en transcripciones completas y resúmenes de llamadas. \
 Ideal para preguntas sobre lo que se dijo en las llamadas, opiniones detalladas, \
 temas que no estan en los insights estructurados, o cuando se necesita contexto \
 de conversaciones especificas:
 SEARCH:
 ---FILTROS---
-(condiciones SQL opcionales para filtrar por metadata: segment, region, country, \
-company_name, deal_name, deal_owner, deal_stage, industry, call_date, amount, source_type)
+(condiciones SQL opcionales para filtrar por metadata de transcript_chunks: \
+segment, region, country, company_name, deal_name, deal_owner, deal_stage, \
+industry, call_date, amount, source_type)
 ---BUSQUEDA---
 (descripcion en lenguaje natural de lo que buscar en las transcripciones)
 ---SQL---
@@ -283,10 +286,11 @@ LIMIT 10;
 6. Para revenue, usa SUM(DISTINCT amount) o subquery para evitar duplicados.
 7. En modo HYBRID, la query CUALITATIVA debe incluir summary y/o verbatim_quote.
 8. En modo SEARCH, la seccion ---BUSQUEDA--- es obligatoria. ---FILTROS--- y ---SQL--- son opcionales.
-9. En modo SEARCH, los filtros deben usar columnas de raw_transcripts: \
-title, call_date, team. Ejemplo de filtro: title ILIKE '%Coca%Cola%'.
-10. En modo SEARCH, la busqueda debe incluir palabras clave variadas y sinonimos \
-(en espanol e ingles) para maximizar la cobertura de resultados.
+9. En modo SEARCH, los filtros deben usar columnas de transcript_chunks: \
+company_name, deal_name, segment, region, country, deal_owner, deal_stage, industry, \
+call_date, amount, source_type.
+10. En modo SEARCH, la seccion ---BUSQUEDA--- debe describir la intención semántica \
+de la búsqueda; no la reduzcas a una sola keyword.
 11. Nunca respondas con "fecha de entrenamiento", "knowledge cutoff" o limites de internet. \
 Si la pregunta requiere datos, usa SQL, HYBRID o SEARCH.
 """
@@ -1146,33 +1150,88 @@ def _generate_search_keywords(client: OpenAI, search_query: str) -> list[str]:
         return [w for w in search_query.split() if len(w) > 2][:4]
 
 
-def search_transcript_chunks(
+def _normalize_search_filters(filters: str) -> str:
+    """Map legacy raw_transcripts-style filters to transcript_chunks metadata columns."""
+    if not filters or not filters.strip():
+        return ""
+
+    normalized = filters
+    replacements = {
+        r"\btitle\b": "company_name",
+        r"\bteam\b": "segment",
+    }
+    for pattern, replacement in replacements.items():
+        normalized = re.sub(pattern, replacement, normalized, flags=re.IGNORECASE)
+    return normalized
+
+
+def _filters_for_summary_fallback(filters: str) -> str:
+    """Keep only filters compatible with raw_transcripts fallback search."""
+    if not filters or not filters.strip():
+        return ""
+
+    normalized = filters
+    replacements = {
+        r"\bcompany_name\b": "title",
+        r"\bdeal_name\b": "title",
+        r"\bsegment\b": "team",
+    }
+    for pattern, replacement in replacements.items():
+        normalized = re.sub(pattern, replacement, normalized, flags=re.IGNORECASE)
+
+    unsupported = (
+        "region",
+        "country",
+        "deal_owner",
+        "deal_stage",
+        "industry",
+        "amount",
+        "source_type",
+    )
+    if any(re.search(rf"\b{column}\b", normalized, re.IGNORECASE) for column in unsupported):
+        return ""
+    return normalized
+
+
+def _filters_for_candidate_search(filters: str) -> str:
+    """Keep only metadata filters compatible with v_transcripts candidate retrieval."""
+    if not filters or not filters.strip():
+        return ""
+
+    normalized = filters
+    unsupported = (
+        "source_type",
+        "chunk_index",
+        "distance",
+        "similarity",
+    )
+    for column in unsupported:
+        normalized = re.sub(rf"\b{column}\b", "NULL", normalized, flags=re.IGNORECASE)
+    return normalized
+
+
+def _build_embedding_vector(client: OpenAI, search_query: str) -> list[float]:
+    response = client.embeddings.create(
+        model=SEMANTIC_EMBEDDING_MODEL,
+        input=[search_query],
+        dimensions=SEMANTIC_EMBEDDING_DIMENSIONS,
+    )
+    return response.data[0].embedding
+
+
+def _keyword_search_summaries(
     client: OpenAI,
     search_query: str,
     filters: str = "",
     limit: int = SEARCH_RESULTS_LIMIT,
 ) -> list[dict]:
-    """Keyword-based search on raw_transcripts.fathom_summary.
-
-    Uses GPT to generate bilingual keywords, then searches with ILIKE on
-    raw_transcripts (~5K rows, lightweight — no vector columns).
-    Returns results ordered by recency (most recent calls first).
-
-    Returns list of dicts with keys: chunk_text, source_type, company_name,
-    call_date, segment, similarity.
-    """
-    # 1. Generate bilingual search keywords
+    """Fallback search over Fathom summaries using keyword matching."""
     keywords = _generate_search_keywords(client, search_query)
     if not keywords:
         return []
 
-    # 2. Build parameterized ILIKE patterns
     patterns = [f"%{kw}%" for kw in keywords]
-
-    # WHERE: at least one keyword matches
     or_clauses = " OR ".join(f"fathom_summary ILIKE %s" for _ in patterns)
-
-    # Step 1: Find matching recording_ids (fast — no TOAST decompression)
     id_query = f"""
         SELECT recording_id, title, call_date::text AS call_date, team
         FROM raw_transcripts
@@ -1181,10 +1240,11 @@ def search_transcript_chunks(
     """
     id_params: list = list(patterns)
 
-    if filters and filters.strip():
-        valid, err = _validate_filters(filters)
+    fallback_filters = _filters_for_summary_fallback(filters)
+    if fallback_filters and fallback_filters.strip():
+        valid, _err = _validate_filters(fallback_filters)
         if valid:
-            id_query += f" AND ({filters})"
+            id_query += f" AND ({fallback_filters})"
 
     id_query += """
         ORDER BY call_date DESC NULLS LAST
@@ -1202,7 +1262,6 @@ def search_transcript_chunks(
         if not id_rows:
             return []
 
-        # Step 2: Fetch text for matching IDs (small batch, fast)
         recording_ids = [r[0] for r in id_rows]
         placeholders = ",".join(["%s"] * len(recording_ids))
         with conn.cursor() as cur:
@@ -1215,12 +1274,10 @@ def search_transcript_chunks(
             text_rows = cur.fetchall()
         text_map = {r[0]: r[1] for r in text_rows}
 
-        # Normalize results to expected format
         results = []
         for row in id_rows:
             rid, title, call_date, team = row
             chunk_text = text_map.get(rid, "")
-            # Count how many keywords match for scoring
             text_lower = (chunk_text or "").lower()
             matches = sum(1 for kw in keywords if kw.lower() in text_lower)
             similarity = round(matches / len(keywords), 3) if keywords else 0
@@ -1232,11 +1289,169 @@ def search_transcript_chunks(
                 "segment": team or "",
                 "similarity": similarity,
             })
-        # Re-sort by relevance score first, then date
         results.sort(key=lambda x: (-x["similarity"], x.get("call_date") or ""))
         return results
     finally:
         conn.close()
+
+
+def search_transcript_chunks(
+    client: OpenAI,
+    search_query: str,
+    filters: str = "",
+    limit: int = SEARCH_RESULTS_LIMIT,
+) -> list[dict]:
+    """Semantic search over transcript_chunks with pgvector, fallback to summaries."""
+    if not search_query or not search_query.strip():
+        return []
+
+    safe_filters = _normalize_search_filters(filters)
+    valid, err = _validate_filters(safe_filters)
+    if not valid:
+        raise ValueError(err)
+
+    query_embedding = _build_embedding_vector(client, search_query.strip())
+    vector_literal = "[" + ",".join(f"{value:.8f}" for value in query_embedding) + "]"
+
+    where_clauses = ["embedding IS NOT NULL"]
+    keywords = _generate_search_keywords(client, search_query)
+    if not keywords:
+        keywords = [search_query.strip()]
+    patterns = [f"%{kw}%" for kw in keywords if kw.strip()]
+    candidate_search_limit = max(int(limit) * 10, 500)
+
+    transcript_candidates_sql = """
+        SELECT vt.transcript_id
+        FROM v_transcripts vt
+        WHERE EXISTS (
+            SELECT 1
+            FROM transcript_chunks tc
+            WHERE tc.transcript_id = vt.transcript_id
+              AND tc.embedding IS NOT NULL
+        )
+          AND (
+    """
+    transcript_candidates_sql += " OR ".join(
+        "(transcript_text ILIKE %s OR fathom_summary ILIKE %s)" for _ in patterns
+    )
+    transcript_candidates_sql += "\n        )"
+    candidate_params: list = []
+    for pattern in patterns:
+        candidate_params.extend([pattern, pattern])
+    transcript_candidates_sql += "\n        ORDER BY call_date DESC NULLS LAST\n        LIMIT %s"
+    candidate_params.append(int(candidate_search_limit))
+
+    conn = _get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SET statement_timeout = '30s';")
+            if safe_filters.strip():
+                metadata_candidate_sql = f"""
+                    SELECT DISTINCT transcript_id
+                    FROM transcript_chunks
+                    WHERE embedding IS NOT NULL
+                      AND ({safe_filters})
+                    ORDER BY transcript_id
+                    LIMIT %s
+                """
+                cur.execute(metadata_candidate_sql, [int(candidate_search_limit)])
+                candidate_ids = [row[0] for row in cur.fetchall() if row and row[0]]
+            else:
+                cur.execute(transcript_candidates_sql, candidate_params)
+                candidate_ids = [row[0] for row in cur.fetchall() if row and row[0]]
+
+            if not candidate_ids:
+                return _keyword_search_summaries(client=client, search_query=search_query, filters=safe_filters, limit=limit)
+            candidate_limit = max(int(limit) * 2, 100)
+
+            def fetch_ranked_rows(selected_ids: list[str]) -> list[tuple]:
+                params: list = [vector_literal, vector_literal, selected_ids]
+                chunk_where = ["embedding IS NOT NULL", "transcript_id = ANY(%s)"]
+                if safe_filters.strip():
+                    chunk_where.append(f"({safe_filters})")
+
+                sql = f"""
+                    SELECT
+                        transcript_id,
+                        chunk_index,
+                        source_type,
+                        LEFT(chunk_text, 2200) AS chunk_text,
+                        company_name,
+                        call_date::text AS call_date,
+                        segment,
+                        region,
+                        country,
+                        deal_name,
+                        deal_owner,
+                        deal_stage,
+                        1 - (embedding <=> %s::vector) AS similarity,
+                        (embedding <=> %s::vector) AS distance
+                    FROM transcript_chunks
+                    WHERE {' AND '.join(chunk_where)}
+                    ORDER BY embedding <=> %s::vector ASC
+                    LIMIT %s
+                """
+                params.extend([vector_literal, int(candidate_limit)])
+                cur.execute(sql, params)
+                return cur.fetchall()
+
+            rows = fetch_ranked_rows(candidate_ids)
+    except Exception:
+        return _keyword_search_summaries(client=client, search_query=search_query, filters=safe_filters, limit=limit)
+    finally:
+        conn.close()
+
+    if not rows:
+        return _keyword_search_summaries(client=client, search_query=search_query, filters=safe_filters, limit=limit)
+
+    results = []
+    seen_chunks = set()
+    for row in rows:
+        (
+            transcript_id,
+            chunk_index,
+            source_type,
+            chunk_text,
+            company_name,
+            call_date,
+            segment,
+            region,
+            country,
+            deal_name,
+            deal_owner,
+            deal_stage,
+            similarity,
+            distance,
+        ) = row
+        chunk_key = (transcript_id, chunk_index, source_type)
+        if chunk_key in seen_chunks:
+            continue
+        seen_chunks.add(chunk_key)
+        similarity = max(0.0, min(1.0, float(similarity or 0.0)))
+        results.append({
+            "transcript_id": transcript_id,
+            "chunk_index": chunk_index,
+            "chunk_text": chunk_text or "",
+            "source_type": source_type,
+            "company_name": company_name or "",
+            "call_date": call_date,
+            "segment": segment or "",
+            "region": region or "",
+            "country": country or "",
+            "deal_name": deal_name or "",
+            "deal_owner": deal_owner or "",
+            "deal_stage": deal_stage or "",
+            "similarity": round(similarity, 3),
+            "distance": round(float(distance or 0.0), 3),
+        })
+    results.sort(
+        key=lambda item: (
+            item["distance"],
+            0 if item["source_type"] == "transcript" else 1,
+            item.get("call_date") or "",
+        )
+    )
+    return results[:limit]
 
 
 # ---------------------------------------------------------------------------
