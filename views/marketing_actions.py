@@ -16,6 +16,7 @@ import unicodedata
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
+from shared import get_filtered_data
 
 from exp_ds import DS, ds_sub, inject_ds_css
 from src.connectors.campaign_advisor_store import (
@@ -274,8 +275,8 @@ def _get_filter_options(filter_key: str) -> list[str]:
     if filter_key == "segment":
         return [value for value in SEGMENT_OPTIONS if value]
 
-    df = st.session_state.get("filtered_df")
-    if not isinstance(df, pd.DataFrame):
+    df = get_filtered_data()
+    if not isinstance(df, pd.DataFrame) or df.empty:
         df = st.session_state.get("df")
     column = FILTER_COLUMNS.get(filter_key)
     if df is None or getattr(df, "empty", True) or not column or column not in df.columns:
@@ -330,7 +331,7 @@ def _render_chat_selector(owner_candidates: list[str], conversations: list[dict]
             format_func=lambda conversation_id: labels.get(conversation_id, conversation_id),
         )
     with btn_col:
-        if st.button("＋ Nuevo", key="ma-main-new-chat", use_container_width=True):
+        if st.button("＋ Nuevo", key="ma-main-new-chat", use_container_width=True, type="primary"):
             _reset_conversation_state()
             st.session_state["ma_force_new_chat"] = True
             st.rerun()
