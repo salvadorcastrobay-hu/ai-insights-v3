@@ -431,7 +431,7 @@ def load_deal_properties(data_version: str) -> pd.DataFrame:
     return deal_props
 
 
-@st.cache_data(show_spinner=False, ttl=300, max_entries=4, persist="disk")
+@st.cache_data(show_spinner=False, ttl=300, max_entries=1, persist="disk")
 def load_data(prompt_version: str, data_version: str) -> pd.DataFrame:
     """Load insights from the dashboard view, filtered by prompt_version."""
     client = get_supabase()
@@ -680,6 +680,13 @@ def apply_global_filters(df: pd.DataFrame) -> pd.DataFrame:
 
     _save_filter_preferences(_filter_owner(), _current_filter_payload())
     return df[mask]
+
+
+def get_filtered_data(df: pd.DataFrame | None = None) -> pd.DataFrame:
+    source_df = df if isinstance(df, pd.DataFrame) else st.session_state.get("df")
+    if source_df is None or getattr(source_df, "empty", True):
+        return pd.DataFrame()
+    return apply_global_filters(source_df)
 
 
 def render_sidebar(df: pd.DataFrame) -> pd.DataFrame:

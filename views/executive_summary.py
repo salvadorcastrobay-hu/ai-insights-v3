@@ -45,7 +45,7 @@ st.markdown(
 
 # ── Top-of-page filters ──────────────────────────────────────────────────────
 
-df = render_inline_filters(raw_df, key_prefix="es").copy()
+df = render_inline_filters(raw_df, key_prefix="es")
 
 if df.empty:
     st.warning("No hay datos para los filtros seleccionados.")

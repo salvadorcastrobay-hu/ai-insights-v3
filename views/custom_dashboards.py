@@ -10,10 +10,13 @@ import plotly.express as px
 import streamlit as st
 from exp_ds import inject_ds_css, DS, apply_ds_layout, BRAND_SCALE, ds_sub
 try:
-    from shared import chart_tooltip
+    from shared import chart_tooltip, get_filtered_data
 except ImportError:
     def chart_tooltip(*_args, **_kwargs):
         return None
+
+    def get_filtered_data(*_args, **_kwargs):
+        return pd.DataFrame()
 
 
 STORE_PATH = Path(__file__).resolve().parent.parent / "custom_dashboards.json"
@@ -289,15 +292,14 @@ def _resolve_columns(df: pd.DataFrame, candidates: list[str]) -> list[str]:
 def _get_df(source_mode: str) -> pd.DataFrame:
     mode = _normalize_source_mode(source_mode)
     if mode == "filtered":
-        df = st.session_state.get("filtered_df")
+        df = get_filtered_data()
     else:
         df = st.session_state.get("df")
     if df is None:
         return pd.DataFrame()
-    out = df.copy()
-    if "call_date" in out.columns:
-        out["call_date"] = pd.to_datetime(out["call_date"], errors="coerce")
-    return out
+    if "call_date" in df.columns and not pd.api.types.is_datetime64_any_dtype(df["call_date"]):
+        return df.assign(call_date=pd.to_datetime(df["call_date"], errors="coerce"))
+    return df
 
 
 def _load_store() -> dict:
@@ -441,7 +443,7 @@ def _render_save_destination(
 
 
 def _apply_optional_filters(df: pd.DataFrame, spec: dict) -> pd.DataFrame:
-    out = df.copy()
+    out = df
     region_filter = spec.get("region_filter") or []
     country_filter = spec.get("country_filter") or []
     start_date = spec.get("start_date")
@@ -643,7 +645,7 @@ def _build_agg_frame(
     if color_col:
         group_cols.append(color_col)
 
-    work = df.copy()
+    work = df
     if x_col not in work.columns:
         return pd.DataFrame()
 
