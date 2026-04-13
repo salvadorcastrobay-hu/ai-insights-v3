@@ -1757,13 +1757,13 @@ def _start_sql_chat_conversation(question: str) -> None:
         conversation_id = create_sql_chat_conversation(owner, question)
     except Exception as exc:
         st.session_state.pop("sql_chat_active_conversation_id", None)
-        st.session_state["sql_chat_sidebar_choice"] = "__new__"
+        st.session_state["sql_chat_conversation_choice"] = "__new__"
         _set_sql_chat_history_warning(
             f"No se pudo iniciar el historial en Supabase. El chat sigue funcionando en esta sesión: {exc}"
         )
         return
     st.session_state["sql_chat_active_conversation_id"] = conversation_id
-    st.session_state["sql_chat_sidebar_choice"] = conversation_id
+    st.session_state["sql_chat_conversation_choice"] = conversation_id
     _clear_sql_chat_history_warning()
 
 
@@ -1772,70 +1772,82 @@ def _reset_sql_chat_state() -> None:
         "sql_chat_messages",
         "sql_chat_openai_history",
         "sql_chat_active_conversation_id",
-        "sql_chat_sidebar_choice",
+        "sql_chat_conversation_choice",
+        "sql_chat_force_new_chat",
     ):
         st.session_state.pop(key, None)
 
 
 def _apply_loaded_sql_chat(payload: dict) -> None:
     st.session_state["sql_chat_active_conversation_id"] = payload["conversation"]["id"]
-    st.session_state["sql_chat_sidebar_choice"] = payload["conversation"]["id"]
+    st.session_state["sql_chat_conversation_choice"] = payload["conversation"]["id"]
     st.session_state["sql_chat_messages"] = list(payload.get("messages") or [])
     st.session_state["sql_chat_openai_history"] = list(payload.get("openai_history") or [])
 
 
-def _render_sql_chat_history_panel() -> None:
-    try:
-        owner_candidates = _get_current_user_candidates()
-        conversations = list_sql_chat_conversations(owner_candidates)
-    except Exception as exc:
-        st.sidebar.caption(f"Historial no disponible: {exc}")
-        return
+def _list_saved_sql_chat_conversations() -> tuple[list[str], list[dict]]:
+    owner_candidates = _get_current_user_candidates()
+    conversations = list_sql_chat_conversations(owner_candidates)
+    return owner_candidates, conversations
 
-    with st.sidebar.expander("Chats de Chat con IA", expanded=False):
-        if st.session_state.get("sql_chat_history_warning"):
-            st.caption(st.session_state["sql_chat_history_warning"])
 
-        if st.button("Nuevo chat", key="sql-chat-new-chat", use_container_width=True):
-            _reset_sql_chat_state()
-            st.session_state["sql_chat_sidebar_choice"] = "__new__"
-            st.rerun()
+def _load_selected_sql_chat(owner_candidates: list[str], conversation_id: str) -> str | None:
+    if conversation_id == "__new__":
+        return None
+    active_conversation_id = st.session_state.get("sql_chat_active_conversation_id")
+    if conversation_id == active_conversation_id:
+        return None
+    payload = load_sql_chat_conversation(owner_candidates, conversation_id)
+    if payload is None:
+        return "No se pudo cargar esa conversación."
+    _apply_loaded_sql_chat(payload)
+    return "loaded"
 
-        if not conversations:
-            st.caption("Todavía no hay conversaciones guardadas.")
-            return
 
-        conversation_options = ["__new__"] + [conversation["id"] for conversation in conversations]
-        active_conversation_id = st.session_state.get("sql_chat_active_conversation_id")
-        default_choice = active_conversation_id if active_conversation_id in conversation_options else "__new__"
-        current_choice = st.session_state.get("sql_chat_sidebar_choice", default_choice)
-        if current_choice not in conversation_options:
-            current_choice = default_choice
+def _render_sql_chat_selector(owner_candidates: list[str], conversations: list[dict]) -> None:
+    if st.session_state.pop("sql_chat_force_new_chat", False):
+        st.session_state["sql_chat_conversation_choice"] = "__new__"
 
-        labels = {"__new__": "Seleccionar chat..."}
-        for conversation in conversations:
-            labels[conversation["id"]] = conversation.get("title") or "Chat con IA"
+    chat_col, btn_col = st.columns([4, 1], vertical_alignment="bottom")
+    active_conversation_id = st.session_state.get("sql_chat_active_conversation_id")
+    conversation_options = ["__new__"] + [conversation["id"] for conversation in conversations]
+    default_choice = active_conversation_id if active_conversation_id in conversation_options else "__new__"
+    current_choice = st.session_state.get("sql_chat_conversation_choice", default_choice)
+    if current_choice not in conversation_options:
+        current_choice = default_choice
 
+    labels = {"__new__": "Seleccionar chat..."}
+    for conversation in conversations:
+        labels[conversation["id"]] = conversation.get("title") or "Chat con IA"
+
+    with chat_col:
         selected_conversation_id = st.selectbox(
-            "Abrir chat",
+            "Chat activo",
             options=conversation_options,
-            key="sql_chat_sidebar_choice",
+            key="sql_chat_conversation_choice",
             index=conversation_options.index(current_choice),
             label_visibility="collapsed",
             format_func=lambda conversation_id: labels.get(conversation_id, conversation_id),
         )
+    with btn_col:
+        if st.button("＋ Nuevo", key="sql-chat-main-new-chat", use_container_width=True, type="primary"):
+            _reset_sql_chat_state()
+            st.session_state["sql_chat_force_new_chat"] = True
+            st.rerun()
 
-        if selected_conversation_id == "__new__":
-            return
-        if selected_conversation_id == active_conversation_id:
-            return
-
-        payload = load_sql_chat_conversation(owner_candidates, selected_conversation_id)
-        if payload is None:
-            st.warning("No se pudo cargar esa conversación.")
-            return
-        _apply_loaded_sql_chat(payload)
+    load_status = _load_selected_sql_chat(owner_candidates, selected_conversation_id)
+    if load_status == "loaded":
         st.rerun()
+    if load_status and load_status != "loaded":
+        st.warning(load_status)
+
+
+def _is_sql_chat_ready() -> bool:
+    if st.session_state.get("sql_chat_active_conversation_id"):
+        return True
+    if st.session_state.get("sql_chat_messages"):
+        return True
+    return False
 
 
 def page_sql_chat(df) -> None:
@@ -1852,14 +1864,25 @@ def page_sql_chat(df) -> None:
     if "sql_chat_openai_history" not in st.session_state:
         st.session_state.sql_chat_openai_history = []
 
-    _render_sql_chat_history_panel()
-
     if st.sidebar.button("Limpiar chat", key="clear_sql_chat"):
         st.session_state.sql_chat_messages = []
         st.session_state.sql_chat_openai_history = []
         st.session_state.pop("sql_chat_active_conversation_id", None)
-        st.session_state["sql_chat_sidebar_choice"] = "__new__"
+        st.session_state["sql_chat_conversation_choice"] = "__new__"
         st.rerun()
+
+    try:
+        owner_candidates, saved_conversations = _list_saved_sql_chat_conversations()
+    except Exception as exc:
+        owner_candidates, saved_conversations = [], []
+        st.caption(f"Historial no disponible: {exc}")
+
+    if st.session_state.get("sql_chat_history_warning"):
+        st.caption(st.session_state["sql_chat_history_warning"])
+
+    render_chat_input = _is_sql_chat_ready()
+    if not render_chat_input:
+        _render_sql_chat_selector(owner_candidates, saved_conversations)
 
     # --- Render chat history ---
     for idx, msg in enumerate(st.session_state.sql_chat_messages):
@@ -1942,169 +1965,170 @@ def page_sql_chat(df) -> None:
                         width="stretch",
                     )
 
-    # --- Chat input ---
-    question = st.chat_input("Escribi tu pregunta sobre los datos...")
-    if not question:
-        return
+    if render_chat_input:
+        # --- Chat input ---
+        question = st.chat_input("Escribi tu pregunta sobre los datos...")
+        if not question:
+            return
 
-    if not st.session_state.get("sql_chat_active_conversation_id"):
-        _start_sql_chat_conversation(question)
+        if not st.session_state.get("sql_chat_active_conversation_id"):
+            _start_sql_chat_conversation(question)
 
-    _append_sql_chat_message({"role": "user", "content": question})
-    with st.chat_message("user"):
-        st.markdown(question)
+        _append_sql_chat_message({"role": "user", "content": question})
+        with st.chat_message("user"):
+            st.markdown(question)
 
-    # --- Process ---
-    with st.chat_message("assistant"):
-        try:
-            with st.spinner("Pensando..."):
-                client = _get_openai_client()
+        # --- Process ---
+        with st.chat_message("assistant"):
+            try:
+                with st.spinner("Pensando..."):
+                    client = _get_openai_client()
 
-                try:
-                    mode, content = generate_response(
-                        client, question, st.session_state.sql_chat_openai_history,
-                    )
-                    mode, content = _force_data_mode_if_needed(
-                        client=client,
-                        question=question,
-                        mode=mode,
-                        content=content,
-                        history=st.session_state.sql_chat_openai_history,
-                    )
-                except Exception:
-                    response_text = "No pude conectarme con el servicio de IA. Intenta de nuevo."
-                    st.markdown(response_text)
-                    _append_sql_chat_message({"role": "assistant", "content": response_text})
+                    try:
+                        mode, content = generate_response(
+                            client, question, st.session_state.sql_chat_openai_history,
+                        )
+                        mode, content = _force_data_mode_if_needed(
+                            client=client,
+                            question=question,
+                            mode=mode,
+                            content=content,
+                            history=st.session_state.sql_chat_openai_history,
+                        )
+                    except Exception:
+                        response_text = "No pude conectarme con el servicio de IA. Intenta de nuevo."
+                        st.markdown(response_text)
+                        _append_sql_chat_message({"role": "assistant", "content": response_text})
+                        _persist_sql_chat_snapshot()
+                        return
+
+                # --- CHAT ---
+                if mode == "chat":
+                    st.markdown(content)
+                    _append_sql_chat_message({"role": "assistant", "content": content})
+                    st.session_state.sql_chat_openai_history.append({"role": "user", "content": question})
+                    st.session_state.sql_chat_openai_history.append({"role": "assistant", "content": content})
+                    _trim_history()
                     _persist_sql_chat_snapshot()
                     return
 
-            # --- CHAT ---
-            if mode == "chat":
-                st.markdown(content)
-                _append_sql_chat_message({"role": "assistant", "content": content})
-                st.session_state.sql_chat_openai_history.append({"role": "user", "content": question})
-                st.session_state.sql_chat_openai_history.append({"role": "assistant", "content": content})
-                _trim_history()
-                _persist_sql_chat_snapshot()
-                return
+                # --- HYBRID ---
+                if mode == "hybrid":
+                    with st.spinner("Consultando datos cuantitativos y cualitativos..."):
+                        _handle_hybrid(client, question, content)
+                    return
 
-            # --- HYBRID ---
-            if mode == "hybrid":
-                with st.spinner("Consultando datos cuantitativos y cualitativos..."):
-                    _handle_hybrid(client, question, content)
-                return
+                # --- SEARCH ---
+                if mode == "search":
+                    with st.spinner("Buscando en transcripciones..."):
+                        _handle_search(client, question, content)
+                    return
 
-            # --- SEARCH ---
-            if mode == "search":
-                with st.spinner("Buscando en transcripciones..."):
-                    _handle_search(client, question, content)
-                return
+                # --- SQL ---
+                sql = content
 
-            # --- SQL ---
-            sql = content
+                valid, err = validate_sql(sql)
+                if not valid:
+                    response_text = f"No puedo ejecutar esa consulta: {err}"
+                    st.markdown(response_text)
+                    _append_sql_chat_message({"role": "assistant", "content": response_text})
+                    st.session_state.sql_chat_openai_history.append({"role": "user", "content": question})
+                    st.session_state.sql_chat_openai_history.append({"role": "assistant", "content": response_text})
+                    _trim_history()
+                    _persist_sql_chat_snapshot()
+                    return
 
-            valid, err = validate_sql(sql)
-            if not valid:
-                response_text = f"No puedo ejecutar esa consulta: {err}"
-                st.markdown(response_text)
-                _append_sql_chat_message({"role": "assistant", "content": response_text})
-                st.session_state.sql_chat_openai_history.append({"role": "user", "content": question})
-                st.session_state.sql_chat_openai_history.append({"role": "assistant", "content": response_text})
-                _trim_history()
-                _persist_sql_chat_snapshot()
-                return
-
-            with st.spinner("Ejecutando consulta SQL..."):
-                columns, rows = [], []
-                exec_error = None
-                try:
-                    columns, rows = execute_query(sql)
-                except Exception as e:
-                    exec_error = str(e)
-
-                if exec_error:
-                    if _is_db_connection_error(exec_error):
-                        if _handle_rest_fallback(question, exec_error):
-                            return
-                    retry_prompt = (
-                        f"El SQL anterior fallo con este error:\n{exec_error}\n\n"
-                        f"SQL que fallo:\n{sql}\n\n"
-                        f"Pregunta original: {question}\n\n"
-                        "Genera un SQL corregido. Responde con SQL: seguido del query."
-                    )
-                    try:
-                        sql = generate_sql(
-                            client, retry_prompt, st.session_state.sql_chat_openai_history,
-                        )
-                    except Exception:
-                        response_text = "Hubo un error al generar la consulta. Intenta reformular."
-                        st.markdown(response_text)
-                        _append_sql_chat_message({"role": "assistant", "content": response_text})
-                        _trim_history()
-                        _persist_sql_chat_snapshot()
-                        return
-
-                    valid, err = validate_sql(sql)
-                    if not valid:
-                        response_text = f"No pude generar una consulta valida: {err}"
-                        st.markdown(response_text)
-                        _append_sql_chat_message({"role": "assistant", "content": response_text})
-                        _trim_history()
-                        _persist_sql_chat_snapshot()
-                        return
-
+                with st.spinner("Ejecutando consulta SQL..."):
+                    columns, rows = [], []
+                    exec_error = None
                     try:
                         columns, rows = execute_query(sql)
-                    except Exception as e2:
-                        if _is_db_connection_error(str(e2)):
-                            if _handle_rest_fallback(question, str(e2)):
+                    except Exception as e:
+                        exec_error = str(e)
+
+                    if exec_error:
+                        if _is_db_connection_error(exec_error):
+                            if _handle_rest_fallback(question, exec_error):
                                 return
-                        response_text = f"La consulta fallo incluso despues de reintentar: {e2}"
-                        st.markdown(response_text)
-                        _append_sql_chat_message({"role": "assistant", "content": response_text})
-                        _trim_history()
-                        _persist_sql_chat_snapshot()
-                        return
+                        retry_prompt = (
+                            f"El SQL anterior fallo con este error:\n{exec_error}\n\n"
+                            f"SQL que fallo:\n{sql}\n\n"
+                            f"Pregunta original: {question}\n\n"
+                            "Genera un SQL corregido. Responde con SQL: seguido del query."
+                        )
+                        try:
+                            sql = generate_sql(
+                                client, retry_prompt, st.session_state.sql_chat_openai_history,
+                            )
+                        except Exception:
+                            response_text = "Hubo un error al generar la consulta. Intenta reformular."
+                            st.markdown(response_text)
+                            _append_sql_chat_message({"role": "assistant", "content": response_text})
+                            _trim_history()
+                            _persist_sql_chat_snapshot()
+                            return
 
-                try:
-                    summary = summarize_results(client, question, sql, columns, rows)
-                except Exception:
-                    summary = "No pude generar el resumen. Revisa los datos crudos abajo."
+                        valid, err = validate_sql(sql)
+                        if not valid:
+                            response_text = f"No pude generar una consulta valida: {err}"
+                            st.markdown(response_text)
+                            _append_sql_chat_message({"role": "assistant", "content": response_text})
+                            _trim_history()
+                            _persist_sql_chat_snapshot()
+                            return
 
-            # Display (outside spinner)
-            st.markdown(summary)
-            with st.expander("Ver SQL"):
-                st.code(sql, language="sql")
+                        try:
+                            columns, rows = execute_query(sql)
+                        except Exception as e2:
+                            if _is_db_connection_error(str(e2)):
+                                if _handle_rest_fallback(question, str(e2)):
+                                    return
+                            response_text = f"La consulta fallo incluso despues de reintentar: {e2}"
+                            st.markdown(response_text)
+                            _append_sql_chat_message({"role": "assistant", "content": response_text})
+                            _trim_history()
+                            _persist_sql_chat_snapshot()
+                            return
 
-            raw_data = None
-            auto_chart_meta = None
-            if columns and rows:
-                raw_data = {"columns": columns, "rows": [list(r) for r in rows]}
-                auto_chart_meta = _render_auto_chart(
-                    question=question,
-                    columns=columns,
-                    rows=raw_data["rows"],
-                    key_prefix=f"live_sql_{len(st.session_state.sql_chat_messages)}",
+                    try:
+                        summary = summarize_results(client, question, sql, columns, rows)
+                    except Exception:
+                        summary = "No pude generar el resumen. Revisa los datos crudos abajo."
+
+                # Display (outside spinner)
+                st.markdown(summary)
+                with st.expander("Ver SQL"):
+                    st.code(sql, language="sql")
+
+                raw_data = None
+                auto_chart_meta = None
+                if columns and rows:
+                    raw_data = {"columns": columns, "rows": [list(r) for r in rows]}
+                    auto_chart_meta = _render_auto_chart(
+                        question=question,
+                        columns=columns,
+                        rows=raw_data["rows"],
+                        key_prefix=f"live_sql_{len(st.session_state.sql_chat_messages)}",
+                    )
+                    with st.expander("Ver datos crudos"):
+                        st.dataframe(pd.DataFrame(rows, columns=columns), width="stretch")
+
+                _append_sql_chat_message({
+                    "role": "assistant", "content": summary, "sql": sql, "raw_data": raw_data,
+                    "auto_chart": auto_chart_meta, "question": question,
+                })
+                st.session_state.sql_chat_openai_history.append({"role": "user", "content": question})
+                st.session_state.sql_chat_openai_history.append(
+                    {"role": "assistant", "content": f"SQL: {sql}\nResultado resumido: {summary}"}
                 )
-                with st.expander("Ver datos crudos"):
-                    st.dataframe(pd.DataFrame(rows, columns=columns), width="stretch")
+                _trim_history()
+                _persist_sql_chat_snapshot()
 
-            _append_sql_chat_message({
-                "role": "assistant", "content": summary, "sql": sql, "raw_data": raw_data,
-                "auto_chart": auto_chart_meta, "question": question,
-            })
-            st.session_state.sql_chat_openai_history.append({"role": "user", "content": question})
-            st.session_state.sql_chat_openai_history.append(
-                {"role": "assistant", "content": f"SQL: {sql}\nResultado resumido: {summary}"}
-            )
-            _trim_history()
-            _persist_sql_chat_snapshot()
-
-        except Exception:
-            response_text = "Ocurrio un error inesperado. Intenta de nuevo."
-            st.markdown(response_text)
-            _append_sql_chat_message({"role": "assistant", "content": response_text})
-            _persist_sql_chat_snapshot()
+            except Exception:
+                response_text = "Ocurrio un error inesperado. Intenta de nuevo."
+                st.markdown(response_text)
+                _append_sql_chat_message({"role": "assistant", "content": response_text})
+                _persist_sql_chat_snapshot()
 
 
 def _trim_history() -> None:
