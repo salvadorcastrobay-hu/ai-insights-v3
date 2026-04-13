@@ -289,6 +289,43 @@ CREATE INDEX IF NOT EXISTS idx_campaign_advisor_snapshots_conversation
 CREATE INDEX IF NOT EXISTS idx_campaign_advisor_snapshots_owner
     ON campaign_advisor_snapshots(owner, created_at DESC);
 
+-- 4c. SQL Chat history (append-only)
+
+CREATE TABLE IF NOT EXISTS sql_chat_conversations (
+    id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    owner            TEXT NOT NULL,
+    title            TEXT NOT NULL,
+    initial_question TEXT NOT NULL,
+    created_at       TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS sql_chat_messages_store (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    conversation_id UUID NOT NULL REFERENCES sql_chat_conversations(id),
+    owner           TEXT NOT NULL,
+    role            TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
+    payload         JSONB NOT NULL,
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS sql_chat_snapshots (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    conversation_id UUID NOT NULL REFERENCES sql_chat_conversations(id),
+    owner           TEXT NOT NULL,
+    messages        JSONB NOT NULL,
+    openai_history  JSONB NOT NULL,
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_sql_chat_conversations_owner
+    ON sql_chat_conversations(owner, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sql_chat_messages_conversation
+    ON sql_chat_messages_store(conversation_id, created_at ASC);
+CREATE INDEX IF NOT EXISTS idx_sql_chat_snapshots_conversation
+    ON sql_chat_snapshots(conversation_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sql_chat_snapshots_owner
+    ON sql_chat_snapshots(owner, created_at DESC);
+
 -- 5. Dashboard View
 
 CREATE OR REPLACE VIEW v_insights_dashboard AS
