@@ -50,6 +50,15 @@ credentials:
       roles:
       - campaign_advisor
       - viewer
+    caro:
+      email: caro@humand.co
+      failed_login_attempts: 0
+      first_name: Carolina
+      last_name: Mendiondo
+      logged_in: false
+      password: $2b$12$b73nohSTp1pGbx3T9nKLYua479dp1sYQ1rLqqSC5C4QofS2zB4..2
+      roles:
+      - user
     juan.diego.alcocer:
       email: juan.diego.alcocer@humand.co
       failed_login_attempts: 0
