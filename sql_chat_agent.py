@@ -1758,12 +1758,14 @@ def _start_sql_chat_conversation(question: str) -> None:
     except Exception as exc:
         st.session_state.pop("sql_chat_active_conversation_id", None)
         st.session_state["sql_chat_conversation_choice"] = "__new__"
+        st.session_state["sql_chat_draft_mode"] = True
         _set_sql_chat_history_warning(
             f"No se pudo iniciar el historial en Supabase. El chat sigue funcionando en esta sesión: {exc}"
         )
         return
     st.session_state["sql_chat_active_conversation_id"] = conversation_id
     st.session_state["sql_chat_conversation_choice"] = conversation_id
+    st.session_state["sql_chat_draft_mode"] = False
     _clear_sql_chat_history_warning()
 
 
@@ -1774,6 +1776,7 @@ def _reset_sql_chat_state() -> None:
         "sql_chat_active_conversation_id",
         "sql_chat_conversation_choice",
         "sql_chat_force_new_chat",
+        "sql_chat_draft_mode",
     ):
         st.session_state.pop(key, None)
 
@@ -1783,6 +1786,7 @@ def _apply_loaded_sql_chat(payload: dict) -> None:
     st.session_state["sql_chat_conversation_choice"] = payload["conversation"]["id"]
     st.session_state["sql_chat_messages"] = list(payload.get("messages") or [])
     st.session_state["sql_chat_openai_history"] = list(payload.get("openai_history") or [])
+    st.session_state["sql_chat_draft_mode"] = False
 
 
 def _list_saved_sql_chat_conversations() -> tuple[list[str], list[dict]]:
@@ -1793,6 +1797,10 @@ def _list_saved_sql_chat_conversations() -> tuple[list[str], list[dict]]:
 
 def _load_selected_sql_chat(owner_candidates: list[str], conversation_id: str) -> str | None:
     if conversation_id == "__new__":
+        st.session_state.pop("sql_chat_active_conversation_id", None)
+        st.session_state["sql_chat_messages"] = []
+        st.session_state["sql_chat_openai_history"] = []
+        st.session_state["sql_chat_draft_mode"] = True
         return None
     active_conversation_id = st.session_state.get("sql_chat_active_conversation_id")
     if conversation_id == active_conversation_id:
@@ -1843,6 +1851,8 @@ def _render_sql_chat_selector(owner_candidates: list[str], conversations: list[d
 
 
 def _is_sql_chat_ready() -> bool:
+    if st.session_state.get("sql_chat_draft_mode"):
+        return True
     if st.session_state.get("sql_chat_active_conversation_id"):
         return True
     if st.session_state.get("sql_chat_messages"):
@@ -1863,12 +1873,15 @@ def page_sql_chat(df) -> None:
         st.session_state.sql_chat_messages = []
     if "sql_chat_openai_history" not in st.session_state:
         st.session_state.sql_chat_openai_history = []
+    if "sql_chat_draft_mode" not in st.session_state:
+        st.session_state.sql_chat_draft_mode = False
 
     if st.sidebar.button("Limpiar chat", key="clear_sql_chat"):
         st.session_state.sql_chat_messages = []
         st.session_state.sql_chat_openai_history = []
         st.session_state.pop("sql_chat_active_conversation_id", None)
         st.session_state["sql_chat_conversation_choice"] = "__new__"
+        st.session_state["sql_chat_draft_mode"] = True
         st.rerun()
 
     try:
