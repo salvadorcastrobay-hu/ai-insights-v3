@@ -113,6 +113,7 @@ pages = {
     ],
     "Herramientas": [
         st.Page("views/sql_chat.py", title="Chat con IA", icon="🤖"),
+        st.Page("views/comparative_analysis.py", title="Comparative Analysis", icon="⚖️"),
         st.Page("views/custom_dashboards.py", title="Dashboards Personalizados", icon="📈"),
         st.Page("views/glossary.py", title="Glosario y Cómo funciona", icon="📘"),
     ],
@@ -130,6 +131,7 @@ _apply_sidebar_layout(nav.title)
 
 pages_with_data = {
     "Executive Summary",
+    "Comparative Analysis",
     "Product Intelligence",
     "Competitive Intelligence",
     "Sales Enablement",

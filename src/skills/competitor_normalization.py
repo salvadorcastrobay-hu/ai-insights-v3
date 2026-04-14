@@ -15,6 +15,9 @@ OWN_BRAND_COMPETITOR_ALIASES = {"humand", "human", "human d"}
 
 # Manual aliases discovered in live data or already normalized elsewhere in the app.
 COMPETITOR_NORMALIZATION = {
+    "humand": "Humand",
+    "human": "Humand",
+    "human d": "Humand",
     "be home": "Beehome",
     "behome": "Beehome",
     "bee home": "Beehome",
@@ -53,7 +56,7 @@ def normalize_competitor_name(value) -> str | None:
 
     normalized_key = _normalize_competitor_key(cleaned)
     if normalized_key in OWN_BRAND_COMPETITOR_ALIASES:
-        return cleaned
+        return "Humand"
 
     manual_match = COMPETITOR_NORMALIZATION.get(normalized_key)
     if manual_match:

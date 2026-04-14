@@ -105,6 +105,9 @@ LOAD_DATA_COLUMNS = [
 LOAD_DATA_SELECT = ",".join(LOAD_DATA_COLUMNS)
 
 COMPETITOR_NORMALIZATION = {
+    "humand": "Humand",
+    "human": "Humand",
+    "human d": "Humand",
     "book": "Buk",
     "buk hr": "Buk",
     "bukhr": "Buk",
