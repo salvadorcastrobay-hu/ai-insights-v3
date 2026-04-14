@@ -350,6 +350,20 @@ class MarketingAdvisorAgent:
                 )
                 if not repaired_recommendation.error:
                     recommendation = repaired_recommendation
+        if recommendation.error:
+            regenerated_response = self._regenerate_recommendation(
+                context_text=context_text,
+                question=question,
+                previous_output=raw_response,
+            )
+            if regenerated_response.strip():
+                regenerated_recommendation = self._parse_recommendation(
+                    regenerated_response,
+                    filters,
+                    insights.sample_size,
+                )
+                if not regenerated_recommendation.error:
+                    recommendation = regenerated_recommendation
         recommendation.model_used = self.model
         return recommendation
 
@@ -984,33 +998,97 @@ REGLAS:
         Intenta reparar una salida JSON invalida usando un prompt de correccion.
         Si falla, devuelve la respuesta original.
         """
-        if not hasattr(self.client, "chat") or not hasattr(self.client.chat, "completions"):
-            return raw_response
-
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                temperature=0,
-                response_format={
-                    "type": "json_schema",
-                    "json_schema": self._response_schema(),
-                },
-                max_tokens=2200,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": (
-                            "Corrige el siguiente JSON para que cumpla exactamente el schema pedido. "
-                            "No inventes nueva evidencia. Si falta un dato, usa el minimo texto posible "
-                            "sin salir del contenido ya presente."
-                        ),
-                    },
-                    {"role": "user", "content": raw_response},
-                ],
+            repair_instructions = (
+                "Corrige el siguiente output para que cumpla exactamente el schema pedido. "
+                "No inventes nueva evidencia. Si falta un dato, usa el minimo texto posible "
+                "sin salir del contenido ya presente. Devuelve unicamente JSON valido."
             )
-            return response.choices[0].message.content or raw_response
+
+            if hasattr(self.client, "responses") and hasattr(self.client.responses, "create"):
+                try:
+                    response = self.client.responses.create(
+                        model=self.model,
+                        instructions=repair_instructions,
+                        input=raw_response,
+                        max_output_tokens=2200,
+                        text={"format": {"type": "json_schema", **self._response_schema()}},
+                    )
+                    repaired = self._extract_response_text(response)
+                    if repaired:
+                        return repaired
+                except Exception:
+                    pass
+
+            if hasattr(self.client, "chat") and hasattr(self.client.chat, "completions"):
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    temperature=0,
+                    response_format={
+                        "type": "json_schema",
+                        "json_schema": self._response_schema(),
+                    },
+                    max_tokens=2200,
+                    messages=[
+                        {"role": "system", "content": repair_instructions},
+                        {"role": "user", "content": raw_response},
+                    ],
+                )
+                return response.choices[0].message.content or raw_response
         except Exception:
             return raw_response
+        return raw_response
+
+    def _regenerate_recommendation(
+        self,
+        context_text: str,
+        question: str,
+        previous_output: str,
+    ) -> str:
+        """
+        Hace un ultimo intento de generacion cuando el modelo devolvio texto
+        libre o un JSON imposible de reparar.
+        """
+        user_content = (
+            f"{context_text}\n\n"
+            "SALIDA PREVIA INVALIDA O NO PARSEABLE:\n"
+            f"{previous_output.strip() or '[vacia]'}\n\n"
+            "REINTENTO:\n"
+            "Reescribe la respuesta desde cero y devuelve unicamente un JSON valido "
+            "que cumpla el schema. No agregues markdown ni explicaciones."
+        )
+        if question and question.strip():
+            user_content += f"\n\nPREGUNTA ESPECIFICA DEL USUARIO: {question.strip()}"
+
+        try:
+            if hasattr(self.client, "responses") and hasattr(self.client.responses, "create"):
+                response = self.client.responses.create(
+                    model=self.model,
+                    instructions=self._build_system_prompt(),
+                    input=user_content,
+                    max_output_tokens=2200,
+                    text={"format": {"type": "json_schema", **self._response_schema()}},
+                )
+                return self._extract_response_text(response) or ""
+
+            if hasattr(self.client, "chat") and hasattr(self.client.chat, "completions"):
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    temperature=0.1,
+                    response_format={
+                        "type": "json_schema",
+                        "json_schema": self._response_schema(),
+                    },
+                    max_tokens=2200,
+                    messages=[
+                        {"role": "system", "content": self._build_system_prompt()},
+                        {"role": "user", "content": user_content},
+                    ],
+                )
+                return response.choices[0].message.content or ""
+        except Exception:
+            return ""
+        return ""
 
     def _parse_recommendation(
         self, raw: str, filters: dict, sample_size: int
