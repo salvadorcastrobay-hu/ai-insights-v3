@@ -4,7 +4,7 @@ import pandas as pd
 import streamlit.components.v1 as components
 
 try:
-    from shared import humanize, format_currency, chart_tooltip, render_inline_filters
+    from shared import humanize, format_currency, chart_tooltip, render_inline_filters, dataframe_with_csv
 except ImportError:
     from shared import humanize, format_currency
 
@@ -13,6 +13,12 @@ except ImportError:
 
     def render_inline_filters(df, **_):
         return df
+
+    def dataframe_with_csv(dataframe, **kwargs):
+        kwargs.pop("export_df", None)
+        kwargs.pop("file_name", None)
+        kwargs.pop("filename_seed", None)
+        return st.dataframe(dataframe, **kwargs)
 
 from exp_ds import inject_ds_css, DS, apply_ds_layout, BRAND_SCALE, ds_sub
 
@@ -482,17 +488,22 @@ column_config = {
     for col, label in column_labels.items()
     if col in available_cols
 }
+table_export = table_gaps.copy()
 try:
-    st.dataframe(
+    dataframe_with_csv(
         styled_table,
+        export_df=table_export,
+        file_name="product-gaps-detalle.csv",
         use_container_width=True,
         height=400,
         hide_index=True,
         column_config=column_config,
     )
 except Exception:
-    st.dataframe(
+    dataframe_with_csv(
         table_display,
+        export_df=table_export,
+        file_name="product-gaps-detalle.csv",
         use_container_width=True,
         height=400,
         hide_index=True,

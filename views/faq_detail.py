@@ -4,13 +4,19 @@ import plotly.express as px
 from exp_ds import inject_ds_css, DS, apply_ds_layout, BRAND_SCALE, ds_sub
 
 try:
-    from shared import chart_tooltip, render_inline_filters
+    from shared import chart_tooltip, render_inline_filters, dataframe_with_csv
 except ImportError:
     def chart_tooltip(*_args, **_kwargs):
         return None
 
     def render_inline_filters(df, **_):
         return df
+
+    def dataframe_with_csv(dataframe, **kwargs):
+        kwargs.pop("export_df", None)
+        kwargs.pop("file_name", None)
+        kwargs.pop("filename_seed", None)
+        return st.dataframe(dataframe, **kwargs)
 
 raw_df = st.session_state.get("df")
 if raw_df is None or raw_df.empty:
@@ -200,8 +206,13 @@ display_cols = [
     "resumen",
 ]
 available_cols = [c for c in display_cols if c in table_faqs.columns]
-st.dataframe(
-    table_faqs[available_cols].sort_values("insight_subtype_display", ascending=True),
+table_display = table_faqs[available_cols].sort_values("insight_subtype_display", ascending=True)
+table_export = table_faqs.sort_values("insight_subtype_display", ascending=True)
+
+dataframe_with_csv(
+    table_display,
+    export_df=table_export,
+    file_name="faqs-detalle.csv",
     use_container_width=True,
     height=400,
 )
