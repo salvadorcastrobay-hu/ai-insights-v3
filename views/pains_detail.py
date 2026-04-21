@@ -1,7 +1,7 @@
 import streamlit as st
 import plotly.express as px
 try:
-    from shared import humanize, chart_tooltip, render_inline_filters
+    from shared import humanize, chart_tooltip, render_inline_filters, dataframe_with_csv
 except ImportError:
     from shared import humanize
 
@@ -10,6 +10,12 @@ except ImportError:
 
     def render_inline_filters(df, **_):
         return df
+
+    def dataframe_with_csv(dataframe, **kwargs):
+        kwargs.pop("export_df", None)
+        kwargs.pop("file_name", None)
+        kwargs.pop("filename_seed", None)
+        return st.dataframe(dataframe, **kwargs)
 
 from exp_ds import inject_ds_css, DS, apply_ds_layout, ds_sub
 
@@ -159,4 +165,13 @@ display_cols = [
     "module_display", "segment", "country", "deal_stage", "deal_owner", "resumen",
 ]
 available_cols = [c for c in display_cols if c in table_pains.columns]
-st.dataframe(table_pains[available_cols].sort_values("pain_theme", ascending=True), use_container_width=True, height=400)
+table_display = table_pains[available_cols].sort_values("pain_theme", ascending=True)
+table_export = table_pains.sort_values("pain_theme", ascending=True)
+
+dataframe_with_csv(
+    table_display,
+    export_df=table_export,
+    file_name="pains-detalle.csv",
+    use_container_width=True,
+    height=400,
+)

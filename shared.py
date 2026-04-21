@@ -8,6 +8,9 @@ import re
 import textwrap
 import unicodedata
 import json
+import hashlib
+import base64
+from html import escape
 from datetime import date
 
 import streamlit as st
@@ -845,8 +848,13 @@ def humanize(value):
 
 
 _TOOLTIP_QUEUE_KEY = "__viz_tooltip_queue"
-_ORIGINAL_PLOTLY_CHART = st.plotly_chart
-_ORIGINAL_DATAFRAME = st.dataframe
+if not hasattr(st, "_humand_original_plotly_chart"):
+    st._humand_original_plotly_chart = st.plotly_chart
+if not hasattr(st, "_humand_original_dataframe"):
+    st._humand_original_dataframe = st.dataframe
+
+_ORIGINAL_PLOTLY_CHART = st._humand_original_plotly_chart
+_ORIGINAL_DATAFRAME = st._humand_original_dataframe
 
 
 def _queue_viz_tooltip(text: str) -> None:
@@ -864,15 +872,272 @@ def _pop_viz_tooltip() -> str | None:
     return text
 
 
-def _render_viz_tooltip_if_any() -> None:
+def _render_viz_tooltip_if_any(csv_item: dict | None = None) -> None:
     tooltip_text = _pop_viz_tooltip()
-    if tooltip_text:
-        st.caption("ⓘ Info de esta visualización", help=tooltip_text, width="content")
+    if not tooltip_text and not csv_item:
+        return
+
+    left_col, right_col = st.columns([0.86, 0.14], gap="small")
+
+    with left_col:
+        if tooltip_text:
+            st.markdown(
+                f'<div style="display:flex;align-items:center;min-height:36px;">'
+                f'<span style="color:#636271;font-family:Roboto,sans-serif;font-size:16px;line-height:1.15;cursor:help;">'
+                f'ⓘ <span title="{escape(tooltip_text)}">Info de esta visualización</span></span>'
+                "</div>",
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown('<div style="min-height:36px;"></div>', unsafe_allow_html=True)
+
+    with right_col:
+        if csv_item:
+            encoded = base64.b64encode(csv_item["csv_data"].encode("utf-8")).decode("ascii")
+            file_name = escape(str(csv_item["file_name"]))
+            st.markdown(
+                f'<div style="display:flex;align-items:center;justify-content:flex-end;min-height:36px;padding-right:8px;">'
+                f'<a download="{file_name}" href="data:text/csv;charset=utf-8;base64,{encoded}" '
+                'style="display:inline-block;padding:6px 10px;border:1px solid #dfe0e6;border-radius:4px;'
+                'background:#f1f4fd;color:#496be3;text-decoration:none;font-family:Roboto,sans-serif;'
+                'font-size:12px;font-weight:600;" title="Descargar los datos de este gráfico">CSV</a>'
+                "</div>",
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown('<div style="min-height:36px;"></div>', unsafe_allow_html=True)
+
+    # Space between the metadata row and the next chart/card block.
+    st.markdown('<div style="height:12px;"></div>', unsafe_allow_html=True)
+
+
+def _ensure_list(value) -> list:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    if isinstance(value, tuple):
+        return list(value)
+    if hasattr(value, "tolist"):
+        converted = value.tolist()
+        if isinstance(converted, list):
+            return converted
+    return [value]
+
+
+def _as_scalar(value):
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    try:
+        return value.item()  # numpy scalar compatibility
+    except Exception:
+        pass
+    if isinstance(value, (list, tuple, dict)):
+        try:
+            return json.dumps(value, ensure_ascii=False)
+        except Exception:
+            return str(value)
+    return str(value)
+
+
+def _customdata_to_columns(point_value) -> dict[str, object]:
+    if isinstance(point_value, (list, tuple)):
+        return {f"customdata_{idx + 1}": _as_scalar(val) for idx, val in enumerate(point_value)}
+    if point_value is None:
+        return {}
+    return {"customdata_1": _as_scalar(point_value)}
+
+
+def _figure_to_export_dataframe(fig) -> pd.DataFrame:
+    chart_title = getattr(getattr(getattr(fig, "layout", None), "title", None), "text", None)
+    x_axis_title = getattr(getattr(getattr(fig, "layout", None), "xaxis", None), "title", None)
+    x_axis_title = getattr(x_axis_title, "text", None)
+    y_axis_title = getattr(getattr(getattr(fig, "layout", None), "yaxis", None), "title", None)
+    y_axis_title = getattr(y_axis_title, "text", None)
+
+    rows: list[dict] = []
+    traces = getattr(fig, "data", []) or []
+    for idx, trace in enumerate(traces):
+        trace_dict = trace.to_plotly_json() if hasattr(trace, "to_plotly_json") else {}
+        trace_name = trace_dict.get("name") or f"serie_{idx + 1}"
+        trace_type = trace_dict.get("type")
+        trace_orientation = trace_dict.get("orientation")
+
+        z_values = trace_dict.get("z")
+        if isinstance(z_values, list) and z_values and isinstance(z_values[0], (list, tuple)):
+            x_values = _ensure_list(trace_dict.get("x"))
+            y_values = _ensure_list(trace_dict.get("y"))
+            customdata_matrix = trace_dict.get("customdata")
+            for row_idx, row in enumerate(z_values):
+                row_label = y_values[row_idx] if row_idx < len(y_values) else row_idx
+                for col_idx, cell_value in enumerate(row):
+                    col_label = x_values[col_idx] if col_idx < len(x_values) else col_idx
+                    custom_point = None
+                    if (
+                        isinstance(customdata_matrix, list)
+                        and row_idx < len(customdata_matrix)
+                        and isinstance(customdata_matrix[row_idx], (list, tuple))
+                        and col_idx < len(customdata_matrix[row_idx])
+                    ):
+                        custom_point = customdata_matrix[row_idx][col_idx]
+                    rows.append(
+                        {
+                            "chart_title": chart_title,
+                            "x_axis_title": x_axis_title,
+                            "y_axis_title": y_axis_title,
+                            "trace_index": idx,
+                            "serie": trace_name,
+                            "trace_type": trace_type,
+                            "orientation": trace_orientation,
+                            "row_index": row_idx,
+                            "column_index": col_idx,
+                            "row": row_label,
+                            "column": col_label,
+                            "z": _as_scalar(cell_value),
+                            **_customdata_to_columns(custom_point),
+                        }
+                    )
+            continue
+
+        point_arrays: dict[str, list] = {}
+        candidate_keys = [
+            "x", "y", "z", "labels", "values", "text", "hovertext", "ids",
+            "theta", "r", "lon", "lat", "base", "width",
+            "open", "high", "low", "close",
+            "q1", "q3", "median", "mean", "sd", "lowerfence", "upperfence",
+        ]
+        for key in candidate_keys:
+            values = _ensure_list(trace_dict.get(key))
+            if values:
+                point_arrays[key] = values
+
+        marker = trace_dict.get("marker")
+        if isinstance(marker, dict):
+            for mk in ("size", "color", "symbol"):
+                marker_vals = _ensure_list(marker.get(mk))
+                if marker_vals:
+                    point_arrays[f"marker_{mk}"] = marker_vals
+
+        customdata = trace_dict.get("customdata")
+        customdata_list = _ensure_list(customdata) if customdata is not None else []
+        if customdata_list:
+            point_arrays["customdata"] = customdata_list
+
+        if not point_arrays:
+            continue
+
+        length = max(len(values) for values in point_arrays.values())
+        for point_idx in range(length):
+            row: dict[str, object] = {
+                "chart_title": chart_title,
+                "x_axis_title": x_axis_title,
+                "y_axis_title": y_axis_title,
+                "trace_index": idx,
+                "serie": trace_name,
+                "trace_type": trace_type,
+                "orientation": trace_orientation,
+                "point_index": point_idx,
+            }
+            for key, values in point_arrays.items():
+                point_value = values[point_idx] if point_idx < len(values) else None
+                if key == "customdata":
+                    row.update(_customdata_to_columns(point_value))
+                else:
+                    row[key] = _as_scalar(point_value)
+            rows.append(row)
+
+    if not rows:
+        return pd.DataFrame()
+
+    export_df = pd.DataFrame(rows)
+    all_null_cols = [col for col in export_df.columns if export_df[col].isna().all()]
+    if all_null_cols:
+        export_df = export_df.drop(columns=all_null_cols)
+    return export_df
+
+
+def _build_chart_csv_export_if_any(fig, chart_key: str | None = None) -> dict | None:
+    export_df = _figure_to_export_dataframe(fig)
+    if export_df.empty:
+        return None
+
+    title = getattr(getattr(getattr(fig, "layout", None), "title", None), "text", None)
+    filename_seed = chart_key or title or "chart-data"
+    safe_name = re.sub(r"[^a-zA-Z0-9_-]+", "-", str(filename_seed).strip().lower()).strip("-") or "chart-data"
+    csv_data = export_df.to_csv(index=False)
+    key_basis = f"{safe_name}:{len(export_df)}:{hashlib.md5(csv_data.encode('utf-8')).hexdigest()[:8]}"
+    download_key = f"chart-csv-{key_basis}-{id(fig)}"
+    return {
+        "csv_data": csv_data,
+        "file_name": f"{safe_name}.csv",
+        "key": download_key,
+    }
+
+
+def _build_dataframe_csv_export_if_any(
+    df: pd.DataFrame | None,
+    file_name: str | None = None,
+    filename_seed: str | None = None,
+) -> dict | None:
+    if df is None or not isinstance(df, pd.DataFrame) or df.empty:
+        return None
+
+    export_df = df.copy()
+    csv_data = export_df.to_csv(index=False)
+    if not csv_data:
+        return None
+
+    if file_name:
+        safe_name = re.sub(r"[^a-zA-Z0-9._-]+", "-", str(file_name).strip().lower()).strip("-") or "detalle.csv"
+        safe_name = safe_name if safe_name.endswith(".csv") else f"{safe_name}.csv"
+    else:
+        seed = filename_seed or "detalle"
+        safe_seed = re.sub(r"[^a-zA-Z0-9_-]+", "-", str(seed).strip().lower()).strip("-") or "detalle"
+        safe_name = f"{safe_seed}.csv"
+
+    key_basis = f"{safe_name}:{len(export_df)}:{hashlib.md5(csv_data.encode('utf-8')).hexdigest()[:8]}"
+    download_key = f"table-csv-{key_basis}"
+    return {
+        "csv_data": csv_data,
+        "file_name": safe_name,
+        "key": download_key,
+    }
 
 
 def _plotly_chart_with_tooltip(*args, **kwargs):
+    fig = args[0] if args else kwargs.get("figure")
+    csv_item = None
+    if fig is not None:
+        chart_key = kwargs.get("key")
+        csv_item = _build_chart_csv_export_if_any(fig, str(chart_key) if chart_key is not None else None)
     result = _ORIGINAL_PLOTLY_CHART(*args, **kwargs)
-    _render_viz_tooltip_if_any()
+    _render_viz_tooltip_if_any(csv_item=csv_item)
+    return result
+
+
+def plotly_chart_with_csv(fig, **kwargs):
+    chart_key = kwargs.get("key")
+    csv_item = _build_chart_csv_export_if_any(fig, str(chart_key) if chart_key is not None else None)
+    result = _ORIGINAL_PLOTLY_CHART(fig, **kwargs)
+    _render_viz_tooltip_if_any(csv_item=csv_item)
+    return result
+
+
+def dataframe_with_csv(
+    dataframe,
+    export_df: pd.DataFrame | None = None,
+    file_name: str | None = None,
+    filename_seed: str | None = None,
+    **kwargs,
+):
+    result = _ORIGINAL_DATAFRAME(dataframe, **kwargs)
+    csv_source = export_df if export_df is not None else (dataframe if isinstance(dataframe, pd.DataFrame) else None)
+    csv_item = _build_dataframe_csv_export_if_any(
+        csv_source,
+        file_name=file_name,
+        filename_seed=filename_seed,
+    )
+    _render_viz_tooltip_if_any(csv_item=csv_item)
     return result
 
 
