@@ -172,10 +172,24 @@ nav.run()
 # Private runtime debug rendered after pages/charts to capture same-run values.
 if _show_private_test:
     tooltip_sig = str(inspect.signature(getattr(shared_module, "_render_viz_tooltip_if_any", lambda: None)))
+    try:
+        tooltip_src = inspect.getsource(getattr(shared_module, "_render_viz_tooltip_if_any"))
+    except Exception:
+        tooltip_src = ""
+    try:
+        plotly_src = inspect.getsource(getattr(shared_module, "_plotly_chart_with_tooltip"))
+    except Exception:
+        plotly_src = ""
+    has_caption_renderer = "st.caption(" in tooltip_src
+    has_csv_anchor_renderer = 'download="' in tooltip_src
+    wrapper_builds_csv = "_build_chart_csv_export_if_any" in plotly_src
     st.caption(f"shared.py: {getattr(shared_module, '__file__', 'N/A')}")
     st.caption(f"_humand_tooltip_wrapped: {getattr(st, '_humand_tooltip_wrapped', False)}")
     st.caption(f"renderer signature: {tooltip_sig}")
     st.caption(f"has dataframe_with_csv: {hasattr(shared_module, 'dataframe_with_csv')}")
+    st.caption(f"renderer has st.caption(): {has_caption_renderer}")
+    st.caption(f"renderer has CSV anchor html: {has_csv_anchor_renderer}")
+    st.caption(f"plotly wrapper builds csv: {wrapper_builds_csv}")
     st.caption(f"csv debug status: {st.session_state.get('__csv_debug_last_status', 'N/A')}")
     st.caption(f"csv debug rows: {st.session_state.get('__csv_debug_last_rows', 'N/A')}")
     st.caption(f"csv debug has item: {st.session_state.get('__csv_debug_last_item_present', 'N/A')}")
