@@ -113,6 +113,43 @@ def list_conversations(owner, limit: int = 20) -> list[dict]:
     return query.limit(limit).execute().data or []
 
 
+def rename_conversation(owner, conversation_id: str, new_title: str) -> bool:
+    owners = _normalize_owner_candidates(owner)
+    if not owners:
+        return False
+    query = _client().table(CONVERSATIONS_TABLE).update({"title": new_title}).eq("id", conversation_id)
+    if len(owners) == 1:
+        query = query.eq("owner", owners[0])
+    else:
+        query = query.in_("owner", owners)
+    response = query.execute()
+    return bool(response.data)
+
+
+def delete_conversation(owner, conversation_id: str) -> bool:
+    owners = _normalize_owner_candidates(owner)
+    if not owners:
+        return False
+    # Delete children first (defensive; FK on delete may not be set in schema)
+    for table in (MESSAGES_TABLE, SNAPSHOTS_TABLE):
+        child_query = _client().table(table).delete().eq("conversation_id", conversation_id)
+        if len(owners) == 1:
+            child_query = child_query.eq("owner", owners[0])
+        else:
+            child_query = child_query.in_("owner", owners)
+        try:
+            child_query.execute()
+        except Exception:
+            pass
+    query = _client().table(CONVERSATIONS_TABLE).delete().eq("id", conversation_id)
+    if len(owners) == 1:
+        query = query.eq("owner", owners[0])
+    else:
+        query = query.in_("owner", owners)
+    response = query.execute()
+    return bool(response.data)
+
+
 def load_conversation(owner, conversation_id: str) -> dict | None:
     owners = _normalize_owner_candidates(owner)
     if not owners:

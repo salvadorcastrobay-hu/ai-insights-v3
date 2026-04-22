@@ -329,6 +329,7 @@ class MarketingAdvisorAgent:
         question: str = "",
         pipeline=None,
         insights=None,
+        external_context: str = "",
     ) -> MarketingRecommendation:
         """
         Genera recomendaciones de campanas de marketing basadas en los datos del segmento.
@@ -338,6 +339,8 @@ class MarketingAdvisorAgent:
             pipeline, insights = self.build_context(filters)
 
         context_text = self._format_context(pipeline, insights, filters)
+        if external_context and external_context.strip():
+            context_text = f"{context_text}\n\n{external_context.strip()}"
         raw_response = self._call_openai(context_text, question)
         recommendation = self._parse_recommendation(raw_response, filters, insights.sample_size)
         if recommendation.error and raw_response.strip():

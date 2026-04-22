@@ -1,5 +1,12 @@
 # Secrets
 .env
+.env.save
+.filter_prefs.json
+
+# Node / Next (for humand-insights-web)
+node_modules/
+.next/
+*.tsbuildinfo
 
 # Logs & output
 *.log
