@@ -848,13 +848,8 @@ def humanize(value):
 
 
 _TOOLTIP_QUEUE_KEY = "__viz_tooltip_queue"
-if not hasattr(st, "_humand_original_plotly_chart"):
-    st._humand_original_plotly_chart = st.plotly_chart
-if not hasattr(st, "_humand_original_dataframe"):
-    st._humand_original_dataframe = st.dataframe
-
-_ORIGINAL_PLOTLY_CHART = st._humand_original_plotly_chart
-_ORIGINAL_DATAFRAME = st._humand_original_dataframe
+_ORIGINAL_PLOTLY_CHART = getattr(getattr(st, "_main", None), "plotly_chart", st.plotly_chart)
+_ORIGINAL_DATAFRAME = getattr(getattr(st, "_main", None), "dataframe", st.dataframe)
 
 
 def _queue_viz_tooltip(text: str) -> None:
