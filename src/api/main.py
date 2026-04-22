@@ -1,13 +1,17 @@
 from __future__ import annotations
 
+import html
 import json
 import os
+import re
 from dataclasses import asdict, is_dataclass
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
+from urllib.parse import urlparse
 
 import jwt
+import urllib.request
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -60,12 +64,18 @@ class ChatQueryBody(BaseModel):
     question: str
     conversation_id: str | None = None
     history: list[dict[str, Any]] = Field(default_factory=list)
+    filters: dict[str, Any] = Field(default_factory=dict)
+
+
+class ConversationPatchBody(BaseModel):
+    title: str
 
 
 class AdvisorGenerateBody(BaseModel):
     filters: dict[str, Any] = Field(default_factory=dict)
     question: str = ""
     conversation_id: str | None = None
+    external_sources: list[str] = Field(default_factory=list)
 
 
 class AdvisorFollowupBody(BaseModel):
@@ -131,21 +141,180 @@ def healthcheck() -> dict[str, str]:
     return {"status": "ok"}
 
 
+_FILTER_LABELS: dict[str, str] = {
+    "types": "Tipos de insight",
+    "regions": "Regiones",
+    "segments": "Segmentos",
+    "countries": "Paises",
+    "industries": "Industrias",
+    "owners": "AEs / Deal owners",
+    "modules": "Modulos",
+    "categories": "Categorias HR",
+    "channels": "Canales de adquisicion",
+    "sources": "Fuentes de deal",
+}
+
+
+def _coerce_filter_list(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple, set)):
+        return [str(v).strip() for v in value if str(v).strip()]
+    text = str(value).strip()
+    return [text] if text else []
+
+
+def _format_filter_context(filters: dict[str, Any] | None) -> str:
+    if not filters:
+        return ""
+    parts: list[str] = []
+    for key, label in _FILTER_LABELS.items():
+        values = _coerce_filter_list(filters.get(key))
+        if values:
+            parts.append(f"- {label}: {', '.join(values)}")
+    date_start = filters.get("date_start") or filters.get("start_date")
+    date_end = filters.get("date_end") or filters.get("end_date")
+    if date_start:
+        parts.append(f"- Fecha desde: {date_start}")
+    if date_end:
+        parts.append(f"- Fecha hasta: {date_end}")
+    if not parts:
+        return ""
+    return (
+        "FILTROS ACTIVOS DEL DASHBOARD (aplicalos como WHERE clauses cuando generes SQL, "
+        "y usalos para encuadrar la respuesta):\n" + "\n".join(parts)
+    )
+
+
+_EXTERNAL_SOURCE_MAX_BYTES = 400_000  # ~400 KB raw HTML cap per URL
+_EXTERNAL_SOURCE_TIMEOUT = 8  # seconds
+_EXTERNAL_SOURCE_MAX_CHARS = 4000  # extracted text per URL
+_EXTERNAL_SOURCE_MAX_URLS = 5
+
+
+def _strip_html(html_text: str) -> str:
+    """Quick-and-dirty HTML → plain text: drop scripts/styles, strip tags, collapse whitespace."""
+    text = re.sub(r"(?is)<(script|style)[^>]*>.*?</\1>", " ", html_text)
+    text = re.sub(r"(?s)<[^>]+>", " ", text)
+    text = html.unescape(text)
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()
+
+
+def _fetch_external_source(url: str) -> tuple[str, str | None]:
+    """Fetch a URL and return (excerpt, error). Excerpt is capped to _EXTERNAL_SOURCE_MAX_CHARS."""
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        return "", f"URL inválida: {url}"
+    try:
+        req = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": "HumandInsightsAdvisor/1.0 (+https://humand.co)",
+                "Accept": "text/html,text/plain,*/*;q=0.8",
+            },
+        )
+        with urllib.request.urlopen(req, timeout=_EXTERNAL_SOURCE_TIMEOUT) as resp:
+            content_type = resp.headers.get("Content-Type", "") or ""
+            raw = resp.read(_EXTERNAL_SOURCE_MAX_BYTES)
+    except Exception as exc:  # noqa: BLE001 — any network/SSL/etc error is reported back
+        return "", f"No se pudo obtener {url}: {exc}"
+
+    try:
+        body = raw.decode("utf-8", errors="replace")
+    except Exception:
+        body = raw.decode("latin-1", errors="replace")
+
+    if "text/html" in content_type or body.lstrip().startswith("<"):
+        text = _strip_html(body)
+    else:
+        text = re.sub(r"\s+", " ", body).strip()
+
+    if not text:
+        return "", f"Contenido vacío en {url}"
+    return text[:_EXTERNAL_SOURCE_MAX_CHARS], None
+
+
+def _build_external_context(urls: list[str]) -> tuple[str, list[dict[str, str]], list[str]]:
+    """Fetch each URL and return (context_block, source_records, warnings)."""
+    seen: set[str] = set()
+    clean: list[str] = []
+    for raw in urls or []:
+        if not raw:
+            continue
+        url = raw.strip()
+        if not url or url in seen:
+            continue
+        seen.add(url)
+        clean.append(url)
+        if len(clean) >= _EXTERNAL_SOURCE_MAX_URLS:
+            break
+
+    warnings: list[str] = []
+    records: list[dict[str, str]] = []
+    blocks: list[str] = []
+    for idx, url in enumerate(clean, start=1):
+        excerpt, err = _fetch_external_source(url)
+        if err:
+            warnings.append(err)
+            records.append({"url": url, "error": err})
+            continue
+        records.append({"url": url, "excerpt": excerpt})
+        blocks.append(f"[Fuente externa {idx}] {url}\n{excerpt}")
+
+    context = ""
+    if blocks:
+        context = (
+            "REFERENCIAS EXTERNAS PROVISTAS POR EL USUARIO (material de contexto: "
+            "campañas, artículos, notas, documentación, etc. Usalo para enriquecer tu "
+            "razonamiento; no cites su contenido como dato propio):\n\n"
+            + "\n\n".join(blocks)
+        )
+    return context, records, warnings
+
+
+def _normalize_filters_payload(filters: dict[str, Any] | None) -> dict[str, Any]:
+    """Return a compact, JSON-safe dict preserving only the filter keys we expose."""
+    if not filters:
+        return {}
+    out: dict[str, Any] = {}
+    for key in _FILTER_LABELS:
+        values = _coerce_filter_list(filters.get(key))
+        if values:
+            out[key] = values
+    for key in ("date_start", "date_end"):
+        v = filters.get(key)
+        if v:
+            out[key] = str(v)
+    return out
+
+
 @app.post("/sql-chat/query")
 def sql_chat_query(body: ChatQueryBody, owner: str = Depends(verify_jwt)) -> dict[str, Any]:
     question = body.question.strip()
     if not question:
         raise HTTPException(status_code=400, detail="Question is required.")
 
+    filters_payload = _normalize_filters_payload(body.filters)
+    filter_context = _format_filter_context(filters_payload)
+
     existing_state = _load_sql_conversation_state(owner, body.conversation_id)
     conversation_id = body.conversation_id or _safe_create_sql_conversation(owner, question)
     history = body.history or existing_state["openai_history"]
+    if filter_context:
+        # Prepend as an additional system turn. generate_response already stacks
+        # its own SYSTEM_PROMPT first, so OpenAI sees both in order.
+        history = [{"role": "system", "content": filter_context}, *history]
 
     client = OpenAI()
     mode, content = generate_response(client, question, history)
     response = _execute_sql_chat_response(client, mode, content, question)
+    if filters_payload:
+        response["filters_applied"] = filters_payload
 
-    user_message = {"role": "user", "content": question}
+    user_message: dict[str, Any] = {"role": "user", "content": question}
+    if filters_payload:
+        user_message["filters_applied"] = filters_payload
     assistant_message = {"role": "assistant", **response}
     messages = existing_state["messages"] + [user_message, assistant_message]
     openai_history = history + [
@@ -159,6 +328,43 @@ def sql_chat_query(body: ChatQueryBody, owner: str = Depends(verify_jwt)) -> dic
         response["warnings"] = warnings
 
     return {"conversation_id": conversation_id, **response}
+
+
+@app.patch("/sql-chat/conversations/{conv_id}")
+def rename_sql_conversation(
+    conv_id: str,
+    body: ConversationPatchBody,
+    owner: str = Depends(verify_jwt),
+) -> dict[str, Any]:
+    new_title = body.title.strip()[:120]
+    if not new_title:
+        raise HTTPException(status_code=400, detail="Title is required.")
+    try:
+        from src.connectors.sql_chat_store import rename_conversation as _rename
+    except ImportError as exc:
+        raise HTTPException(status_code=500, detail=f"Rename helper unavailable: {exc}") from exc
+    try:
+        ok = _rename(owner, conv_id, new_title)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Unable to rename conversation: {exc}") from exc
+    if not ok:
+        raise HTTPException(status_code=404, detail="Conversation not found.")
+    return {"id": conv_id, "title": new_title}
+
+
+@app.delete("/sql-chat/conversations/{conv_id}")
+def delete_sql_conversation(conv_id: str, owner: str = Depends(verify_jwt)) -> dict[str, Any]:
+    try:
+        from src.connectors.sql_chat_store import delete_conversation as _delete
+    except ImportError as exc:
+        raise HTTPException(status_code=500, detail=f"Delete helper unavailable: {exc}") from exc
+    try:
+        ok = _delete(owner, conv_id)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Unable to delete conversation: {exc}") from exc
+    if not ok:
+        raise HTTPException(status_code=404, detail="Conversation not found.")
+    return {"id": conv_id, "deleted": True}
 
 
 @app.get("/sql-chat/conversations")
@@ -184,10 +390,17 @@ def load_sql_conversation(conv_id: str, owner: str = Depends(verify_jwt)) -> dic
 def advisor_generate(body: AdvisorGenerateBody, owner: str = Depends(verify_jwt)) -> dict[str, Any]:
     filters = dict(body.filters or {})
     question = body.question.strip()
+    external_context, external_records, external_warnings = _build_external_context(body.external_sources)
     agent = MarketingAdvisorAgent()
     pipeline = get_pipeline_breakdown(filters)
     insights = get_segment_insights(filters)
-    recommendation = agent.generate_recommendations(filters, question, pipeline, insights)
+    recommendation = agent.generate_recommendations(
+        filters,
+        question,
+        pipeline,
+        insights,
+        external_context=external_context,
+    )
 
     conversation_id = body.conversation_id or _safe_create_advisor_conversation(owner, question, filters)
     assistant_summary = recommendation.segment_summary or "Recommendation generated."
@@ -200,7 +413,9 @@ def advisor_generate(body: AdvisorGenerateBody, owner: str = Depends(verify_jwt)
         pipeline=pipeline,
         insights=insights,
         assistant_summary=assistant_summary,
+        external_sources=external_records,
     )
+    warnings = list(warnings or []) + external_warnings
 
     response = {
         "conversation_id": conversation_id,
@@ -212,6 +427,7 @@ def advisor_generate(body: AdvisorGenerateBody, owner: str = Depends(verify_jwt)
             "pipeline_revenue": pipeline.total_revenue,
             "insight_sample_size": insights.sample_size,
         },
+        "external_sources": external_records,
     }
     if warnings:
         response["warnings"] = warnings
@@ -301,6 +517,43 @@ def advisor_translate(body: AdvisorTranslateBody, owner: str = Depends(verify_jw
     return response
 
 
+@app.patch("/campaign-advisor/conversations/{conv_id}")
+def rename_advisor_conversation(
+    conv_id: str,
+    body: ConversationPatchBody,
+    owner: str = Depends(verify_jwt),
+) -> dict[str, Any]:
+    new_title = body.title.strip()[:120]
+    if not new_title:
+        raise HTTPException(status_code=400, detail="Title is required.")
+    try:
+        from src.connectors.campaign_advisor_store import rename_conversation as _rename
+    except ImportError as exc:
+        raise HTTPException(status_code=500, detail=f"Rename helper unavailable: {exc}") from exc
+    try:
+        ok = _rename(owner, conv_id, new_title)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Unable to rename conversation: {exc}") from exc
+    if not ok:
+        raise HTTPException(status_code=404, detail="Conversation not found.")
+    return {"id": conv_id, "title": new_title}
+
+
+@app.delete("/campaign-advisor/conversations/{conv_id}")
+def delete_advisor_conversation(conv_id: str, owner: str = Depends(verify_jwt)) -> dict[str, Any]:
+    try:
+        from src.connectors.campaign_advisor_store import delete_conversation as _delete
+    except ImportError as exc:
+        raise HTTPException(status_code=500, detail=f"Delete helper unavailable: {exc}") from exc
+    try:
+        ok = _delete(owner, conv_id)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Unable to delete conversation: {exc}") from exc
+    if not ok:
+        raise HTTPException(status_code=404, detail="Conversation not found.")
+    return {"id": conv_id, "deleted": True}
+
+
 @app.get("/campaign-advisor/conversations")
 def list_advisor_conversations(
     limit: int = Query(default=20, ge=1, le=100),
@@ -388,8 +641,12 @@ def _persist_advisor_initial_state(
     pipeline,
     insights,
     assistant_summary: str,
+    external_sources: list[dict[str, str]] | None = None,
 ) -> list[str]:
     warnings: list[str] = []
+    inferred: dict[str, Any] = {}
+    if external_sources:
+        inferred["external_sources"] = external_sources
     try:
         if question:
             insert_campaign_advisor_message(conversation_id, owner, "user", question, "prompt")
@@ -405,7 +662,7 @@ def _persist_advisor_initial_state(
             owner=owner,
             question=question,
             filters=filters,
-            inferred_filters={},
+            inferred_filters=inferred,
             answer_language=recommendation.recommended_market_language,
             recommendation=recommendation,
             pipeline=pipeline,
