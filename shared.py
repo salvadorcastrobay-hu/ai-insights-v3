@@ -1161,10 +1161,11 @@ def _dataframe_with_tooltip(*args, **kwargs):
     return result
 
 
-if getattr(st, "_humand_tooltip_wrapped", False) is False:
-    st.plotly_chart = _plotly_chart_with_tooltip
-    st.dataframe = _dataframe_with_tooltip
-    st._humand_tooltip_wrapped = True
+# Always rebind wrappers so hot-reloads pick up the latest wrapper implementation.
+# Safe because originals are stored in st._humand_original_* and never overwritten.
+st.plotly_chart = _plotly_chart_with_tooltip
+st.dataframe = _dataframe_with_tooltip
+st._humand_tooltip_wrapped = True
 
 
 def chart_tooltip(what_shows: str, how_to_read: str | None = None) -> None:
