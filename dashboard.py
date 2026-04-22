@@ -96,6 +96,13 @@ user_roles = config["credentials"]["usernames"].get(current_user, {}).get("roles
 is_admin = "admin" in user_roles
 can_access_campaign_advisor = is_admin or "campaign_advisor" in user_roles
 
+# Private deploy marker: visible only for Salvador to validate deployed version.
+_PRIVATE_TEST_USERS = {"salvador.castrobay", "salvadorcastrobay", "salvadorcastrobay-hu"}
+if current_user in _PRIVATE_TEST_USERS:
+    st.markdown("---")
+    st.subheader("TEST")
+    st.markdown("---")
+
 # ── Navigation (views/ dir avoids Streamlit auto-detection) ──
 
 pages = {
