@@ -100,18 +100,10 @@ can_access_campaign_advisor = is_admin or "campaign_advisor" in user_roles
 
 # Private deploy marker: visible only for Salvador to validate deployed version.
 _PRIVATE_TEST_USERS = {"salvador.castrobay", "salvadorcastrobay", "salvadorcastrobay-hu"}
-if current_user in _PRIVATE_TEST_USERS:
+_show_private_test = current_user in _PRIVATE_TEST_USERS
+if _show_private_test:
     st.markdown("---")
     st.subheader("TEST")
-    tooltip_sig = str(inspect.signature(getattr(shared_module, "_render_viz_tooltip_if_any", lambda: None)))
-    st.caption(f"shared.py: {getattr(shared_module, '__file__', 'N/A')}")
-    st.caption(f"_humand_tooltip_wrapped: {getattr(st, '_humand_tooltip_wrapped', False)}")
-    st.caption(f"renderer signature: {tooltip_sig}")
-    st.caption(f"has dataframe_with_csv: {hasattr(shared_module, 'dataframe_with_csv')}")
-    st.caption(f"csv debug status: {st.session_state.get('__csv_debug_last_status', 'N/A')}")
-    st.caption(f"csv debug rows: {st.session_state.get('__csv_debug_last_rows', 'N/A')}")
-    st.caption(f"csv debug has item: {st.session_state.get('__csv_debug_last_item_present', 'N/A')}")
-    st.caption(f"csv debug chart key: {st.session_state.get('__csv_debug_last_chart_key', 'N/A')}")
     st.markdown("---")
 
 # ── Navigation (views/ dir avoids Streamlit auto-detection) ──
@@ -176,6 +168,18 @@ else:
 # ── Run selected page ──
 
 nav.run()
+
+# Private runtime debug rendered after pages/charts to capture same-run values.
+if _show_private_test:
+    tooltip_sig = str(inspect.signature(getattr(shared_module, "_render_viz_tooltip_if_any", lambda: None)))
+    st.caption(f"shared.py: {getattr(shared_module, '__file__', 'N/A')}")
+    st.caption(f"_humand_tooltip_wrapped: {getattr(st, '_humand_tooltip_wrapped', False)}")
+    st.caption(f"renderer signature: {tooltip_sig}")
+    st.caption(f"has dataframe_with_csv: {hasattr(shared_module, 'dataframe_with_csv')}")
+    st.caption(f"csv debug status: {st.session_state.get('__csv_debug_last_status', 'N/A')}")
+    st.caption(f"csv debug rows: {st.session_state.get('__csv_debug_last_rows', 'N/A')}")
+    st.caption(f"csv debug has item: {st.session_state.get('__csv_debug_last_item_present', 'N/A')}")
+    st.caption(f"csv debug chart key: {st.session_state.get('__csv_debug_last_chart_key', 'N/A')}")
 
 # ── Footer ──
 
