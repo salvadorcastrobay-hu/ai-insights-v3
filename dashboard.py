@@ -108,6 +108,10 @@ if current_user in _PRIVATE_TEST_USERS:
     st.caption(f"_humand_tooltip_wrapped: {getattr(st, '_humand_tooltip_wrapped', False)}")
     st.caption(f"renderer signature: {tooltip_sig}")
     st.caption(f"has dataframe_with_csv: {hasattr(shared_module, 'dataframe_with_csv')}")
+    st.caption(f"csv debug status: {st.session_state.get('__csv_debug_last_status', 'N/A')}")
+    st.caption(f"csv debug rows: {st.session_state.get('__csv_debug_last_rows', 'N/A')}")
+    st.caption(f"csv debug has item: {st.session_state.get('__csv_debug_last_item_present', 'N/A')}")
+    st.caption(f"csv debug chart key: {st.session_state.get('__csv_debug_last_chart_key', 'N/A')}")
     st.markdown("---")
 
 # ── Navigation (views/ dir avoids Streamlit auto-detection) ──
