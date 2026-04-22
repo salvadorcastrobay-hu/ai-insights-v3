@@ -7,7 +7,9 @@ Deploy: Streamlit Community Cloud (free)
 
 from __future__ import annotations
 
+import inspect
 import pandas as pd
+import shared as shared_module
 import streamlit as st
 import streamlit_authenticator as stauth
 from shared import (
@@ -101,6 +103,11 @@ _PRIVATE_TEST_USERS = {"salvador.castrobay", "salvadorcastrobay", "salvadorcastr
 if current_user in _PRIVATE_TEST_USERS:
     st.markdown("---")
     st.subheader("TEST")
+    tooltip_sig = str(inspect.signature(getattr(shared_module, "_render_viz_tooltip_if_any", lambda: None)))
+    st.caption(f"shared.py: {getattr(shared_module, '__file__', 'N/A')}")
+    st.caption(f"_humand_tooltip_wrapped: {getattr(st, '_humand_tooltip_wrapped', False)}")
+    st.caption(f"renderer signature: {tooltip_sig}")
+    st.caption(f"has dataframe_with_csv: {hasattr(shared_module, 'dataframe_with_csv')}")
     st.markdown("---")
 
 # ── Navigation (views/ dir avoids Streamlit auto-detection) ──
