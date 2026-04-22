@@ -1058,7 +1058,16 @@ def _figure_to_export_dataframe(fig) -> pd.DataFrame:
 
 def _build_chart_csv_export_if_any(fig, chart_key: str | None = None) -> dict | None:
     export_df = _figure_to_export_dataframe(fig)
+    try:
+        st.session_state["__csv_debug_last_rows"] = int(len(export_df))
+        st.session_state["__csv_debug_last_chart_key"] = chart_key
+    except Exception:
+        pass
     if export_df.empty:
+        try:
+            st.session_state["__csv_debug_last_status"] = "empty_export_df"
+        except Exception:
+            pass
         return None
 
     title = getattr(getattr(getattr(fig, "layout", None), "title", None), "text", None)
@@ -1110,6 +1119,11 @@ def _plotly_chart_with_tooltip(*args, **kwargs):
     if fig is not None:
         chart_key = kwargs.get("key")
         csv_item = _build_chart_csv_export_if_any(fig, str(chart_key) if chart_key is not None else None)
+    try:
+        st.session_state["__csv_debug_last_item_present"] = bool(csv_item)
+        st.session_state["__csv_debug_last_status"] = "ok" if csv_item else st.session_state.get("__csv_debug_last_status", "missing_item")
+    except Exception:
+        pass
     result = _ORIGINAL_PLOTLY_CHART(*args, **kwargs)
     _render_viz_tooltip_if_any(csv_item=csv_item)
     return result
