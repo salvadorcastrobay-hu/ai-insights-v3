@@ -877,35 +877,35 @@ def _render_viz_tooltip_if_any(csv_item: dict | None = None) -> None:
     if not tooltip_text and not csv_item:
         return
 
-    left_col, right_col = st.columns([0.86, 0.14], gap="small")
-
-    with left_col:
-        if tooltip_text:
-            st.markdown(
-                f'<div style="display:flex;align-items:center;min-height:36px;">'
-                f'<span style="color:#636271;font-family:Roboto,sans-serif;font-size:16px;line-height:1.15;cursor:help;">'
-                f'ⓘ <span title="{escape(tooltip_text)}">Info de esta visualización</span></span>'
-                "</div>",
-                unsafe_allow_html=True,
-            )
-        else:
-            st.markdown('<div style="min-height:36px;"></div>', unsafe_allow_html=True)
-
-    with right_col:
-        if csv_item:
-            encoded = base64.b64encode(csv_item["csv_data"].encode("utf-8")).decode("ascii")
-            file_name = escape(str(csv_item["file_name"]))
-            st.markdown(
-                f'<div style="display:flex;align-items:center;justify-content:flex-end;min-height:36px;padding-right:8px;">'
-                f'<a download="{file_name}" href="data:text/csv;charset=utf-8;base64,{encoded}" '
-                'style="display:inline-block;padding:6px 10px;border:1px solid #dfe0e6;border-radius:4px;'
-                'background:#f1f4fd;color:#496be3;text-decoration:none;font-family:Roboto,sans-serif;'
-                'font-size:12px;font-weight:600;" title="Descargar los datos de este gráfico">CSV</a>'
-                "</div>",
-                unsafe_allow_html=True,
-            )
-        else:
-            st.markdown('<div style="min-height:36px;"></div>', unsafe_allow_html=True)
+    left_html = (
+        f'<span style="color:#636271;font-family:Roboto,sans-serif;font-size:16px;line-height:1.15;cursor:help;">'
+        f'ⓘ <span title="{escape(tooltip_text)}">Info de esta visualización</span></span>'
+        if tooltip_text
+        else "&nbsp;"
+    )
+    right_html = ""
+    if csv_item:
+        encoded = base64.b64encode(csv_item["csv_data"].encode("utf-8")).decode("ascii")
+        file_name = escape(str(csv_item["file_name"]))
+        right_html = (
+            f'<a download="{file_name}" href="data:text/csv;charset=utf-8;base64,{encoded}" '
+            'style="display:inline-block;padding:6px 10px;border:1px solid #dfe0e6;border-radius:4px;'
+            'background:#f1f4fd;color:#496be3;text-decoration:none;font-family:Roboto,sans-serif;'
+            'font-size:12px;font-weight:600;" title="Descargar los datos de este gráfico">CSV</a>'
+        )
+    st.markdown(
+        f"""
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:36px;">
+          <div style="display:flex;align-items:center;min-height:36px;flex:1 1 auto;min-width:0;">
+            {left_html}
+          </div>
+          <div style="display:flex;align-items:center;justify-content:flex-end;min-height:36px;flex:0 0 auto;">
+            {right_html}
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     # Space between the metadata row and the next chart/card block.
     st.markdown('<div style="height:12px;"></div>', unsafe_allow_html=True)
