@@ -31,6 +31,24 @@ credentials:
       password: $2b$12$NamiW6VbImi8tAG/vV26uOn06JAWMXBtAb3BRTmqEg.3Luu/.Z6a.
       roles:
       - viewer
+    caro:
+      email: caro@humand.co
+      failed_login_attempts: 0
+      first_name: Carolina
+      last_name: Mendiondo
+      logged_in: false
+      password: $2b$12$b73nohSTp1pGbx3T9nKLYua479dp1sYQ1rLqqSC5C4QofS2zB4..2
+      roles:
+      - user
+    dana.goin:
+      email: dana.goin@humand.co
+      failed_login_attempts: 0
+      first_name: Dana
+      last_name: Goin
+      logged_in: false
+      password: $2b$12$AHbiJMn7d3TK9gq/beLcDe13iM0s.Y.mD5Hgc7zeltQ.Pzow4dguy
+      roles:
+      - marketing
     daniel.moreno:
       email: daniel.moreno@humand.co
       failed_login_attempts: 0
@@ -50,15 +68,6 @@ credentials:
       roles:
       - campaign_advisor
       - viewer
-    caro:
-      email: caro@humand.co
-      failed_login_attempts: 0
-      first_name: Carolina
-      last_name: Mendiondo
-      logged_in: false
-      password: $2b$12$b73nohSTp1pGbx3T9nKLYua479dp1sYQ1rLqqSC5C4QofS2zB4..2
-      roles:
-      - user
     juan.diego.alcocer:
       email: juan.diego.alcocer@humand.co
       failed_login_attempts: 0
