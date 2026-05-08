@@ -10,10 +10,13 @@ try:
         format_currency,
         humanize,
         load_total_transcripts_count,
+        plotly_chart_with_csv,
         render_inline_filters,
     )
 except ImportError:
     from shared import format_currency, chart_tooltip, load_total_transcripts_count
+    def plotly_chart_with_csv(fig, **kwargs):
+        return st.plotly_chart(fig, **kwargs)
     def humanize(v):
         return str(v).replace("_", " ").title() if isinstance(v, str) else v
 
@@ -120,7 +123,7 @@ with col_ind:
             fig.update_layout(yaxis=dict(autorange="reversed"), showlegend=False)
             fig = apply_ds_layout(fig, "Distribución por Industria")
             chart_tooltip("Número de demos únicas por industria en el recorte actual.")
-            st.plotly_chart(fig, use_container_width=True)
+            plotly_chart_with_csv(fig, use_container_width=True)
 
 with col_seg:
     if "segment" in df.columns:
@@ -142,7 +145,7 @@ with col_seg:
             fig.update_layout(yaxis=dict(autorange="reversed"), showlegend=False)
             fig = apply_ds_layout(fig, "Distribución por Segmento")
             chart_tooltip("Número de demos únicas por segmento comercial en el recorte actual.")
-            st.plotly_chart(fig, use_container_width=True)
+            plotly_chart_with_csv(fig, use_container_width=True)
 
 if "country" in df.columns:
     country_demos = (
@@ -163,7 +166,7 @@ if "country" in df.columns:
         fig.update_layout(yaxis=dict(autorange="reversed"), showlegend=False)
         fig = apply_ds_layout(fig, "Distribución por País")
         chart_tooltip("Número de demos únicas por país en el recorte actual.")
-        st.plotly_chart(fig, use_container_width=True)
+        plotly_chart_with_csv(fig, use_container_width=True)
 
 # ── Resumen de señales detectadas (Insights por Tipo) ─────────────────────────
 
@@ -186,7 +189,7 @@ chart_tooltip(
     "Cada fila es una detección individual. Una demo puede generar múltiples insights del mismo tipo "
     "(ej: 10 FAQs + 1 fricción + 3 pains = 14 insights en total).",
 )
-st.plotly_chart(fig, use_container_width=True)
+plotly_chart_with_csv(fig, use_container_width=True)
 
 # ── 1️⃣ ¿Con qué problemas llegan los clientes? ───────────────────────────────
 
@@ -214,7 +217,7 @@ if not pains.empty:
         "Frecuencia = número de demos únicas donde se detectó el pain "
         "(no el total de detecciones). El % indica qué porción del total de demos lo mencionó.",
     )
-    st.plotly_chart(fig, use_container_width=True)
+    plotly_chart_with_csv(fig, use_container_width=True)
 
     top2_pain_names = pains["insight_subtype_display"].value_counts().head(2).index.tolist()
 
@@ -253,7 +256,7 @@ if not pains.empty:
                 )
                 fig.update_layout(yaxis=dict(autorange="reversed"), height=260, margin=dict(t=40, b=20))
                 fig = apply_ds_layout(fig, f"Subtemas de {theme_label}: {pain_name}")
-                st.plotly_chart(fig, use_container_width=True)
+                plotly_chart_with_csv(fig, use_container_width=True)
 
     pain_module = (
         pains.dropna(subset=["module_display"])
@@ -285,7 +288,7 @@ if not pains.empty:
                 )
                 fig.update_layout(yaxis=dict(autorange="reversed"), height=260, margin=dict(t=40, b=20))
                 fig = apply_ds_layout(fig, f"Desglose: {pain_name}")
-                st.plotly_chart(fig, use_container_width=True)
+                plotly_chart_with_csv(fig, use_container_width=True)
 
 # Top 15 Pains × Segmento heatmap (full-width)
 if not pains.empty and "segment" in pains.columns:
@@ -321,7 +324,7 @@ if not pains.empty and "segment" in pains.columns:
             "Cruce entre pains principales y segmento comercial.",
             "Permite ver si ciertos pains son más fuertes en SMB, Mid-Market o Enterprise.",
         )
-        st.plotly_chart(fig, use_container_width=True)
+        plotly_chart_with_csv(fig, use_container_width=True)
 
 # ── 2️⃣ ¿Qué módulos buscan más? ──────────────────────────────────────────────
 
@@ -361,7 +364,7 @@ if not module_focus.empty:
         "Módulos más mencionados en pains y product gaps combinados, contando demos únicas.",
         "Refleja qué áreas de producto generan más interés o preguntas en las primeras demos.",
     )
-    st.plotly_chart(fig, use_container_width=True)
+    plotly_chart_with_csv(fig, use_container_width=True)
 
 col_gap_freq, col_gap_rev = st.columns(2)
 with col_gap_freq:
@@ -393,7 +396,7 @@ with col_gap_freq:
         )
         fig = apply_ds_layout(fig, "Top 10 Feature Gaps — Frecuencia")
         chart_tooltip("Top de features faltantes por frecuencia de aparición en deals únicos.")
-        st.plotly_chart(fig, use_container_width=True)
+        plotly_chart_with_csv(fig, use_container_width=True)
 
 with col_gap_rev:
     gaps = df[df["insight_type"] == "product_gap"]
@@ -431,7 +434,7 @@ with col_gap_rev:
             "Top de features faltantes por revenue asociado a los deals que las mencionan.",
             "Revenue asociado a deals en los que se mencionó esta feature como ausente.",
         )
-        st.plotly_chart(fig, use_container_width=True)
+        plotly_chart_with_csv(fig, use_container_width=True)
 
 # ── 3️⃣ ¿Qué competidores se mencionan más? ───────────────────────────────────
 
@@ -469,7 +472,7 @@ if not comp.empty:
         "Ranking de competidores más mencionados, desglosado por tipo de relación.",
         "Colores: usa actualmente, está evaluando, migrando, etc. Para análisis detallado, ir a Competitive Intelligence.",
     )
-    st.plotly_chart(fig, use_container_width=True)
+    plotly_chart_with_csv(fig, use_container_width=True)
 
 # ── 4️⃣ ¿Cuáles son las fricciones más recurrentes? ───────────────────────────
 
@@ -499,7 +502,7 @@ with col_fric:
             "Ranking de las 10 fricciones más frecuentes.",
             "Frecuencia = demos únicas donde se detectó la fricción.",
         )
-        st.plotly_chart(fig, use_container_width=True)
+        plotly_chart_with_csv(fig, use_container_width=True)
     else:
         st.info("Sin datos de fricciones en el recorte actual.")
 
@@ -540,7 +543,7 @@ with col_fric_insights:
                         )
                         fig.update_layout(yaxis=dict(autorange="reversed"), height=240, margin=dict(t=40, b=20))
                         fig = apply_ds_layout(fig, f"Desglose: {fric_name}")
-                        st.plotly_chart(fig, use_container_width=True)
+                        plotly_chart_with_csv(fig, use_container_width=True)
 
 # Fricciones por revenue (full-width)
 if not friction_all.empty and "amount" in friction_all.columns:
@@ -566,7 +569,7 @@ if not friction_all.empty and "amount" in friction_all.columns:
             "Revenue total en riesgo asociado a cada tipo de fricción.",
             "Calculado como suma del monto de deals únicos afectados por cada fricción.",
         )
-        st.plotly_chart(fig, use_container_width=True)
+        plotly_chart_with_csv(fig, use_container_width=True)
 
 # ── 5️⃣ ¿Qué preguntas aparecen siempre? ──────────────────────────────────────
 
@@ -603,7 +606,7 @@ with col_faq:
             "Ranking de las 10 preguntas más frecuentes.",
             "Frecuencia = demos únicas donde apareció la pregunta.",
         )
-        st.plotly_chart(fig, use_container_width=True)
+        plotly_chart_with_csv(fig, use_container_width=True)
     else:
         st.info("Sin datos de FAQs en el recorte actual.")
 
@@ -653,7 +656,7 @@ with col_faq_insights:
                 "Para los 10 módulos más demandados, las 6 preguntas más frecuentes.",
                 "Co-ocurrencia: demos donde el módulo y la pregunta coinciden.",
             )
-            st.plotly_chart(fig, use_container_width=True)
+            plotly_chart_with_csv(fig, use_container_width=True)
 
 # FAQ desglose: top 2 FAQ topics × module co-occurrence
 if not faq_all.empty and not transcript_modules.empty:
@@ -687,7 +690,7 @@ if not faq_all.empty and not transcript_modules.empty:
                     )
                     fig.update_layout(yaxis=dict(autorange="reversed"), height=280, margin=dict(t=40, b=20))
                     fig = apply_ds_layout(fig, f"Módulos donde aparece: {topic}")
-                    st.plotly_chart(fig, use_container_width=True)
+                    plotly_chart_with_csv(fig, use_container_width=True)
 
 # ── Tendencia Mensual ─────────────────────────────────────────────────────────
 
@@ -709,7 +712,7 @@ if "call_date" in df.columns:
             "Evolución mensual del volumen de insights por tipo.",
             "Ayuda a detectar tendencias, estacionalidades o cambios recientes en la demanda.",
         )
-        st.plotly_chart(fig, use_container_width=True)
+        plotly_chart_with_csv(fig, use_container_width=True)
         st.caption(
             "La caída en las últimas semanas del período puede reflejar que el dataset "
             "aún no está completo para esas fechas al momento de esta captura."
