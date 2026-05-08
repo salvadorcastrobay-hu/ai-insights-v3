@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^3.0.53",
     "@radix-ui/react-accordion": "^1.2.0",
     "@radix-ui/react-dialog": "^1.1.0",
     "@radix-ui/react-popover": "^1.1.0",
@@ -22,6 +23,7 @@
     "@tanstack/react-query": "^5.56.0",
     "@tanstack/react-table": "^8.20.0",
     "@uiw/react-heat-map": "^2.2.0",
+    "ai": "^6.0.168",
     "clsx": "^2.1.0",
     "cmdk": "^1.0.0",
     "date-fns": "^3.6.0",
@@ -32,7 +34,9 @@
     "postgres": "^3.4.9",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-markdown": "^10.1.0",
     "recharts": "^2.12.0",
+    "remark-gfm": "^4.0.1",
     "styled-jsx": "^5.1.7",
     "tailwind-merge": "^2.5.0",
     "tailwindcss": "^4.0.0",

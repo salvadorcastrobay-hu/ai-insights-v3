@@ -31,6 +31,8 @@ type Props = {
   /** Y-axis label width. Defaults to 220px. Use 260+ for very long labels. */
   yAxisWidth?: number;
   exportFileName?: string;
+  /** If set, makes bars clickable and invokes this callback with the full row. */
+  onBarClick?: (row: Row) => void;
 };
 
 export function HorizontalBarChart({
@@ -45,6 +47,7 @@ export function HorizontalBarChart({
   xMaxMultiplier = 1.18,
   yAxisWidth = 220,
   exportFileName = "bar-chart.csv",
+  onBarClick,
 }: Props) {
   const sorted = reverseY ? [...data].reverse() : data;
   const xMax = Math.max(1, ...data.map((d) => Number(d[xKey] ?? 0))) * xMaxMultiplier;
@@ -81,7 +84,15 @@ export function HorizontalBarChart({
               border: "1px solid #eeeef1",
             }}
           />
-          <Bar dataKey={xKey} radius={[0, 4, 4, 0]}>
+          <Bar
+            dataKey={xKey}
+            radius={[0, 4, 4, 0]}
+            cursor={onBarClick ? "pointer" : undefined}
+            onClick={onBarClick ? (payload: unknown) => {
+              const row = (payload as { payload?: Row })?.payload;
+              if (row) onBarClick(row);
+            } : undefined}
+          >
             <LabelList
               dataKey={xKey}
               position="right"

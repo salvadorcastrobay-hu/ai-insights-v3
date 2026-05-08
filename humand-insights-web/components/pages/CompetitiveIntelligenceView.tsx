@@ -5,6 +5,7 @@ import { HorizontalBarChart } from "@/components/charts/BarChart";
 import { HeatMap } from "@/components/charts/HeatMap";
 import { StackedBarChart } from "@/components/charts/StackedBar";
 import { COMPETITOR_REL_COLORS } from "@/components/charts/chart-theme";
+import { useDrillDown } from "@/components/drill-down/DrillDownProvider";
 import { MetricCard } from "@/components/layout/MetricCard";
 import { SectionHeader } from "@/components/layout/SectionHeader";
 import { EmptyState, PageTitle } from "@/components/pages/common";
@@ -24,6 +25,7 @@ const RELATIONSHIP_LEGEND: Array<{ label: string; color: string; note: string }>
 ];
 
 export function CompetitiveIntelligenceView({ data }: Props) {
+  const { open: drill } = useDrillDown();
   const {
     isEmpty,
     kpis,
@@ -63,8 +65,24 @@ export function CompetitiveIntelligenceView({ data }: Props) {
         description="Ranking de competidores por deals únicos, con desglose de la relación que el prospect tiene con ellos."
       />
       <section className="grid gap-3 lg:grid-cols-2">
-        <ChartCard title="¿Contra quién competimos más seguido?">
-          <HorizontalBarChart data={competitorCounts} height={Math.max(320, competitorCounts.length * 32)} />
+        <ChartCard
+          title="¿Contra quién competimos más seguido?"
+          ask={{
+            chartTitle: "Ranking de competidores",
+            chartKind: "horizontal-bar",
+            description: "Competidores ordenados por deals únicos que los mencionan.",
+            dimension: "competitor_name",
+            scopeType: "competitive_signal",
+            rows: competitorCounts.map((r) => ({ label: r.name, value: r.value })),
+          }}
+        >
+          <HorizontalBarChart
+            data={competitorCounts}
+            height={Math.max(320, competitorCounts.length * 32)}
+            onBarClick={(row) =>
+              drill({ dimension: "competitor_name", value: String(row.name), scopeType: "competitive_signal" })
+            }
+          />
         </ChartCard>
         <ChartCard title="¿Cuál es la relación del prospect con el competidor?">
           <StackedBarChart
