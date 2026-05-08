@@ -347,6 +347,70 @@ def inject_ds_css() -> None:
             background-color: {DS['brand_500']} !important;
             box-shadow: {DS['shadow_8dp']};
         }}
+
+        /* ── Download buttons in chart actions ── */
+        [data-testid="stDownloadButton"] button {{
+            background-color: {DS['brand_50']} !important;
+            border: 1px solid {DS['neutral_200']} !important;
+            border-radius: {DS['radius_s']} !important;
+            color: {DS['brand_500']} !important;
+            font-family: {DS['font']} !important;
+            font-size: {DS['size_xxs']} !important;
+            font-weight: 600 !important;
+            min-height: 32px !important;
+            padding: 0 8px !important;
+        }}
+        [data-testid="stDownloadButton"] button:hover {{
+            border-color: {DS['brand_400']} !important;
+            background-color: {DS['blueprimary_100']} !important;
+            color: {DS['blueprimary_800']} !important;
+        }}
+
+        /* ── Inline chart metadata row (tooltip + CSV action) ── */
+        .viz-meta-row {{
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-top: 6px;
+            margin-bottom: 2px;
+        }}
+        .viz-meta-row__left {{
+            min-width: 0;
+        }}
+        .viz-meta-row__right {{
+            flex-shrink: 0;
+        }}
+        .viz-meta__info {{
+            color: {DS['text_secondary']};
+            font-family: {DS['font']};
+            font-size: {DS['size_s']};
+            font-weight: 400;
+            line-height: 1.2;
+            cursor: help;
+            white-space: nowrap;
+        }}
+        .viz-meta__csv {{
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 56px;
+            height: 32px;
+            padding: 0 10px;
+            border-radius: {DS['radius_s']};
+            border: 1px solid {DS['neutral_200']};
+            background: {DS['brand_50']};
+            color: {DS['brand_500']} !important;
+            font-family: {DS['font']};
+            font-size: {DS['size_xxs']};
+            font-weight: 600;
+            text-decoration: none !important;
+        }}
+        .viz-meta__csv:hover {{
+            border-color: {DS['brand_400']};
+            background: {DS['blueprimary_100']};
+            color: {DS['blueprimary_800']} !important;
+        }}
         </style>
         """,
         unsafe_allow_html=True,
