@@ -5,7 +5,7 @@ import { loadInsights, loadTotalTranscriptsCount } from "@/lib/supabase/queries"
 
 export const dynamic = "force-dynamic";
 // Worst-case cold call (~10s insights + 2s deal_props). Warm cache: <100ms.
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 type PageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
