@@ -6,6 +6,7 @@ import { ChartCard } from "@/components/charts/ChartCard";
 import { HorizontalBarChart } from "@/components/charts/BarChart";
 import { HeatMap } from "@/components/charts/HeatMap";
 import { StackedBarChart } from "@/components/charts/StackedBar";
+import { useDrillDown } from "@/components/drill-down/DrillDownProvider";
 import { MetricCard } from "@/components/layout/MetricCard";
 import { SectionHeader } from "@/components/layout/SectionHeader";
 import { PageTitle } from "@/components/pages/common";
@@ -22,6 +23,7 @@ const PRIORITY_COLORS: Record<string, string> = {
 };
 
 export function ProductGapsDetailView({ data }: Props) {
+  const { open: drill } = useDrillDown();
   const {
     kpis,
     topFeatures,
@@ -66,6 +68,7 @@ export function ProductGapsDetailView({ data }: Props) {
   const topFeaturesDisplay = topFeatures.map((row) => ({
     name: row.priorityTag ? `${row.priorityTag} ${row.name}` : row.name,
     value: row.value,
+    rawName: row.name,
   }));
 
   // Segment priority stack
@@ -103,11 +106,27 @@ export function ProductGapsDetailView({ data }: Props) {
         title="Top 20 Features Faltantes"
         description="Ordenado por deals únicos que mencionaron la feature. El emoji indica la prioridad dominante."
       />
-      <ChartCard>
+      <ChartCard
+        ask={{
+          chartTitle: "Top 20 features faltantes",
+          chartKind: "horizontal-bar",
+          description: "Features ordenadas por deals únicos; el emoji indica prioridad dominante.",
+          dimension: "feature_display",
+          scopeType: "product_gap",
+          rows: topFeaturesDisplay.map((r) => ({ label: r.rawName, value: r.value })),
+        }}
+      >
         <HorizontalBarChart
           data={topFeaturesDisplay}
           height={Math.max(520, topFeaturesDisplay.length * 30 + 60)}
           yAxisWidth={260}
+          onBarClick={(row) =>
+            drill({
+              dimension: "feature_display",
+              value: String((row as { rawName?: string }).rawName ?? row.name),
+              scopeType: "product_gap",
+            })
+          }
         />
       </ChartCard>
 

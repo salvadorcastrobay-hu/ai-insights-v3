@@ -4,6 +4,7 @@ import { ChartCard } from "@/components/charts/ChartCard";
 import { HorizontalBarChart } from "@/components/charts/BarChart";
 import { HeatMap } from "@/components/charts/HeatMap";
 import { StackedBarChart } from "@/components/charts/StackedBar";
+import { useDrillDown } from "@/components/drill-down/DrillDownProvider";
 import { MetricCard } from "@/components/layout/MetricCard";
 import { SectionHeader } from "@/components/layout/SectionHeader";
 import { EmptyState, PageTitle } from "@/components/pages/common";
@@ -14,6 +15,7 @@ import type { SalesEnablementData } from "@/lib/data/sales-enablement-data";
 type Props = { data: SalesEnablementData };
 
 export function SalesEnablementView({ data }: Props) {
+  const { open: drill } = useDrillDown();
   const {
     isEmpty,
     kpis,
@@ -52,8 +54,24 @@ export function SalesEnablementView({ data }: Props) {
         description="Ranking de fricciones por deals únicos y desglose narrativo de las dos principales."
       />
       <section className="grid gap-3 lg:grid-cols-2">
-        <ChartCard title="¿Qué está frenando más los deals?">
-          <HorizontalBarChart data={topFrictionTypes} height={Math.max(320, topFrictionTypes.length * 32)} />
+        <ChartCard
+          title="¿Qué está frenando más los deals?"
+          ask={{
+            chartTitle: "Top fricciones",
+            chartKind: "horizontal-bar",
+            description: "Fricciones ordenadas por deals únicos afectados.",
+            dimension: "friction_subtype",
+            scopeType: "deal_friction",
+            rows: topFrictionTypes.map((r) => ({ label: r.name, value: r.value })),
+          }}
+        >
+          <HorizontalBarChart
+            data={topFrictionTypes}
+            height={Math.max(320, topFrictionTypes.length * 32)}
+            onBarClick={(row) =>
+              drill({ dimension: "friction_subtype", value: String(row.name), scopeType: "deal_friction" })
+            }
+          />
         </ChartCard>
         <ChartCard title="¿Varía la fricción según el tamaño de empresa?">
           <StackedBarChart

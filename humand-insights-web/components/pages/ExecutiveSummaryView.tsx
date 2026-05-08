@@ -6,6 +6,7 @@ import { TrendLineChart } from "@/components/charts/LineChart";
 import { HorizontalBarChart } from "@/components/charts/BarChart";
 import { StackedBarChart } from "@/components/charts/StackedBar";
 import { COMPETITOR_REL_COLORS } from "@/components/charts/chart-theme";
+import { useDrillDown } from "@/components/drill-down/DrillDownProvider";
 import { MetricCard } from "@/components/layout/MetricCard";
 import { SectionHeader } from "@/components/layout/SectionHeader";
 import { EmptyState, PageTitle } from "@/components/pages/common";
@@ -31,6 +32,7 @@ function Note({ children }: { children: React.ReactNode }) {
 }
 
 export function ExecutiveSummaryView({ data }: Props) {
+  const { open: drill } = useDrillDown();
   const {
     kpis,
     composition,
@@ -114,7 +116,21 @@ export function ExecutiveSummaryView({ data }: Props) {
           title="¿Con qué problemas llegan los clientes?"
           description="Top pains por demos únicas, desglosados por tema y por módulo."
         />
-        <ChartCard title="Top 10 Pains (demos únicas)">
+        <ChartCard
+          title="Top 10 Pains (demos únicas)"
+          ask={{
+            chartTitle: "Top 10 Pains (demos únicas)",
+            chartKind: "horizontal-bar",
+            description: "Top pains por demos únicas; valor = demos, pct = % sobre total de demos.",
+            dimension: "insight_subtype_display",
+            scopeType: "pain",
+            rows: pains.topPains.map((r) => ({
+              label: r.name,
+              value: r.value,
+              extra: { pct: `${r.pct.toFixed(1)}%` },
+            })),
+          }}
+        >
           <HorizontalBarChart
             data={pains.topPains.map((r) => ({ name: r.name, value: r.value, pct: r.pct }))}
             label={(value) => {
@@ -122,6 +138,7 @@ export function ExecutiveSummaryView({ data }: Props) {
               return row ? `${value} (${row.pct.toFixed(1)}%)` : String(value);
             }}
             yAxisWidth={260}
+            onBarClick={(row) => drill({ dimension: "pain_theme", value: String(row.name), scopeType: "pain" })}
           />
         </ChartCard>
 
