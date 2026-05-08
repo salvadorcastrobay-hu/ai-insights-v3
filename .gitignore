@@ -16,6 +16,9 @@ batches/
 # State
 state.json
 
+# Duplicated nested copy (legacy, regenerable)
+ai-insights-v3/
+
 # Reports (regenerable)
 qa_report.json
 prompt_refinements.json
