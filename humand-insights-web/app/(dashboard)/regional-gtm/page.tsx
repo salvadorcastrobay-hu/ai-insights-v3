@@ -4,7 +4,7 @@ import { parseFiltersFromSearchParams } from "@/lib/data/search-params-filters";
 import { loadInsights } from "@/lib/supabase/queries";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 type PageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
