@@ -31,10 +31,11 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (local + vercel pulled)
+# env files (local + vercel pulled + QA harness)
 .env
 .env*.local
 .env.vercel*
+.env.qa
 
 # vercel
 .vercel
