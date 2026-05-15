@@ -135,3 +135,13 @@ export function normalizeAcquisitionChannel(
   }
   return "Otros";
 }
+
+/**
+ * Strip the "(<250 employees)" / "(250-1000 employees)" / etc. suffix from
+ * segment labels for chart legibility. Humand employees know the segments by
+ * their short name; the parenthetical is redundant in axis labels.
+ */
+export function shortSegmentLabel(value: string | null | undefined): string {
+  if (!value) return "";
+  return value.replace(/\s*\([^)]*\)\s*$/, "").trim();
+}

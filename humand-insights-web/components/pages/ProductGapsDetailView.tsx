@@ -13,8 +13,9 @@ import { PageTitle } from "@/components/pages/common";
 import { Input } from "@/components/ui/input";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@/components/ui/table";
 import type { ProductGapsDetailData } from "@/lib/data/product-gaps-detail-data";
+import type { InsightRow } from "@/lib/supabase/types";
 
-type Props = { data: ProductGapsDetailData };
+type Props = { data: ProductGapsDetailData; filteredRows: InsightRow[] };
 
 const PRIORITY_COLORS: Record<string, string> = {
   "⚠️ Must Have": "#E53E3E",
@@ -22,7 +23,7 @@ const PRIORITY_COLORS: Record<string, string> = {
   "🚫 Dealbreaker": "#9B2335",
 };
 
-export function ProductGapsDetailView({ data }: Props) {
+export function ProductGapsDetailView({ data, filteredRows }: Props) {
   const { open: drill } = useDrillDown();
   const {
     kpis,
@@ -107,6 +108,7 @@ export function ProductGapsDetailView({ data }: Props) {
         description="Ordenado por deals únicos que mencionaron la feature. El emoji indica la prioridad dominante."
       />
       <ChartCard
+        rawRows={filteredRows.filter((r) => r.insight_type === "product_gap")}
         ask={{
           chartTitle: "Top 20 features faltantes",
           chartKind: "horizontal-bar",

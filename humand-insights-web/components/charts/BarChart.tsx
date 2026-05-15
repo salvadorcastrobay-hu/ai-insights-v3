@@ -43,7 +43,7 @@ export function HorizontalBarChart({
   multicolor = false,
   height,
   label,
-  reverseY = true,
+  reverseY = false,
   xMaxMultiplier = 1.18,
   yAxisWidth = 220,
   exportFileName = "bar-chart.csv",

@@ -13,6 +13,19 @@ type Props = {
   valueFormat?: (v: number) => string;
 };
 
+/**
+ * Strip redundant parentheticals from labels for axis legibility. E.g.
+ *   "SMB (<250 employees)"            → "SMB"
+ *   "Mid Market (250-1000 employees)" → "Mid Market"
+ *
+ * Heuristic: only strip when the parenthetical contains "employee" or is the
+ * trailing chunk of a 2-part label. Keeps things like "Performance Review (PR)"
+ * intact because we don't blindly drop every `(...)`.
+ */
+function compactLabel(label: string): string {
+  return label.replace(/\s*\(\s*[^)]*employees?[^)]*\)\s*$/i, "").trim() || label;
+}
+
 function hexToRgb(hex: string) {
   const clean = hex.replace("#", "");
   const normalized = clean.length === 3
@@ -57,9 +70,14 @@ export function HeatMap({
 }: Props) {
   const rows = rowLabels.length;
   const cols = colLabels.length;
-  const computedHeight = height ?? Math.max(360, rows * 36 + 120);
+  // Floor row height at 40px so few-row heatmaps don't collapse into tiny cells.
+  const MIN_CELL_HEIGHT = 40;
+  const computedHeight = height ?? Math.max(360, rows * 44 + 130);
   const topPadding = 110;
-  const leftPadding = 220;
+  // Adaptive left padding: enough to fit the longest row label, no more.
+  // Avoids huge whitespace when labels are short (e.g. "processes", "talent").
+  const longestRow = rowLabels.reduce((m, l) => Math.max(m, l.length), 0);
+  const leftPadding = Math.min(260, Math.max(120, longestRow * 7 + 24));
   const rightPadding = 24;
   const bottomPadding = 24;
 
@@ -68,28 +86,45 @@ export function HeatMap({
     [values],
   );
 
-  const innerHeight = computedHeight - topPadding - bottomPadding;
-  const cellHeight = rows > 0 ? innerHeight / rows : 0;
+  const rawInnerHeight = computedHeight - topPadding - bottomPadding;
+  const rawCellHeight = rows > 0 ? rawInnerHeight / rows : 0;
+  const cellHeight = Math.max(rawCellHeight, MIN_CELL_HEIGHT);
+  const innerHeight = cellHeight * rows;
+  // If we expanded cellHeight beyond what the parent height accommodated,
+  // grow the svg viewBox so the rows aren't clipped.
+  const finalHeight = innerHeight + topPadding + bottomPadding;
   const viewWidth = 1000;
   const innerWidth = viewWidth - leftPadding - rightPadding;
-  const cellWidth = cols > 0 ? innerWidth / cols : 0;
+  // Cap cell width so few-column heatmaps don't get stretched into giant
+  // sparse panels, but be generous when there are only a few columns —
+  // otherwise we leave a lot of empty space on either side.
+  const maxCellWidth = cols <= 3 ? 220 : cols <= 5 ? 180 : 150;
+  const rawCellWidth = cols > 0 ? innerWidth / cols : 0;
+  const cellWidth = Math.min(rawCellWidth, maxCellWidth);
+  const matrixWidth = cellWidth * cols;
+  const xOffset = leftPadding + (innerWidth - matrixWidth) / 2;
+  // Rotate column labels only when cells are narrow enough that horizontal
+  // text would overlap. Wide cells (≥ 90px) get horizontal centred labels.
+  const rotateColLabels = cellWidth < 90;
 
   return (
     <div className="w-full overflow-x-auto">
-      <svg width="100%" viewBox={`0 0 ${viewWidth} ${computedHeight}`}>
+      <svg width="100%" viewBox={`0 0 ${viewWidth} ${finalHeight}`}>
         {colLabels.map((label, c) => {
-          const x = leftPadding + c * cellWidth + cellWidth / 2;
+          const x = xOffset + c * cellWidth + cellWidth / 2;
+          const display = compactLabel(label);
           return (
             <text
               key={`col-${label}-${c}`}
               x={x}
-              y={70}
-              textAnchor="start"
-              transform={`rotate(-30 ${x} 70)`}
-              fontSize={11}
-              fill="#636271"
+              y={rotateColLabels ? 70 : 90}
+              textAnchor="middle"
+              transform={rotateColLabels ? `rotate(-30 ${x} 70)` : undefined}
+              fontSize={12}
+              fontWeight={600}
+              fill="#303036"
             >
-              {label}
+              {display}
             </text>
           );
         })}
@@ -99,21 +134,21 @@ export function HeatMap({
           return (
             <text
               key={`row-${label}-${r}`}
-              x={leftPadding - 8}
+              x={xOffset - 8}
               y={y}
               textAnchor="end"
               dominantBaseline="middle"
               fontSize={11}
               fill="#636271"
             >
-              {label}
+              {compactLabel(label)}
             </text>
           );
         })}
 
         {values.map((row, r) =>
           row.map((v, c) => {
-            const x = leftPadding + c * cellWidth;
+            const x = xOffset + c * cellWidth;
             const y = topPadding + r * cellHeight;
             const ratio = matrixMax > 0 ? v / matrixMax : 0;
             const fill = interpolateColor(ratio);

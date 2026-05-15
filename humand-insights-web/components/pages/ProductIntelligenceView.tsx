@@ -12,7 +12,7 @@ import { Table, Tbody, Td, Th, Thead, Tr } from "@/components/ui/table";
 import { formatCurrency } from "@/lib/data/computations";
 import type { ProductIntelligenceData } from "@/lib/data/product-intelligence-data";
 
-type Props = { data: ProductIntelligenceData };
+type Props = { data: ProductIntelligenceData; filteredRows: import("@/lib/supabase/types").InsightRow[] };
 
 function Caption({ children }: { children: React.ReactNode }) {
   return (
@@ -49,7 +49,7 @@ function SelectBox({
   );
 }
 
-export function ProductIntelligenceView({ data }: Props) {
+export function ProductIntelligenceView({ data, filteredRows }: Props) {
   const {
     topPains,
     painThemeBreakdown,
@@ -86,7 +86,18 @@ export function ProductIntelligenceView({ data }: Props) {
           title="¿Con qué problemas llegan los prospects?"
           description="Top pains por demos únicas, con desglose por tema y por segmento."
         />
-        <ChartCard title="Top 15 Pains (demos únicas)">
+        <ChartCard
+          title="Top 15 Pains (demos únicas)"
+          rawRows={filteredRows.filter((r) => r.insight_type === "pain")}
+          ask={{
+            chartTitle: "Top 15 Pains",
+            chartKind: "horizontal-bar",
+            description: "Top pains por demos únicas.",
+            dimension: "insight_subtype_display",
+            scopeType: "pain",
+            rows: topPains.map((r) => ({ label: r.name, value: r.value, extra: { pct: `${r.pct.toFixed(1)}%` } })),
+          }}
+        >
           <HorizontalBarChart
             data={topPains.map((r) => ({ name: r.name, value: r.value, pct: r.pct }))}
             label={(value) => {
@@ -174,10 +185,32 @@ export function ProductIntelligenceView({ data }: Props) {
           )}
         </ChartCard>
         <section className="grid gap-3 lg:grid-cols-2">
-          <ChartCard title="Top 20 Feature Gaps — Frecuencia">
+          <ChartCard
+            title="Top 20 Feature Gaps — Frecuencia"
+            rawRows={filteredRows.filter((r) => r.insight_type === "product_gap")}
+            ask={{
+              chartTitle: "Top 20 Feature Gaps — Frecuencia",
+              chartKind: "horizontal-bar",
+              description: "Features faltantes más solicitadas por deals únicos.",
+              dimension: "feature_display",
+              scopeType: "product_gap",
+              rows: featureFreq.map((r) => ({ label: r.name, value: r.value })),
+            }}
+          >
             <HorizontalBarChart data={featureFreq} yAxisWidth={240} />
           </ChartCard>
-          <ChartCard title="Top 10 Feature Gaps — Revenue en Riesgo">
+          <ChartCard
+            title="Top 10 Feature Gaps — Revenue en Riesgo"
+            rawRows={filteredRows.filter((r) => r.insight_type === "product_gap")}
+            ask={{
+              chartTitle: "Top 10 Feature Gaps — Revenue en Riesgo",
+              chartKind: "horizontal-bar",
+              description: "Features ordenadas por revenue acumulado de los deals que las solicitan.",
+              dimension: "feature_display",
+              scopeType: "product_gap",
+              rows: featureRevenue.map((r) => ({ label: r.name, value: r.value })),
+            }}
+          >
             <HorizontalBarChart
               data={featureRevenue}
               label={(v) => formatCurrency(v)}

@@ -1,4 +1,5 @@
 import { SalesEnablementView } from "@/components/pages/SalesEnablementView";
+import { applyFilters } from "@/lib/data/filters";
 import { buildSalesEnablementData } from "@/lib/data/sales-enablement-data";
 import { parseFiltersFromSearchParams } from "@/lib/data/search-params-filters";
 import { loadInsights } from "@/lib/supabase/queries";
@@ -15,5 +16,6 @@ export default async function Page({ searchParams }: PageProps) {
   const filters = parseFiltersFromSearchParams(params);
   const rows = await loadInsights(process.env.NEXT_PUBLIC_PROMPT_VERSION ?? "v3.0");
   const data = buildSalesEnablementData(rows, 0, filters);
-  return <SalesEnablementView data={data} />;
+  const filteredRows = applyFilters(rows, filters);
+  return <SalesEnablementView data={data} filteredRows={filteredRows} />;
 }

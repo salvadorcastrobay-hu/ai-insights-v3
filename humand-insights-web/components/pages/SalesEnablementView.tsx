@@ -12,9 +12,9 @@ import { Table, Tbody, Td, Th, Thead, Tr } from "@/components/ui/table";
 import { formatCurrency } from "@/lib/data/computations";
 import type { SalesEnablementData } from "@/lib/data/sales-enablement-data";
 
-type Props = { data: SalesEnablementData };
+type Props = { data: SalesEnablementData; filteredRows: import("@/lib/supabase/types").InsightRow[] };
 
-export function SalesEnablementView({ data }: Props) {
+export function SalesEnablementView({ data, filteredRows }: Props) {
   const { open: drill } = useDrillDown();
   const {
     isEmpty,
@@ -56,6 +56,7 @@ export function SalesEnablementView({ data }: Props) {
       <section className="grid gap-3 lg:grid-cols-2">
         <ChartCard
           title="¿Qué está frenando más los deals?"
+          rawRows={filteredRows.filter((r) => r.insight_type === "deal_friction")}
           ask={{
             chartTitle: "Top fricciones",
             chartKind: "horizontal-bar",
@@ -111,7 +112,7 @@ export function SalesEnablementView({ data }: Props) {
         </div>
       </ChartCard>
 
-      <section className="grid gap-3 lg:grid-cols-2">
+      <section className="space-y-3">
         <ChartCard title="¿En qué etapa del deal aparece cada fricción?">
           <HeatMap
             rowLabels={stageHeat.rowLabels}
@@ -198,8 +199,8 @@ export function SalesEnablementView({ data }: Props) {
                     </li>
                   ) : (
                     card.questions.map((q, i) => (
-                      <li key={i}>
-                        <span className="text-[var(--color-text-secondary)]">[{q.pct}%]</span>{" "}
+                      <li key={i} className="leading-snug">
+                        <span className="mr-1 text-[var(--color-text-secondary)]">•</span>
                         {q.text}
                       </li>
                     ))

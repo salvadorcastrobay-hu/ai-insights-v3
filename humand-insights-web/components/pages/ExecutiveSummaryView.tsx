@@ -11,10 +11,13 @@ import { MetricCard } from "@/components/layout/MetricCard";
 import { SectionHeader } from "@/components/layout/SectionHeader";
 import { EmptyState, PageTitle } from "@/components/pages/common";
 import { formatCurrency } from "@/lib/data/computations";
+import { shortSegmentLabel } from "@/lib/data/normalizers";
 import type { ExecutiveSummaryData } from "@/lib/data/executive-summary-data";
+import type { InsightRow } from "@/lib/supabase/types";
 
 type Props = {
   data: ExecutiveSummaryData;
+  filteredRows: InsightRow[];
 };
 
 function Caption({ children }: { children: React.ReactNode }) {
@@ -31,7 +34,7 @@ function Note({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function ExecutiveSummaryView({ data }: Props) {
+export function ExecutiveSummaryView({ data, filteredRows }: Props) {
   const { open: drill } = useDrillDown();
   const {
     kpis,
@@ -86,18 +89,47 @@ export function ExecutiveSummaryView({ data }: Props) {
           title="Composición de la muestra"
           description="Volumen de demos únicas cubiertas por industria, segmento y país."
         />
-        <section className="grid gap-3 lg:grid-cols-2">
-          <ChartCard title="Distribución por Industria (Top 15)">
+        <section className="space-y-3">
+          <ChartCard
+            title="Distribución por Industria (Top 15)"
+            rawRows={filteredRows}
+            ask={{
+              chartTitle: "Distribución por Industria",
+              chartKind: "horizontal-bar",
+              description: "Distribución de insights por industria del cliente.",
+              rows: composition.byIndustry.map((r) => ({ label: r.name, value: r.value })),
+            }}
+          >
             <HorizontalBarChart data={composition.byIndustry} yAxisWidth={220} />
           </ChartCard>
-          <ChartCard title="Distribución por Segmento">
-            <HorizontalBarChart data={composition.bySegment} yAxisWidth={180} />
+          <ChartCard
+            title="Distribución por Segmento"
+            rawRows={filteredRows}
+            ask={{
+              chartTitle: "Distribución por Segmento",
+              chartKind: "horizontal-bar",
+              description: "Distribución de insights por segmento comercial.",
+              rows: composition.bySegment.map((r) => ({ label: shortSegmentLabel(r.name), value: r.value })),
+            }}
+          >
+            <HorizontalBarChart
+              data={composition.bySegment.map((d) => ({ ...d, name: shortSegmentLabel(d.name) }))}
+              yAxisWidth={220}
+              height={220}
+            />
           </ChartCard>
-          <div className="lg:col-span-2">
-            <ChartCard title="Distribución por País (Top 15)">
-              <HorizontalBarChart data={composition.byCountry} yAxisWidth={180} />
-            </ChartCard>
-          </div>
+          <ChartCard
+            title="Distribución por País (Top 15)"
+            rawRows={filteredRows}
+            ask={{
+              chartTitle: "Distribución por País",
+              chartKind: "horizontal-bar",
+              description: "Distribución de insights por país.",
+              rows: composition.byCountry.map((r) => ({ label: r.name, value: r.value })),
+            }}
+          >
+            <HorizontalBarChart data={composition.byCountry} yAxisWidth={220} />
+          </ChartCard>
         </section>
       </div>
 
@@ -106,7 +138,16 @@ export function ExecutiveSummaryView({ data }: Props) {
           title="Resumen de señales detectadas"
           description="Cantidad de insights únicos por tipo. Una misma demo puede generar varios."
         />
-        <ChartCard title="Insights por Tipo">
+        <ChartCard
+          title="Insights por Tipo"
+          rawRows={filteredRows}
+          ask={{
+            chartTitle: "Insights por Tipo",
+            chartKind: "horizontal-bar",
+            description: "Cantidad de insights extraídos por cada tipo (pain, product_gap, etc.).",
+            rows: insightTypes.map((r) => ({ label: r.name, value: r.value })),
+          }}
+        >
           <HorizontalBarChart data={insightTypes} multicolor yAxisWidth={220} />
         </ChartCard>
       </div>
@@ -118,6 +159,7 @@ export function ExecutiveSummaryView({ data }: Props) {
         />
         <ChartCard
           title="Top 10 Pains (demos únicas)"
+          rawRows={filteredRows.filter((r) => r.insight_type === "pain")}
           ask={{
             chartTitle: "Top 10 Pains (demos únicas)",
             chartKind: "horizontal-bar",
@@ -197,7 +239,17 @@ export function ExecutiveSummaryView({ data }: Props) {
           title="¿Qué módulos buscan y qué les falta?"
           description="Demanda de módulos (pains + gaps combinados) y gaps por frecuencia y revenue."
         />
-        <ChartCard title="Módulos más buscados en la primera demo">
+        <ChartCard
+          title="Módulos más buscados en la primera demo"
+          rawRows={filteredRows}
+          ask={{
+            chartTitle: "Módulos más buscados",
+            chartKind: "horizontal-bar",
+            description: "Módulos con mayor demanda (pains + gaps combinados) por demos únicas.",
+            dimension: "module_display",
+            rows: moduleDemand.map((r) => ({ label: r.name, value: r.value, extra: { pct: `${r.pct.toFixed(1)}%` } })),
+          }}
+        >
           <HorizontalBarChart
             data={moduleDemand.map((r) => ({ name: r.name, value: r.value, pct: r.pct }))}
             label={(value) => {
@@ -207,8 +259,19 @@ export function ExecutiveSummaryView({ data }: Props) {
             yAxisWidth={220}
           />
         </ChartCard>
-        <section className="grid gap-3 lg:grid-cols-2">
-          <ChartCard title="Top 10 Feature Gaps — Frecuencia">
+        <section className="space-y-3">
+          <ChartCard
+            title="Top 20 Feature Gaps — Frecuencia"
+            rawRows={filteredRows.filter((r) => r.insight_type === "product_gap")}
+            ask={{
+              chartTitle: "Top 20 Feature Gaps — Frecuencia",
+              chartKind: "horizontal-bar",
+              description: "Features faltantes más solicitadas por deals únicos.",
+              dimension: "feature_display",
+              scopeType: "product_gap",
+              rows: gaps.byFreq.map((r) => ({ label: r.name, value: r.value, extra: { pct: `${r.pct.toFixed(1)}%` } })),
+            }}
+          >
             <HorizontalBarChart
               data={gaps.byFreq.map((r) => ({ name: r.name, value: r.value, pct: r.pct }))}
               label={(value) => {
@@ -218,7 +281,18 @@ export function ExecutiveSummaryView({ data }: Props) {
               yAxisWidth={220}
             />
           </ChartCard>
-          <ChartCard title="Top 10 Feature Gaps — Revenue en Riesgo">
+          <ChartCard
+            title="Top 20 Feature Gaps — Revenue en Riesgo"
+            rawRows={filteredRows.filter((r) => r.insight_type === "product_gap")}
+            ask={{
+              chartTitle: "Top 20 Feature Gaps — Revenue en Riesgo",
+              chartKind: "horizontal-bar",
+              description: "Features ordenadas por revenue de los deals que las mencionaron.",
+              dimension: "feature_display",
+              scopeType: "product_gap",
+              rows: gaps.byRevenue.map((r) => ({ label: r.name, value: r.value })),
+            }}
+          >
             <HorizontalBarChart
               data={gaps.byRevenue}
               label={(value) => formatCurrency(value)}
@@ -233,7 +307,18 @@ export function ExecutiveSummaryView({ data }: Props) {
           title="¿Qué competidores se mencionan más?"
           description="Top competidores desglosados por tipo de relación (usa, evalúa, migra, etc.)."
         />
-        <ChartCard title="Top Competidores Mencionados">
+        <ChartCard
+          title="Top Competidores Mencionados"
+          rawRows={filteredRows.filter((r) => r.insight_type === "competitive_signal" && !r.is_own_brand_competitor)}
+          ask={{
+            chartTitle: "Top Competidores Mencionados",
+            chartKind: "stacked-bar",
+            description: "Top competidores por deals únicos, desglosados por tipo de relación.",
+            dimension: "competitor_name",
+            scopeType: "competitive_signal",
+            rows: competitors.data.map((r) => ({ label: String(r.name), value: competitors.stackKeys.reduce((sum, k) => sum + (Number(r[k]) || 0), 0) })),
+          }}
+        >
           <StackedBarChart
             data={competitors.data}
             yKey="name"
@@ -250,14 +335,36 @@ export function ExecutiveSummaryView({ data }: Props) {
           description="Top fricciones por demos únicas, desglose por etapa y revenue en riesgo."
         />
         <section className="grid gap-3 lg:grid-cols-2">
-          <ChartCard title="Top 10 Fricciones (demos únicas)">
+          <ChartCard
+            title="Top 10 Fricciones (demos únicas)"
+            rawRows={filteredRows.filter((r) => r.insight_type === "deal_friction")}
+            ask={{
+              chartTitle: "Top 10 Fricciones",
+              chartKind: "horizontal-bar",
+              description: "Top fricciones del deal por demos únicas afectadas.",
+              dimension: "friction_subtype",
+              scopeType: "deal_friction",
+              rows: frictions.top.map((r) => ({ label: r.name, value: r.value })),
+            }}
+          >
             {frictions.top.length > 0 ? (
               <HorizontalBarChart data={frictions.top} yAxisWidth={240} />
             ) : (
               <EmptyState>Sin datos de fricciones en el recorte actual.</EmptyState>
             )}
           </ChartCard>
-          <ChartCard title="Fricciones — Revenue en Riesgo">
+          <ChartCard
+            title="Fricciones — Revenue en Riesgo"
+            rawRows={filteredRows.filter((r) => r.insight_type === "deal_friction")}
+            ask={{
+              chartTitle: "Fricciones — Revenue en Riesgo",
+              chartKind: "horizontal-bar",
+              description: "Fricciones ordenadas por revenue de los deals afectados.",
+              dimension: "friction_subtype",
+              scopeType: "deal_friction",
+              rows: frictions.byRevenue.map((r) => ({ label: r.name, value: r.value })),
+            }}
+          >
             {frictions.byRevenue.length > 0 ? (
               <HorizontalBarChart
                 data={frictions.byRevenue}
@@ -289,8 +396,19 @@ export function ExecutiveSummaryView({ data }: Props) {
           title="¿Qué preguntas aparecen siempre?"
           description="Top FAQs por demos únicas y co-ocurrencia con módulos."
         />
-        <section className="grid gap-3 lg:grid-cols-[2fr_3fr]">
-          <ChartCard title="Top 10 Preguntas Frecuentes (demos únicas)">
+        <section className="space-y-3">
+          <ChartCard
+            title="Top 10 Preguntas Frecuentes (demos únicas)"
+            rawRows={filteredRows.filter((r) => r.insight_type === "faq")}
+            ask={{
+              chartTitle: "Top 10 FAQs",
+              chartKind: "horizontal-bar",
+              description: "Top topics de preguntas frecuentes por demos únicas.",
+              dimension: "insight_subtype_display",
+              scopeType: "faq",
+              rows: faqs.top.map((r) => ({ label: r.name, value: r.value })),
+            }}
+          >
             {faqs.top.length > 0 ? (
               <HorizontalBarChart data={faqs.top} yAxisWidth={260} />
             ) : (

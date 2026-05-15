@@ -10,9 +10,9 @@ import { Input } from "@/components/ui/input";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@/components/ui/table";
 import type { FaqDetailData } from "@/lib/data/faq-detail-data";
 
-type Props = { data: FaqDetailData };
+type Props = { data: FaqDetailData; filteredRows: import("@/lib/supabase/types").InsightRow[] };
 
-export function FaqDetailView({ data }: Props) {
+export function FaqDetailView({ data, filteredRows }: Props) {
   const { kpis, topicCounts, topics, topQuestionsByTopic, faqTableRows } = data;
 
   const [topic, setTopic] = useState(topics[0] ?? "");
@@ -51,7 +51,18 @@ export function FaqDetailView({ data }: Props) {
       </p>
 
       <section className="grid gap-3 lg:grid-cols-2">
-        <ChartCard title="FAQs por Topic (deals únicos con al menos 1 pregunta)">
+        <ChartCard
+          title="FAQs por Topic (deals únicos con al menos 1 pregunta)"
+          rawRows={filteredRows.filter((r) => r.insight_type === "faq")}
+          ask={{
+            chartTitle: "FAQs por Topic",
+            chartKind: "horizontal-bar",
+            description: "Topics de preguntas frecuentes por deals únicos.",
+            dimension: "insight_subtype_display",
+            scopeType: "faq",
+            rows: topicCounts.map((r) => ({ label: r.name, value: r.value })),
+          }}
+        >
           <p className="mb-2 text-[12px] text-[var(--color-text-secondary)]">
             Los topics con mayor volumen son los candidatos prioritarios para construir Battle
             Cards. Cada AE debería tener una respuesta preparada para esos topics.

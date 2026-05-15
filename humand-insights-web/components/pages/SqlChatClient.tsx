@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { SlidersHorizontal, X } from "lucide-react";
 import { ChatInterface } from "@/components/chat/ChatInterface";
 import type {
   ChartPayload,
@@ -101,6 +102,7 @@ export function SqlChatClient({ filterBar }: { filterBar?: ReactNode } = {}) {
   const [input, setInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingConversations, setIsLoadingConversations] = useState(true);
+  const [showFilters, setShowFilters] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const [filters, setFilters] = useGlobalFilters();
@@ -287,9 +289,39 @@ export function SqlChatClient({ filterBar }: { filterBar?: ReactNode } = {}) {
       isSubmitting={isSubmitting}
       inputPlaceholder="Ej: Top 10 pains en Enterprise en los ultimos 90 dias"
       sidebarTitle="Consultas guardadas"
-      filterBar={filterBar}
       assistantLabel="AI"
       onCancel={cancel}
+      inputAccessory={
+        filterBar ? (
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowFilters((v) => !v)}
+              title="Filtros"
+              className="flex h-8 w-8 items-center justify-center rounded-full text-[var(--color-text-secondary)] transition hover:bg-[var(--color-neutral-100)] hover:text-[var(--color-brand-500)]"
+            >
+              <SlidersHorizontal size={15} strokeWidth={2} />
+            </button>
+            {showFilters ? (
+              <div className="absolute bottom-10 left-0 z-30 w-[640px] max-w-[90vw] rounded-[var(--radius-m)] border border-[var(--color-neutral-200)] bg-white p-3 shadow-[var(--shadow-8dp)]">
+                <div className="mb-2 flex items-center gap-2">
+                  <SlidersHorizontal size={13} className="text-[var(--color-brand-500)]" />
+                  <span className="text-[12px] font-semibold text-[var(--color-text-default)]">Filtros</span>
+                  <button
+                    type="button"
+                    onClick={() => setShowFilters(false)}
+                    className="ml-auto rounded-full p-0.5 text-[var(--color-text-secondary)] hover:bg-[var(--color-neutral-100)]"
+                    aria-label="Cerrar"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+                {filterBar}
+              </div>
+            ) : null}
+          </div>
+        ) : undefined
+      }
       starterPrompts={[
         "Top 10 pains en Enterprise en los últimos 90 días",
         "¿Cuáles son los competidores más mencionados en Mid Market?",
