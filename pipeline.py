@@ -95,13 +95,15 @@ def run_pipeline(
     logger.info(f"Found {len(transcripts)} transcripts")
 
     # ── Step 3: Filter already processed ──
+    # Filtra SIEMPRE — no importa si vino con --sample. Re-procesar lo ya
+    # hecho es desperdicio de tokens. La forma de forzar re-extracción es
+    # bumpear PROMPT_VERSION (cada versión tiene su propio set de IDs).
     processed_ids = get_processed_transcript_ids(supabase)
-    logger.info(f"Found {len(processed_ids)} already-processed transcript IDs")
-    if not sample:
-        before = len(transcripts)
-        transcripts = [t for t in transcripts
-                       if (t.get("transcript_id") or t.get("id", "unknown")) not in processed_ids]
-        logger.info(f"Filtered: {before} -> {len(transcripts)} transcripts remaining")
+    logger.info(f"Found {len(processed_ids)} already-processed transcript IDs (prompt_version={config.PROMPT_VERSION})")
+    before = len(transcripts)
+    transcripts = [t for t in transcripts
+                   if (t.get("transcript_id") or t.get("id", "unknown")) not in processed_ids]
+    logger.info(f"Filtered: {before} -> {len(transcripts)} transcripts remaining")
 
     # ── Step 4: Chunk transcripts ──
     all_chunks = []
