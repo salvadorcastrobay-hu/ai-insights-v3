@@ -34,7 +34,10 @@ export default function LoginPage() {
 
     try {
       const supabase = createClient();
-      const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
+      // Allow users to type just "salvador.castrobay" and auto-append the
+      // workspace domain. Supabase Auth keys on email under the hood.
+      const fullEmail = email.includes("@") ? email.trim() : `${email.trim()}@humand.co`;
+      const { error: authError } = await supabase.auth.signInWithPassword({ email: fullEmail, password });
       if (authError) throw authError;
       router.push("/executive-summary");
       router.refresh();
@@ -54,8 +57,14 @@ export default function LoginPage() {
         </header>
         <form className="space-y-3" onSubmit={onSubmit}>
           <label className="block text-[12px] font-semibold text-[var(--color-text-secondary)]">
-            Email
-            <Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
+            Usuario o email
+            <Input
+              type="text"
+              autoComplete="username"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              required
+            />
           </label>
           <label className="block text-[12px] font-semibold text-[var(--color-text-secondary)]">
             Password
