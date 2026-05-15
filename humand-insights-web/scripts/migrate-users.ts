@@ -1,16 +1,19 @@
 /**
  * One-time migration of streamlit-authenticator users (config.yaml) into
- * Supabase Auth. Each created user gets a recovery link emailed so they can
- * pick a new password.
+ * Supabase Auth. Each user is created with the shared INITIAL_PASSWORD;
+ * they can change it later via "forgot password" if they want.
  *
  * Usage:
  *   NEXT_PUBLIC_SUPABASE_URL=... \
  *   SUPABASE_SERVICE_ROLE_KEY=... \
  *   npx tsx scripts/migrate-users.ts
  *
- * Re-running is safe: existing users are skipped (or have their roles updated).
- * Pass --dry-run to print the plan without touching Supabase.
+ * Re-running is safe: existing users are updated (roles + password reset back
+ * to INITIAL_PASSWORD). Pass --dry-run to print the plan without applying.
+ * Pass --skip-password to keep current passwords untouched on re-run.
  */
+
+const INITIAL_PASSWORD = "12345678";
 
 import { createClient } from "@supabase/supabase-js";
 
@@ -31,6 +34,7 @@ const USERS: SeedUser[] = [
   { email: "mile@humand.co", roles: ["campaign_advisor", "viewer"], first_name: "Milena", last_name: "Yuri" },
   { email: "pedro@humand.co", roles: ["campaign_advisor", "viewer"], first_name: "Pedro" },
   { email: "raphael.montressor@humand.co", roles: ["campaign_advisor", "viewer"], first_name: "Raphael", last_name: "Montressor" },
+  { email: "laura.flores@humand.co", roles: ["campaign_advisor", "viewer"], first_name: "Laura", last_name: "Flôres" },
   { email: "agustina.ini@humand.co", roles: ["viewer"], first_name: "Agus", last_name: "Ini" },
   { email: "aimee@humand.co", roles: ["viewer"], first_name: "Aimee" },
   { email: "augusto.ferrer@humand.co", roles: ["viewer"], first_name: "Augusto", last_name: "Ferrer" },
@@ -55,10 +59,10 @@ async function main() {
   }
 
   const dryRun = process.argv.includes("--dry-run");
-  const skipReset = process.argv.includes("--skip-recovery");
+  const skipPassword = process.argv.includes("--skip-password");
   const supabase = createClient(url, serviceRole, { auth: { persistSession: false } });
 
-  console.log(`Migrating ${USERS.length} users (dry-run=${dryRun}, skip-recovery=${skipReset})`);
+  console.log(`Migrating ${USERS.length} users (dry-run=${dryRun}, skip-password=${skipPassword})`);
 
   // Page through the existing users so we only do one round-trip.
   const existing = new Map<string, string>(); // email → user id
@@ -87,12 +91,14 @@ async function main() {
 
     const existingId = existing.get(email);
     if (existingId) {
-      console.log(`= ${email} already exists (${existingId}); syncing app_metadata.roles`);
+      console.log(`= ${email} already exists (${existingId}); syncing roles${skipPassword ? "" : " + resetting password"}`);
       if (!dryRun) {
-        const { error } = await supabase.auth.admin.updateUserById(existingId, {
+        const updatePayload: Parameters<typeof supabase.auth.admin.updateUserById>[1] = {
           app_metadata: appMeta,
           user_metadata: userMeta,
-        });
+        };
+        if (!skipPassword) updatePayload.password = INITIAL_PASSWORD;
+        const { error } = await supabase.auth.admin.updateUserById(existingId, updatePayload);
         if (error) {
           console.error(`  ! failed to update ${email}: ${error.message}`);
           continue;
@@ -109,6 +115,7 @@ async function main() {
     }
     const { data, error } = await supabase.auth.admin.createUser({
       email,
+      password: INITIAL_PASSWORD,
       email_confirm: true,
       app_metadata: appMeta,
       user_metadata: userMeta,
@@ -119,16 +126,6 @@ async function main() {
       continue;
     }
     created += 1;
-
-    if (!skipReset) {
-      const { error: linkError } = await supabase.auth.admin.generateLink({
-        type: "recovery",
-        email,
-      });
-      if (linkError) {
-        console.error(`  ! failed to send recovery link to ${email}: ${linkError.message}`);
-      }
-    }
   }
 
   console.log(`\nDone. created=${created} updated=${updated} skipped=${skipped}`);
