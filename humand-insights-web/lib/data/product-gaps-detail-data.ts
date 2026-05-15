@@ -217,7 +217,11 @@ export function buildProductGapsDetailData(
   const moduleCounts = new Map<string, number>();
   for (const row of gaps) {
     if (!row.module_status) continue;
-    const label = row.module_status === "existing" ? "Existente" : row.module_status === "missing" ? "Faltante" : row.module_status;
+    const label =
+      row.module_status === "existing" ? "Existente"
+      : row.module_status === "missing" ? "Faltante"
+      : row.module_status === "roadmap" ? "En roadmap"
+      : row.module_status;
     moduleCounts.set(label, (moduleCounts.get(label) ?? 0) + 1);
   }
   const moduleTotal = [...moduleCounts.values()].reduce((a, b) => a + b, 0);

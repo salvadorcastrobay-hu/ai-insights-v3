@@ -113,8 +113,16 @@ function countActiveFilters(f: Record<string, unknown>): number {
   return n;
 }
 
+// Pages where the floating "Preguntar" launcher is irrelevant — tools that
+// have their own input surface or don't operate on dashboard data.
+const HIDE_LAUNCHER_PATHS = ["/sql-chat", "/campaign-advisor", "/custom-dashboards", "/glossary"];
+
 export function AskChartLauncher() {
   const { openGeneric } = useAskChart();
+  const pathname = usePathname() ?? "";
+  if (HIDE_LAUNCHER_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
+    return null;
+  }
   return (
     <button
       type="button"
@@ -136,7 +144,7 @@ export function AskChartLauncher() {
 }
 
 export function AskChartSheet() {
-  const { isOpen, close, chart, filters } = useAskChart();
+  const { isOpen, close, openGeneric, chart, filters } = useAskChart();
   const pathname = usePathname();
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
@@ -161,15 +169,23 @@ export function AskChartSheet() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && isOpen) close();
+      if (e.key === "Escape" && isOpen) {
+        close();
+        return;
+      }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        // Don't hijack the shortcut while typing into a form field.
+        const target = e.target as HTMLElement | null;
+        const tag = target?.tagName?.toLowerCase();
+        if (tag === "input" || tag === "textarea" || target?.isContentEditable) return;
         e.preventDefault();
-        // toggle handled elsewhere via launcher; do nothing if already open
+        if (isOpen) close();
+        else openGeneric();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [isOpen, close]);
+  }, [isOpen, close, openGeneric]);
 
   const send = useCallback(
     async (questionArg?: string) => {

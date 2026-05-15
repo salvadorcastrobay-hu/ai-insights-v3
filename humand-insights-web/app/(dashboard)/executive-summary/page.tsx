@@ -1,4 +1,5 @@
 import { ExecutiveSummaryView } from "@/components/pages/ExecutiveSummaryView";
+import { applyFilters } from "@/lib/data/filters";
 import { buildExecutiveSummaryData } from "@/lib/data/executive-summary-data";
 import { parseFiltersFromSearchParams } from "@/lib/data/search-params-filters";
 import { loadInsights, loadTotalTranscriptsCount } from "@/lib/supabase/queries";
@@ -21,5 +22,6 @@ export default async function Page({ searchParams }: PageProps) {
   ]);
 
   const data = buildExecutiveSummaryData(rows, totalTranscripts, filters);
-  return <ExecutiveSummaryView data={data} />;
+  const filteredRows = applyFilters(rows, filters);
+  return <ExecutiveSummaryView data={data} filteredRows={filteredRows} />;
 }

@@ -13,7 +13,7 @@ import { Table, Tbody, Td, Th, Thead, Tr } from "@/components/ui/table";
 import { formatCurrency } from "@/lib/data/computations";
 import type { CompetitiveIntelligenceData } from "@/lib/data/competitive-intelligence-data";
 
-type Props = { data: CompetitiveIntelligenceData };
+type Props = { data: CompetitiveIntelligenceData; filteredRows: import("@/lib/supabase/types").InsightRow[] };
 
 const RELATIONSHIP_LEGEND: Array<{ label: string; color: string; note: string }> = [
   { label: "Usa actualmente", color: COMPETITOR_REL_COLORS["Usa actualmente"], note: "desplazamiento activo, máxima prioridad" },
@@ -24,7 +24,7 @@ const RELATIONSHIP_LEGEND: Array<{ label: string; color: string; note: string }>
   { label: "Descartado", color: COMPETITOR_REL_COLORS.Descartado, note: "win para Humand, documentar motivo" },
 ];
 
-export function CompetitiveIntelligenceView({ data }: Props) {
+export function CompetitiveIntelligenceView({ data, filteredRows }: Props) {
   const { open: drill } = useDrillDown();
   const {
     isEmpty,
@@ -64,9 +64,10 @@ export function CompetitiveIntelligenceView({ data }: Props) {
         title="A. ¿Contra quién competimos?"
         description="Ranking de competidores por deals únicos, con desglose de la relación que el prospect tiene con ellos."
       />
-      <section className="grid gap-3 lg:grid-cols-2">
+      <section className="space-y-3">
         <ChartCard
           title="¿Contra quién competimos más seguido?"
+          rawRows={filteredRows.filter((r) => r.insight_type === "competitive_signal" && !r.is_own_brand_competitor)}
           ask={{
             chartTitle: "Ranking de competidores",
             chartKind: "horizontal-bar",

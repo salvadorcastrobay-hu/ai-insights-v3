@@ -306,8 +306,8 @@ export function buildExecutiveSummaryData(
     },
     moduleDemand: groupWithPct(moduleFocus, "module_display", totalTranscripts, 12),
     gaps: {
-      byFreq: groupWithPct(gaps, "feature_display", distinctCount(gaps, "deal_id"), 10),
-      byRevenue: revenueByFeature(gaps, 10),
+      byFreq: groupWithPct(gaps, "feature_display", distinctCount(gaps, "deal_id"), 20),
+      byRevenue: revenueByFeature(gaps, 20),
     },
     competitors: stackBy(comp, "competitor_name", "competitor_relationship_display", 12),
     frictions: {

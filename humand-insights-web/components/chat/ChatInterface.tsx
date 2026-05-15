@@ -31,6 +31,10 @@ type Props = {
   onCancel?: () => void;
   starterPrompts?: string[];
   onStarterPromptClick?: (prompt: string) => void;
+  /** Slot inside the input row, BEFORE the textarea (left side). */
+  inputAccessory?: ReactNode;
+  /** Slot inside the input row, AFTER the textarea but BEFORE the send button. */
+  inputTrailing?: ReactNode;
 };
 
 export function ChatInterface({
@@ -56,6 +60,8 @@ export function ChatInterface({
   filterBar,
   assistantLabel = "Assistant",
   onCancel,
+  inputAccessory,
+  inputTrailing,
   starterPrompts,
   onStarterPromptClick,
 }: Props) {
@@ -164,15 +170,17 @@ export function ChatInterface({
           onSubmit={handleSubmit}
           className="shrink-0 border-t border-[var(--color-neutral-100)] bg-[var(--color-bg-card)] px-4 py-3"
         >
-          <div className="flex items-end gap-2 rounded-[var(--radius-m)] border border-[var(--color-neutral-200)] bg-white p-2 transition-colors focus-within:border-[var(--color-brand-400)]">
+          <div className="flex items-center gap-2 rounded-[var(--radius-m)] border border-[var(--color-neutral-200)] bg-white p-2 transition-colors focus-within:border-[var(--color-brand-400)]">
+            {inputAccessory ? <div className="flex shrink-0 items-center">{inputAccessory}</div> : null}
             <textarea
               value={inputValue}
               onChange={(event) => onInputChange(event.target.value)}
               onKeyDown={handleKeyDown}
               placeholder={inputPlaceholder}
-              rows={2}
-              className="flex-1 resize-none border-0 bg-transparent px-2 py-1.5 text-[14px] leading-5 text-[var(--color-text-default)] outline-none placeholder:text-[var(--color-text-secondary)]"
+              rows={1}
+              className="flex-1 resize-none border-0 bg-transparent px-2 py-1 text-[14px] leading-6 text-[var(--color-text-default)] outline-none placeholder:text-[var(--color-text-secondary)]"
             />
+            {inputTrailing ? <div className="flex shrink-0 items-center">{inputTrailing}</div> : null}
             {isSubmitting && onCancel ? (
               <button
                 type="button"

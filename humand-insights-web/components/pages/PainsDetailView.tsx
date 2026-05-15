@@ -11,9 +11,9 @@ import { Input } from "@/components/ui/input";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@/components/ui/table";
 import type { PainsDetailData } from "@/lib/data/pains-detail-data";
 
-type Props = { data: PainsDetailData };
+type Props = { data: PainsDetailData; filteredRows: import("@/lib/supabase/types").InsightRow[] };
 
-export function PainsDetailView({ data }: Props) {
+export function PainsDetailView({ data, filteredRows }: Props) {
   const { kpis, byModule, themeStatusHeat, themes, modules, painTableRows } = data;
 
   const [theme, setTheme] = useState("");
@@ -50,8 +50,19 @@ export function PainsDetailView({ data }: Props) {
         Summary puede mostrar un número menor si aplica filtros de período por defecto.
       </p>
 
-      <section className="grid gap-3 lg:grid-cols-2">
-        <ChartCard title="¿En qué módulos se concentran más problemas?">
+      <section className="space-y-3">
+        <ChartCard
+          title="¿En qué módulos se concentran más problemas?"
+          rawRows={filteredRows.filter((r) => r.insight_type === "pain")}
+          ask={{
+            chartTitle: "Pains por módulo",
+            chartKind: "horizontal-bar",
+            description: "Top módulos por deals únicos con al menos un pain vinculado.",
+            dimension: "module_display",
+            scopeType: "pain",
+            rows: byModule.map((r) => ({ label: r.name, value: r.value })),
+          }}
+        >
           <p className="mb-2 text-[12px] text-[var(--color-text-secondary)]">
             Deals únicos donde se detectó al menos un pain vinculado a este módulo. Ayuda a
             priorizar foco por módulo de producto.
@@ -63,7 +74,7 @@ export function PainsDetailView({ data }: Props) {
             El porcentaje de pains en módulos existentes revela si el problema es de roadmap o de
             propuesta de valor y UX dentro de los módulos actuales.
           </p>
-          <HeatMap rowLabels={themeStatusHeat.rowLabels} colLabels={themeStatusHeat.colLabels} values={themeStatusHeat.values} height={360} />
+          <HeatMap rowLabels={themeStatusHeat.rowLabels} colLabels={themeStatusHeat.colLabels} values={themeStatusHeat.values} height={Math.max(480, themeStatusHeat.rowLabels.length * 46 + 140)} />
         </ChartCard>
       </section>
 
