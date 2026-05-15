@@ -19,6 +19,12 @@ state.json
 # Duplicated nested copy (legacy, regenerable)
 ai-insights-v3/
 
+# Local data dumps + private CSVs (roadmap from Notion, etc.)
+data/
+
+# Local agent metadata
+.agents/
+
 # Reports (regenerable)
 qa_report.json
 prompt_refinements.json
