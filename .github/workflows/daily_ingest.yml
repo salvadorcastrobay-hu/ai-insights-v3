@@ -1,0 +1,87 @@
+name: Daily Ingest (Fathom + HubSpot)
+
+# Corre diariamente a las 06:00 UTC (03:00 Argentina, después de horario laboral).
+# Solo hace data sync: trae transcripts nuevos de Fathom y refresca el estado
+# de todos los deals en raw_deals (mirror de HubSpot).
+#
+# NO ejecuta extracción con LLM. Eso queda manual (`python main.py run`) o
+# en su propio workflow scheduled si más adelante se quiere automatizar.
+
+on:
+  schedule:
+    - cron: "0 6 * * *"  # 06:00 UTC daily
+  workflow_dispatch:
+    inputs:
+      source:
+        description: "Limitar a una fuente (vacío = ambos)"
+        required: false
+        type: choice
+        options:
+          - ""
+          - "fathom"
+          - "hubspot"
+        default: ""
+      since:
+        description: "Solo Fathom: traer meetings desde esta fecha (ISO 8601). Default = últimos 2 días."
+        required: false
+        type: string
+
+concurrency:
+  # No correr dos ingests en paralelo — pueden generar conflictos en raw_deals
+  group: ai-insights-daily-ingest
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      FATHOM_API_KEY: ${{ secrets.FATHOM_API_KEY }}
+      HUBSPOT_API_KEY: ${{ secrets.HUBSPOT_API_KEY }}
+      FATHOM_TEAM_FILTER: ${{ secrets.FATHOM_TEAM_FILTER }}
+      # PROMPT_VERSION no aplica acá pero algunos módulos lo importan
+      PROMPT_VERSION: "v3.0"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Compute --since (default = 2 días atrás)
+        id: since
+        run: |
+          if [ -n "${{ github.event.inputs.since }}" ]; then
+            echo "value=${{ github.event.inputs.since }}" >> "$GITHUB_OUTPUT"
+          else
+            # 2 días atrás en UTC, formato ISO 8601
+            d=$(date -u -d '2 days ago' '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u -v-2d '+%Y-%m-%dT%H:%M:%SZ')
+            echo "value=$d" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run ingest
+        run: |
+          set -e
+          ARGS=""
+          if [ -n "${{ github.event.inputs.source }}" ]; then
+            ARGS="$ARGS --source ${{ github.event.inputs.source }}"
+          fi
+          # --since aplica solo a Fathom; HubSpot siempre hace full upsert por deal_id
+          ARGS="$ARGS --since ${{ steps.since.outputs.value }}"
+          echo "Running: python main.py ingest $ARGS"
+          python main.py ingest $ARGS
+
+      - name: Report on failure
+        if: failure()
+        run: |
+          echo "::error::Daily ingest failed. Revisar logs arriba."

@@ -165,20 +165,28 @@ def fetch_transcripts(
     client: Client,
     sample: int | None = None,
 ) -> list[dict]:
-    """Fetch transcripts from the Supabase view (paginated)."""
-    if sample:
+    """Fetch transcripts from the Supabase view (paginated).
+
+    `sample` controla cuántas filas como máximo se traen y también es la
+    flag que dispara el modo direct-API en pipeline.run_pipeline. Para
+    samples grandes (>= 500) usamos paginación igual que en full mode
+    para evitar timeouts de Postgres sobre transcript_text blobs.
+    """
+    SMALL_SAMPLE_THRESHOLD = 500
+    if sample and sample < SMALL_SAMPLE_THRESHOLD:
         response = (
             client.table(config.TRANSCRIPT_VIEW_NAME)
             .select("*")
             .limit(sample)
             .execute()
         )
-        logger.info(f"Fetched {len(response.data)} transcripts (sample)")
+        logger.info(f"Fetched {len(response.data)} transcripts (sample, single page)")
         return response.data
 
     all_data = []
     offset = 0
     page_size = 200  # Small pages to avoid timeout on large transcript_text blobs
+    target = sample if sample else float("inf")
     while True:
         response = (
             client.table(config.TRANSCRIPT_VIEW_NAME)
@@ -188,6 +196,9 @@ def fetch_transcripts(
         )
         all_data.extend(response.data)
         if len(response.data) < page_size:
+            break
+        if len(all_data) >= target:
+            all_data = all_data[:int(target)]
             break
         offset += page_size
         if len(all_data) % 1000 == 0:
@@ -216,8 +227,29 @@ def get_processed_hashes(client: Client) -> set[str]:
     return all_hashes
 
 
-def get_processed_transcript_ids(client: Client) -> set[str]:
-    """Get distinct transcript_ids already processed (for skipping)."""
+def get_processed_transcript_ids(client: Client, prompt_version: str | None = None) -> set[str]:
+    """Get distinct transcript_ids already processed at the given prompt_version
+    (for skipping). If prompt_version is None, uses config.PROMPT_VERSION so each
+    version is processed independently — bumping the version forces a re-extraction
+    of every transcript without losing prior data.
+    """
+    pv = prompt_version if prompt_version is not None else config.PROMPT_VERSION
+
+    # Fast path: count first. If zero rows for this version, skip the (slow) paged select.
+    # tax tables don't have an index on prompt_version so the full select can timeout.
+    try:
+        count_resp = (
+            client.table("transcript_insights")
+            .select("transcript_id", count="exact", head=True)
+            .eq("prompt_version", pv)
+            .execute()
+        )
+        if count_resp.count == 0:
+            return set()
+    except Exception as e:
+        logger.warning(f"prompt_version count check failed, assuming empty: {e}")
+        return set()
+
     all_ids = set()
     offset = 0
     page_size = 1000
@@ -225,6 +257,7 @@ def get_processed_transcript_ids(client: Client) -> set[str]:
         response = (
             client.table("transcript_insights")
             .select("transcript_id")
+            .eq("prompt_version", pv)
             .range(offset, offset + page_size - 1)
             .execute()
         )

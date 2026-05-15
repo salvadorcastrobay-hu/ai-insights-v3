@@ -20,6 +20,17 @@ logger = logging.getLogger(__name__)
 REFINEMENTS_PATH = os.path.join(os.path.dirname(__file__), "prompt_refinements.json")
 
 
+# Las helpers _get_modules / _get_seeds quedan apuntando a los dicts de
+# taxonomy.py — mismo comportamiento que v3.0 deployed. La integración con
+# DB queda para una iteración futura (ver consolidate-features.ts + plan).
+def _get_modules() -> dict:
+    return MODULES
+
+
+def _get_seeds() -> dict:
+    return SEED_FEATURE_NAMES
+
+
 def build_system_prompt() -> str:
     """Build the full system prompt with taxonomy and instructions."""
     sections = [
@@ -104,11 +115,13 @@ Reglas importantes:
 
 
 def _taxonomy_modules() -> str:
+    modules = _get_modules()
     lines = ["# Taxonomía: Módulos HR\n"]
     lines.append("| Código Módulo | Display Name | Categoría HR | Status |")
     lines.append("|---|---|---|---|")
-    for code, m in MODULES.items():
-        cat_display = HR_CATEGORIES[m["hr_category"]]["display_name"]
+    for code, m in modules.items():
+        cat_code = m["hr_category"]
+        cat_display = HR_CATEGORIES.get(cat_code, {}).get("display_name", cat_code)
         lines.append(f"| `{code}` | {m['display_name']} | {cat_display} | {m['status']} |")
 
     # Add aliases section
@@ -121,7 +134,7 @@ def _taxonomy_modules() -> str:
         aliases_by_module.setdefault(module_code, []).append(alias)
 
     for module_code, aliases in sorted(aliases_by_module.items()):
-        display = MODULES[module_code]["display_name"]
+        display = modules.get(module_code, {}).get("display_name", module_code)
         lines.append(f"- **{display}** (`{module_code}`): {', '.join(aliases)}")
 
     return "\n".join(lines)
@@ -142,9 +155,10 @@ def _taxonomy_pains() -> str:
     lines.append("\n## Pains Vinculados a Módulo")
     lines.append("| Código | Display Name | Módulo | Theme |")
     lines.append("|---|---|---|---|")
+    modules = _get_modules()
     for code, p in PAIN_SUBTYPES.items():
         if p["module"] is not None:
-            mod_display = MODULES.get(p["module"], {}).get("display_name", p["module"])
+            mod_display = modules.get(p["module"], {}).get("display_name", p["module"])
             lines.append(f"| `{code}` | {p['display_name']} | {mod_display} (`{p['module']}`) | {p['theme']} |")
 
     return "\n".join(lines)
@@ -178,11 +192,12 @@ def _taxonomy_competitive() -> str:
 
 
 def _taxonomy_product_gap() -> str:
+    seeds = _get_seeds()
     lines = ["# Taxonomía: Product Gap - Feature Names (seed list)\n"]
-    lines.append("Usa estos códigos cuando apliquen. Si la feature no está en la lista, crea un código nuevo en formato slug.\n")
+    lines.append(f"Usa estos códigos cuando apliquen ({len(seeds)} features canónicas de Humand). Si la feature no está en la lista, crea un código nuevo en formato slug.\n")
     lines.append("| Código | Display Name | Módulo Sugerido |")
     lines.append("|---|---|---|")
-    for code, f in SEED_FEATURE_NAMES.items():
+    for code, f in seeds.items():
         mod = f.get("suggested_module") or "—"
         lines.append(f"| `{code}` | {f['display_name']} | {mod} |")
     lines.append("\n**gap_priority:** `must_have` (lo necesitan sí o sí), `nice_to_have` (sería bueno tenerlo), `dealbreaker` (sin esto no compran)")
