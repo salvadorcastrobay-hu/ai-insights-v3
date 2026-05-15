@@ -16,58 +16,81 @@ HR_CATEGORIES = {
     "employee_experience":       {"display_name": "Experiencia del Empleado",      "sort_order": 5},
     "compensation_and_benefits": {"display_name": "Compensaciones y Beneficios",   "sort_order": 6},
     "operations_and_workplace":  {"display_name": "Operaciones y Lugar de Trabajo","sort_order": 7},
+    "platform":                  {"display_name": "Plataforma",                    "sort_order": 8},
 }
 
 # ──────────────────────────────────────────────
-# Modules (39)
+# Modules (43)
+# Status values: existing | roadmap | missing
 # ──────────────────────────────────────────────
 MODULES = {
     # internal_communication
-    "chat":                     {"display_name": "Chat",                       "hr_category": "internal_communication", "status": "existing", "sort_order": 1},
-    "internal_social_network":  {"display_name": "Red Social Interna",         "hr_category": "internal_communication", "status": "existing", "sort_order": 2},
-    "magazine":                 {"display_name": "Revista Interna",            "hr_category": "internal_communication", "status": "existing", "sort_order": 3},
-    "live_streaming":           {"display_name": "Streaming en Vivo",          "hr_category": "internal_communication", "status": "existing", "sort_order": 4},
-    "knowledge_libraries":      {"display_name": "Biblioteca de Conocimiento", "hr_category": "internal_communication", "status": "existing", "sort_order": 5},
-    "quick_links":              {"display_name": "Accesos Rapidos",            "hr_category": "internal_communication", "status": "existing", "sort_order": 6},
+    "chat":                     {"display_name": "Chat",                                  "hr_category": "internal_communication", "status": "existing", "sort_order": 1},
+    "internal_social_network":  {"display_name": "Red Social Interna",                    "hr_category": "internal_communication", "status": "existing", "sort_order": 2},
+    "magazine":                 {"display_name": "Noticias",                              "hr_category": "internal_communication", "status": "existing", "sort_order": 3},
+    "live_streaming":           {"display_name": "Live Streaming",                        "hr_category": "internal_communication", "status": "existing", "sort_order": 4},
+    "knowledge_libraries":      {"display_name": "Biblioteca de Recursos",                "hr_category": "internal_communication", "status": "existing", "sort_order": 5},
+    "quick_links":              {"display_name": "Accesos Rapidos",                       "hr_category": "internal_communication", "status": "existing", "sort_order": 6},
     # hr_administration
-    "digital_employee_file":    {"display_name": "Legajo Digital",             "hr_category": "hr_administration", "status": "existing", "sort_order": 7},
-    "documents":                {"display_name": "Documentos",                 "hr_category": "hr_administration", "status": "existing", "sort_order": 8},
-    "files":                    {"display_name": "Archivos",                   "hr_category": "hr_administration", "status": "existing", "sort_order": 9},
-    "company_policies":         {"display_name": "Politicas de Empresa",       "hr_category": "hr_administration", "status": "existing", "sort_order": 10},
-    "forms_and_workflows":      {"display_name": "Formularios y Flujos",       "hr_category": "hr_administration", "status": "existing", "sort_order": 11},
-    "org_chart":                {"display_name": "Organigrama",                "hr_category": "hr_administration", "status": "existing", "sort_order": 12},
-    "digital_access":           {"display_name": "Accesos Digitales",          "hr_category": "hr_administration", "status": "existing", "sort_order": 13},
-    "security_and_privacy":     {"display_name": "Seguridad y Privacidad",     "hr_category": "hr_administration", "status": "existing", "sort_order": 14},
-    "payroll":                  {"display_name": "Nomina / Payroll",           "hr_category": "hr_administration", "status": "missing",  "sort_order": 15},
+    "digital_employee_file":    {"display_name": "Expediente digital del colaborador",    "hr_category": "hr_administration", "status": "existing", "sort_order": 7},
+    "documents":                {"display_name": "Documentos",                            "hr_category": "hr_administration", "status": "existing", "sort_order": 8},
+    "files":                    {"display_name": "Archivos",                              "hr_category": "hr_administration", "status": "roadmap", "sort_order": 9},
+    "company_policies":         {"display_name": "Politicas",                             "hr_category": "hr_administration", "status": "existing", "sort_order": 10},
+    "forms_and_workflows":      {"display_name": "Formularios, tramites y aprobaciones",  "hr_category": "hr_administration", "status": "existing", "sort_order": 11},
+    "org_chart":                {"display_name": "Organigrama",                           "hr_category": "hr_administration", "status": "existing", "sort_order": 12},
+    "digital_access":           {"display_name": "Acceso con ID",                         "hr_category": "hr_administration", "status": "existing", "sort_order": 13},
+    "security_and_privacy":     {"display_name": "Seguridad y Privacidad",                "hr_category": "hr_administration", "status": "existing", "sort_order": 14},
+    "payroll":                  {"display_name": "Nomina",                                "hr_category": "hr_administration", "status": "roadmap", "sort_order": 15},
     # talent_acquisition
-    "internal_job_postings":    {"display_name": "Vacantes Internas",          "hr_category": "talent_acquisition", "status": "existing", "sort_order": 16},
-    "referral_program":         {"display_name": "Programa de Referidos",      "hr_category": "talent_acquisition", "status": "existing", "sort_order": 17},
-    "onboarding":               {"display_name": "Onboarding",                 "hr_category": "talent_acquisition", "status": "existing", "sort_order": 18},
-    "ats":                      {"display_name": "ATS",                        "hr_category": "talent_acquisition", "status": "missing",  "sort_order": 19},
-    "ai_recruiter":             {"display_name": "Reclutador con IA",          "hr_category": "talent_acquisition", "status": "missing",  "sort_order": 20},
-    "recruitment":              {"display_name": "Reclutamiento y Seleccion",  "hr_category": "talent_acquisition", "status": "missing",  "sort_order": 21},
+    "internal_job_postings":    {"display_name": "Busquedas internas",                    "hr_category": "talent_acquisition", "status": "existing", "sort_order": 16},
+    "referral_program":         {"display_name": "Programa de Referidos",                 "hr_category": "talent_acquisition", "status": "existing", "sort_order": 17},
+    "onboarding":               {"display_name": "Onboarding",                            "hr_category": "talent_acquisition", "status": "existing", "sort_order": 18},
+    "ats":                      {"display_name": "ATS",                                   "hr_category": "talent_acquisition", "status": "existing", "sort_order": 19},
+    "ai_recruiter":             {"display_name": "Reclutador con IA",                     "hr_category": "talent_acquisition", "status": "roadmap", "sort_order": 20},
+    "recruitment":              {"display_name": "Reclutamiento y Seleccion",             "hr_category": "talent_acquisition", "status": "roadmap", "sort_order": 21},
     # talent_development
-    "performance_review":       {"display_name": "Evaluacion de Desempeno",    "hr_category": "talent_development", "status": "existing", "sort_order": 22},
-    "goals_and_okrs":           {"display_name": "Objetivos y OKRs",           "hr_category": "talent_development", "status": "existing", "sort_order": 23},
-    "development_plan":         {"display_name": "Plan de Desarrollo",         "hr_category": "talent_development", "status": "existing", "sort_order": 24},
-    "learning":                 {"display_name": "Capacitacion / LMS",         "hr_category": "talent_development", "status": "existing", "sort_order": 25},
-    "succession_planning":      {"display_name": "Planes de Sucesion",         "hr_category": "talent_development", "status": "missing",  "sort_order": 26},
-    "prebuilt_courses":         {"display_name": "Cursos Listos",              "hr_category": "talent_development", "status": "missing",  "sort_order": 27},
-    # employee_experience
-    "people_experience":        {"display_name": "Experiencia de Empleado",    "hr_category": "employee_experience", "status": "existing", "sort_order": 28},
-    "surveys":                  {"display_name": "Encuestas",                  "hr_category": "employee_experience", "status": "existing", "sort_order": 29},
-    "kudos":                    {"display_name": "Reconocimientos",            "hr_category": "employee_experience", "status": "existing", "sort_order": 30},
-    "birthdays_and_anniversaries": {"display_name": "Cumpleanos y Aniversarios","hr_category": "employee_experience","status": "existing", "sort_order": 31},
-    "events":                   {"display_name": "Eventos",                    "hr_category": "employee_experience", "status": "existing", "sort_order": 32},
+    "performance_review":       {"display_name": "Evaluacion de Desempeno",               "hr_category": "talent_development", "status": "existing", "sort_order": 22},
+    "goals_and_okrs":           {"display_name": "Objetivos y Resultados Clave",          "hr_category": "talent_development", "status": "existing", "sort_order": 23},
+    "development_plan":         {"display_name": "Plan de carrera",                       "hr_category": "talent_development", "status": "existing", "sort_order": 24},
+    "learning":                 {"display_name": "Aprendizaje",                           "hr_category": "talent_development", "status": "existing", "sort_order": 25},
+    "succession_planning":      {"display_name": "Planes de Sucesion",                    "hr_category": "talent_development", "status": "missing",  "sort_order": 26},
+    "prebuilt_courses":         {"display_name": "Cursos Listos",                         "hr_category": "talent_development", "status": "missing",  "sort_order": 27},
+    # employee_experience / culture_and_engagement
+    "people_experience":        {"display_name": "People Experience",                     "hr_category": "employee_experience", "status": "existing", "sort_order": 28},
+    "surveys":                  {"display_name": "Encuestas",                             "hr_category": "employee_experience", "status": "existing", "sort_order": 29},
+    "kudos":                    {"display_name": "Reconocimientos",                       "hr_category": "employee_experience", "status": "existing", "sort_order": 30},
+    "birthdays_and_anniversaries": {"display_name": "Cumpleanos y Aniversarios",          "hr_category": "employee_experience","status": "existing", "sort_order": 31},
+    "events":                   {"display_name": "Eventos",                               "hr_category": "employee_experience", "status": "existing", "sort_order": 32},
     # compensation_and_benefits
-    "perks_and_benefits":       {"display_name": "Beneficios y Perks",         "hr_category": "compensation_and_benefits", "status": "existing", "sort_order": 33},
-    "marketplace":              {"display_name": "Marketplace",                "hr_category": "compensation_and_benefits", "status": "existing", "sort_order": 34},
-    "benefits_platform":        {"display_name": "Plataforma de Beneficios",   "hr_category": "compensation_and_benefits", "status": "missing",  "sort_order": 35},
+    "perks_and_benefits":       {"display_name": "Beneficios",                            "hr_category": "compensation_and_benefits", "status": "existing", "sort_order": 33},
+    "marketplace":              {"display_name": "Marketplace",                           "hr_category": "compensation_and_benefits", "status": "existing", "sort_order": 34},
+    "benefits_administration":  {"display_name": "Administracion de Beneficios Flex",     "hr_category": "compensation_and_benefits", "status": "missing",  "sort_order": 35},
+    "benefits_platform":        {"display_name": "Plataforma de Beneficios",              "hr_category": "compensation_and_benefits", "status": "missing",  "sort_order": 36},
     # operations_and_workplace
-    "time_off":                 {"display_name": "Vacaciones y Licencias",     "hr_category": "operations_and_workplace", "status": "existing", "sort_order": 36},
-    "time_tracking":            {"display_name": "Control Horario",            "hr_category": "operations_and_workplace", "status": "existing", "sort_order": 37},
-    "space_reservation":        {"display_name": "Reserva de Espacios",        "hr_category": "operations_and_workplace", "status": "existing", "sort_order": 38},
-    "service_management":       {"display_name": "Mesa de Servicios",          "hr_category": "operations_and_workplace", "status": "existing", "sort_order": 39},
+    "time_off":                 {"display_name": "Vacaciones y Permisos",                 "hr_category": "operations_and_workplace", "status": "existing", "sort_order": 37},
+    "time_tracking":            {"display_name": "Control de Asistencia",                 "hr_category": "operations_and_workplace", "status": "existing", "sort_order": 38},
+    "space_reservation":        {"display_name": "Reserva de espacios",                   "hr_category": "operations_and_workplace", "status": "existing", "sort_order": 39},
+    "service_management":       {"display_name": "Gestion de Servicios",                  "hr_category": "operations_and_workplace", "status": "existing", "sort_order": 40},
+    # platform
+    "roles_permissions":        {"display_name": "Roles & Permisos",                      "hr_category": "platform", "status": "existing", "sort_order": 41},
+    "integrations":             {"display_name": "Integraciones",                         "hr_category": "platform", "status": "existing", "sort_order": 42},
+    "insights":                 {"display_name": "Insights",                              "hr_category": "platform", "status": "existing", "sort_order": 43},
+    "users":                    {"display_name": "Usuarios",                              "hr_category": "platform", "status": "existing", "sort_order": 44},
+    "groups":                   {"display_name": "Grupos",                                "hr_category": "platform", "status": "existing", "sort_order": 45},
+    "auth":                     {"display_name": "Autenticacion",                         "hr_category": "platform", "status": "existing", "sort_order": 46},
+    "notification_center":      {"display_name": "Centro de Notificaciones",              "hr_category": "platform", "status": "existing", "sort_order": 47},
+    "profile":                  {"display_name": "Perfil",                                "hr_category": "platform", "status": "existing", "sort_order": 48},
+    # internal_communication
+    "calls":                    {"display_name": "Llamadas",                              "hr_category": "internal_communication", "status": "existing", "sort_order": 49},
+    "feed":                     {"display_name": "Feed",                                  "hr_category": "internal_communication", "status": "existing", "sort_order": 50},
+    # operations_and_workplace
+    "time_planning":            {"display_name": "Planificacion de Turnos",               "hr_category": "operations_and_workplace", "status": "existing", "sort_order": 51},
+    # talent_development
+    "trainings":                {"display_name": "Capacitaciones Presenciales",           "hr_category": "talent_development", "status": "existing", "sort_order": 52},
+    # employee_experience
+    "prode":                    {"display_name": "Prode",                                 "hr_category": "employee_experience", "status": "roadmap", "sort_order": 53},
+    # compensation_and_benefits
+    "microloans":               {"display_name": "Microcreditos",                         "hr_category": "compensation_and_benefits", "status": "existing", "sort_order": 54},
 }
 
 # ──────────────────────────────────────────────
