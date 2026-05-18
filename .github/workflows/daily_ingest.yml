@@ -42,6 +42,8 @@ jobs:
       FATHOM_API_KEY: ${{ secrets.FATHOM_API_KEY }}
       HUBSPOT_API_KEY: ${{ secrets.HUBSPOT_API_KEY }}
       FATHOM_TEAM_FILTER: ${{ secrets.FATHOM_TEAM_FILTER }}
+      # OPENAI_API_KEY no se usa en ingest pero config.py lo exige al importarse
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       # PROMPT_VERSION no aplica acá pero algunos módulos lo importan
       PROMPT_VERSION: "v3.0"
 
