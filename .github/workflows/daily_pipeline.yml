@@ -1,0 +1,83 @@
+name: Daily Pipeline (LLM Extraction)
+
+# Corre diariamente a las 12:00 UTC (09:00 Argentina).
+# Procesa todos los transcripts ingestados que aún no tienen insights
+# para el prompt_version actual, via OpenAI Batch API.
+#
+# Flujo: submit batch -> poll hasta completion -> parse -> upsert a Supabase.
+# El filtro por prompt_version está hecho en pipeline.py:101 — si el batch
+# anterior ya procesó esos transcripts, esta corrida no hace nada.
+
+on:
+  schedule:
+    - cron: "0 12 * * *"  # 12:00 UTC daily (09:00 ART)
+  workflow_dispatch:
+    inputs:
+      model:
+        description: "OpenAI model (default = OPENAI_MODEL de config.py)"
+        required: false
+        type: string
+        default: ""
+      dry_run:
+        description: "Solo generar JSONL sin enviar"
+        required: false
+        type: boolean
+        default: false
+      resume:
+        description: "Resumir batch pendiente desde state.json"
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  # No correr dos extracciones en paralelo — pueden generar duplicados
+  group: ai-insights-daily-pipeline
+  cancel-in-progress: false
+
+jobs:
+  pipeline:
+    runs-on: ubuntu-latest
+    # 6h = límite máximo de GitHub Actions hosted runners. Los batches diarios
+    # típicamente terminan en <2h. Si timeout, el batch sigue corriendo en
+    # OpenAI y se puede finalizar a mano con `python main.py run --resume`.
+    timeout-minutes: 350
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENAI_MODEL: ${{ inputs.model || 'gpt-4o-mini' }}
+      PROMPT_VERSION: "v3.0"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run pipeline
+        run: |
+          set -e
+          ARGS=""
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            ARGS="$ARGS --dry-run"
+          fi
+          if [ "${{ github.event.inputs.resume }}" = "true" ]; then
+            ARGS="$ARGS --resume"
+          fi
+          echo "Running: python main.py run $ARGS"
+          python main.py run $ARGS
+
+      - name: Report on failure
+        if: failure()
+        run: |
+          echo "::error::Daily pipeline failed. Revisar logs arriba."
+          echo "::warning::Si el batch llegó a submitearse, está corriendo en OpenAI."
+          echo "::warning::Reintentar con workflow_dispatch + resume=true."
