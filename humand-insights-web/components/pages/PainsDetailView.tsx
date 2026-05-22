@@ -85,8 +85,8 @@ export function PainsDetailView({ data, filteredRows }: Props) {
       {phaseTotal > 0 ? (
         <section className="space-y-3">
           <PageTitle
-            title="Pains × Funnel Phase"
-            subtitle="¿En qué momento del journey aparece cada pain?"
+            title="Estado actual de los deals con pain"
+            subtitle="¿En qué phase del funnel están hoy los deals donde se detectó al menos un pain?"
           />
 
           <div className="grid gap-3 md:grid-cols-3">
