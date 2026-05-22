@@ -179,13 +179,18 @@ const FUNNEL_PHASE_BY_PATTERN: Array<[RegExp, FunnelPhase]> = [
 ];
 
 function stripEmojiAndLower(s: string): string {
-  return s
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "") // diacríticos
-    .replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, "")
-    .replace(/\s+/g, " ")
-    .toLowerCase()
-    .trim();
+  try {
+    return s
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "") // diacríticos combinantes
+      .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2300}-\u{23FF}]/gu, "") // emojis comunes
+      .replace(/\s+/g, " ")
+      .toLowerCase()
+      .trim();
+  } catch {
+    // Fallback si el browser no soporta \u{...} en regex
+    return s.toLowerCase().trim();
+  }
 }
 
 export function getFunnelPhase(
