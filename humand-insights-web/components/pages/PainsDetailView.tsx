@@ -5,7 +5,6 @@ import { useMemo, useState } from "react";
 import { ChartCard } from "@/components/charts/ChartCard";
 import { HorizontalBarChart } from "@/components/charts/BarChart";
 import { HeatMap } from "@/components/charts/HeatMap";
-import { CategoryPieChart } from "@/components/charts/PieChart";
 import { StackedBarChart } from "@/components/charts/StackedBar";
 import { MetricCard } from "@/components/layout/MetricCard";
 import { PageTitle } from "@/components/pages/common";
@@ -98,51 +97,55 @@ export function PainsDetailView({ data, filteredRows }: Props) {
             subtitle="¿En qué momento del journey aparece cada pain? Pre-venta, cerrado o post-venta."
           />
 
-          <div className="grid gap-3 lg:grid-cols-3">
-            <div className="lg:col-span-1">
-              <ChartCard title="Distribución de deals con pain por phase">
-                <p className="mb-2 text-[12px] text-[var(--color-text-secondary)]">
-                  Cantidad de deals únicos con al menos un pain, agrupados por phase del journey.
-                </p>
-                <CategoryPieChart data={phaseSummary} height={300} exportFileName="pains-by-phase.csv" />
-              </ChartCard>
-            </div>
-
-            <div className="lg:col-span-2">
-              <ChartCard title="Top pains, distribución por phase">
-                <p className="mb-2 text-[12px] text-[var(--color-text-secondary)]">
-                  Top {topPainsByPhase.length} pains por volumen total. Cada barra muestra cuántos
-                  deals únicos lo mencionaron, desglosado por phase del funnel.
-                </p>
-                <StackedBarChart
-                  data={topPainsByPhase.map((r) => ({
-                    pain: r.pain,
-                    [FUNNEL_PHASE_DISPLAY.pre_sale]: r.pre_sale,
-                    [FUNNEL_PHASE_DISPLAY.closed]: r.closed,
-                    [FUNNEL_PHASE_DISPLAY.post_sale]: r.post_sale,
-                  }))}
-                  yKey="pain"
-                  stackKeys={[
-                    FUNNEL_PHASE_DISPLAY.pre_sale,
-                    FUNNEL_PHASE_DISPLAY.closed,
-                    FUNNEL_PHASE_DISPLAY.post_sale,
-                  ]}
-                  colorMap={{
-                    [FUNNEL_PHASE_DISPLAY.pre_sale]: FUNNEL_PHASE_COLOR.pre_sale,
-                    [FUNNEL_PHASE_DISPLAY.closed]: FUNNEL_PHASE_COLOR.closed,
-                    [FUNNEL_PHASE_DISPLAY.post_sale]: FUNNEL_PHASE_COLOR.post_sale,
-                  }}
-                  exportFileName="pains-by-phase-stacked.csv"
-                />
-              </ChartCard>
-            </div>
+          <div className="grid gap-3 md:grid-cols-3">
+            <MetricCard
+              label="Pre-venta"
+              value={phaseSummary[0]?.value ?? 0}
+              caption="Deals activos en pipeline (lead → final negotiation)"
+            />
+            <MetricCard
+              label="Cerrado"
+              value={phaseSummary[1]?.value ?? 0}
+              caption="Won, lost o postponed"
+            />
+            <MetricCard
+              label="Post-venta"
+              value={phaseSummary[2]?.value ?? 0}
+              caption="Onboarding churned, red list, churned"
+            />
           </div>
 
+          <ChartCard title="Top pains, distribución por phase">
+            <p className="mb-2 text-[12px] text-[var(--color-text-secondary)]">
+              Top {topPainsByPhase.length} pains por volumen total. Cada barra muestra cuántos
+              deals únicos lo mencionaron, desglosado por phase del funnel. Útil para detectar
+              si un pain es objeción de venta, crónico, o de adopción post-venta.
+            </p>
+            <StackedBarChart
+              data={topPainsByPhase.map((r) => ({
+                pain: r.pain,
+                [FUNNEL_PHASE_DISPLAY.pre_sale]: r.pre_sale,
+                [FUNNEL_PHASE_DISPLAY.closed]: r.closed,
+                [FUNNEL_PHASE_DISPLAY.post_sale]: r.post_sale,
+              }))}
+              yKey="pain"
+              stackKeys={[
+                FUNNEL_PHASE_DISPLAY.pre_sale,
+                FUNNEL_PHASE_DISPLAY.closed,
+                FUNNEL_PHASE_DISPLAY.post_sale,
+              ]}
+              colorMap={{
+                [FUNNEL_PHASE_DISPLAY.pre_sale]: FUNNEL_PHASE_COLOR.pre_sale,
+                [FUNNEL_PHASE_DISPLAY.closed]: FUNNEL_PHASE_COLOR.closed,
+                [FUNNEL_PHASE_DISPLAY.post_sale]: FUNNEL_PHASE_COLOR.post_sale,
+              }}
+              exportFileName="pains-by-phase-stacked.csv"
+            />
+          </ChartCard>
+
           <p className="text-[12px] text-[var(--color-text-secondary)]">
-            Phase derivada del <code>deal_stage</code> en HubSpot. <strong>Pre-venta</strong>:
-            lead → final negotiation. <strong>Cerrado</strong>: won / lost / postponed.{" "}
-            <strong>Post-venta</strong>: onboarding churned / red list / churned. Deals sin stage
-            asignado no se incluyen.
+            Phase derivada del <code>deal_stage</code> en HubSpot. Deals sin stage asignado no
+            se incluyen.
           </p>
         </section>
       ) : null}
