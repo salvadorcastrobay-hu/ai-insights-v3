@@ -15,9 +15,20 @@ import type { PainsDetailData } from "@/lib/data/pains-detail-data";
 type Props = { data: PainsDetailData; filteredRows: import("@/lib/supabase/types").InsightRow[] };
 
 export function PainsDetailView({ data, filteredRows }: Props) {
-  const { kpis, byModule, themeStatusHeat, phaseSummary, topPainsByPhase, themes, modules, painTableRows } = data;
+  const {
+    kpis,
+    byModule,
+    themeStatusHeat,
+    phaseSummary,
+    topPainsByPhase,
+    painsByOutcome,
+    themes,
+    modules,
+    painTableRows,
+  } = data;
   const phaseTotal = phaseSummary.pre_sale + phaseSummary.closed + phaseSummary.post_sale;
   const pct = (n: number) => (phaseTotal > 0 ? `${Math.round((n / phaseTotal) * 100)}%` : "0%");
+  const ratePct = (n: number) => `${Math.round(n * 100)}%`;
 
   const [theme, setTheme] = useState("");
   const [module, setModule] = useState("");
@@ -136,6 +147,66 @@ export function PainsDetailView({ data, filteredRows }: Props) {
           <p className="text-[12px] text-[var(--color-text-secondary)]">
             Phase derivada del <code>deal_stage</code> en HubSpot. Solo cuenta deals únicos con
             al menos un pain detectado.
+          </p>
+        </section>
+      ) : null}
+
+      {/* ─── Pains × Outcome (Won vs Lost) ─────────────────────────────── */}
+      {painsByOutcome.length > 0 ? (
+        <section className="space-y-3">
+          <PageTitle
+            title="Pains × Outcome"
+            subtitle="¿Qué pains se asocian a deals ganados vs perdidos? (mínimo 5 deals cerrados)"
+          />
+
+          <ChartCard title="Win-rate y lost-rate por pain">
+            <p className="mb-3 text-[12px] text-[var(--color-text-secondary)]">
+              Para cada pain, % de deals con ese pain que terminaron en Won vs Lost.
+              <span className="ml-2 inline-block rounded bg-green-100 px-1.5 text-green-800">🟢 Win-rate &gt; 60%</span>
+              <span className="ml-1 inline-block rounded bg-amber-100 px-1.5 text-amber-800">⚠ Lost-rate &gt; 55%</span>
+              <span className="ml-1 inline-block rounded bg-red-100 px-1.5 text-red-800">🔴 Lost-rate &gt; 70%</span>
+            </p>
+            <div className="max-h-[480px] overflow-auto">
+              <Table>
+                <Thead>
+                  <Tr>
+                    <Th>Pain</Th>
+                    <Th>Won</Th>
+                    <Th>Lost</Th>
+                    <Th>Cerrados</Th>
+                    <Th>Win-rate</Th>
+                    <Th>Lost-rate</Th>
+                  </Tr>
+                </Thead>
+                <Tbody>
+                  {painsByOutcome.map((row) => {
+                    const isDealKiller = row.lost_rate > 0.7;
+                    const isFriction = !isDealKiller && row.lost_rate > 0.55;
+                    const isResonant = row.win_rate > 0.6;
+                    return (
+                      <Tr key={row.pain}>
+                        <Td>
+                          {isDealKiller ? "🔴 " : isFriction ? "⚠ " : isResonant ? "🟢 " : ""}
+                          {row.pain}
+                        </Td>
+                        <Td>{row.won}</Td>
+                        <Td>{row.lost}</Td>
+                        <Td>{row.closed_total}</Td>
+                        <Td>{ratePct(row.win_rate)}</Td>
+                        <Td>{ratePct(row.lost_rate)}</Td>
+                      </Tr>
+                    );
+                  })}
+                </Tbody>
+              </Table>
+            </div>
+          </ChartCard>
+
+          <p className="text-[12px] text-[var(--color-text-secondary)]">
+            <strong>Marketing:</strong> pains 🟢 son donde el messaging funciona — produciles más contenido.
+            {" "}
+            <strong>Sales:</strong> pains ⚠ y 🔴 necesitan battlecards y objection handling más fuertes.
+            Outcome usa <code>deal_stage</code> de HubSpot: Won = ganado, Lost / Postponed = perdido.
           </p>
         </section>
       ) : null}
