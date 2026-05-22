@@ -16,6 +16,10 @@ export default async function Page({ searchParams }: PageProps) {
   const filters = parseFiltersFromSearchParams(params);
   const rows = await loadInsights(process.env.NEXT_PUBLIC_PROMPT_VERSION ?? "v3.0");
   const data = buildPainsDetailData(rows, 0, filters);
-  const filteredRows = applyFilters(rows, filters);
-  return <PainsDetailView data={data} filteredRows={filteredRows} />;
+  // Memory optimization: pre-filtramos a pains antes de serializar a RSC.
+  // El componente solo usa filteredRows como source para CSV export y
+  // siempre lo filtra a insight_type === "pain" internamente. Pasarle ya
+  // pre-filtrado baja el payload ~5x y resuelve el OOM de Vercel Function.
+  const painsOnly = applyFilters(rows, filters).filter((r) => r.insight_type === "pain");
+  return <PainsDetailView data={data} filteredRows={painsOnly} />;
 }
