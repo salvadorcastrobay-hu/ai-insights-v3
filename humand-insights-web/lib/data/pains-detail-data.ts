@@ -1,4 +1,3 @@
-import { applyFilters, type Filters } from "@/lib/data/filters";
 import {
   buildHeatMap,
   filterByType,
@@ -45,12 +44,12 @@ export type PainsDetailData = {
   painTableRows: PainTableRow[];
 };
 
+// Acepta rows YA FILTRADOS (page route llama applyFilters una sola vez y
+// pasa el resultado acá + a filteredRows del cliente). Evita duplicar memoria.
 export function buildPainsDetailData(
-  rows: InsightRow[],
+  filteredRows: InsightRow[],
   _totalTranscripts: number,
-  filters: Filters,
 ): PainsDetailData {
-  const filteredRows = applyFilters(rows, filters);
   const pains = filterByType(filteredRows, "pain");
 
   const themes = [...new Set(pains.map((row) => row.pain_theme).filter(Boolean))] as string[];
