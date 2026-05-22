@@ -145,3 +145,31 @@ export function shortSegmentLabel(value: string | null | undefined): string {
   if (!value) return "";
   return value.replace(/\s*\([^)]*\)\s*$/, "").trim();
 }
+
+// ─── Funnel phase ─────────────────────────────────────────────────────────────
+export type FunnelPhase = "pre_sale" | "closed" | "post_sale";
+
+export const FUNNEL_PHASE_ORDER: FunnelPhase[] = ["pre_sale", "closed", "post_sale"];
+
+const POST_SALE_KEYWORDS = ["onboarding churned", "success red list", "success churned"];
+const CLOSED_KEYWORDS = ["closed won", "closed lost", "postponed", "won", "lost"];
+const PRE_SALE_KEYWORDS = [
+  "lead",
+  "early stage",
+  "discovery",
+  "champion",
+  "decision maker",
+  "pilot",
+  "final negotiation",
+];
+
+export function getFunnelPhase(
+  dealStage: string | null | undefined,
+): FunnelPhase | null {
+  if (!dealStage || typeof dealStage !== "string") return null;
+  const lowered = dealStage.toLowerCase();
+  for (const kw of POST_SALE_KEYWORDS) if (lowered.includes(kw)) return "post_sale";
+  for (const kw of CLOSED_KEYWORDS) if (lowered.includes(kw)) return "closed";
+  for (const kw of PRE_SALE_KEYWORDS) if (lowered.includes(kw)) return "pre_sale";
+  return null;
+}
