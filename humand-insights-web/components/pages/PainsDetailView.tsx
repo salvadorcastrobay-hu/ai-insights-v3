@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
 
 import { ChartCard } from "@/components/charts/ChartCard";
 import { HorizontalBarChart } from "@/components/charts/BarChart";
@@ -15,12 +14,7 @@ import type { PainsDetailData } from "@/lib/data/pains-detail-data";
 type Props = { data: PainsDetailData; filteredRows: import("@/lib/supabase/types").InsightRow[] };
 
 export function PainsDetailView({ data, filteredRows }: Props) {
-  const { kpis, byModule, themeStatusHeat, phaseSummary, themes, modules, painTableRows } = data;
-
-  // Feature flag para iteración segura: ?ff_funnel=1
-  const searchParams = useSearchParams();
-  const showFunnelPhase = searchParams?.get("ff_funnel") === "1";
-  const phaseTotal = phaseSummary.pre_sale + phaseSummary.closed + phaseSummary.post_sale;
+  const { kpis, byModule, themeStatusHeat, themes, modules, painTableRows } = data;
 
   const [theme, setTheme] = useState("");
   const [module, setModule] = useState("");
@@ -83,37 +77,6 @@ export function PainsDetailView({ data, filteredRows }: Props) {
           <HeatMap rowLabels={themeStatusHeat.rowLabels} colLabels={themeStatusHeat.colLabels} values={themeStatusHeat.values} height={Math.max(480, themeStatusHeat.rowLabels.length * 46 + 140)} />
         </ChartCard>
       </section>
-
-      {/* ─── Funnel phase (feature flag: ?ff_funnel=1) ───────────────── */}
-      {showFunnelPhase && phaseTotal > 0 ? (
-        <section className="space-y-3">
-          <PageTitle
-            title="Pains × Funnel Phase"
-            subtitle="¿En qué momento del journey aparece cada pain?"
-          />
-          <div className="grid gap-3 md:grid-cols-3">
-            <MetricCard
-              label="Pre-venta"
-              value={phaseSummary.pre_sale}
-              caption="Deals activos (lead → final negotiation)"
-            />
-            <MetricCard
-              label="Cerrado"
-              value={phaseSummary.closed}
-              caption="Won, lost o postponed"
-            />
-            <MetricCard
-              label="Post-venta"
-              value={phaseSummary.post_sale}
-              caption="Onboarding churned, red list, churned"
-            />
-          </div>
-          <p className="text-[12px] text-[var(--color-text-secondary)]">
-            Phase derivada del <code>deal_stage</code> en HubSpot. Solo cuenta deals únicos con
-            al menos un pain detectado.
-          </p>
-        </section>
-      ) : null}
 
       <ChartCard title="Detalle por pain">
         <div className="mb-3 grid gap-2 md:grid-cols-3">

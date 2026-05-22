@@ -4,7 +4,6 @@ import {
   filterByType,
   groupDistinctTranscripts,
 } from "@/lib/data/dashboard-aggregations";
-import { getFunnelPhase } from "@/lib/data/normalizers";
 import type { InsightRow } from "@/lib/supabase/types";
 
 export type NameValue = { name: string; value: number };
@@ -25,12 +24,6 @@ export type PainTableRow = {
   verbatim_quote: string | null;
 };
 
-export type PhaseSummary = {
-  pre_sale: number;
-  closed: number;
-  post_sale: number;
-};
-
 export type PainsDetailData = {
   kpis: {
     total: number;
@@ -39,7 +32,6 @@ export type PainsDetailData = {
   };
   byModule: NameValue[];
   themeStatusHeat: HeatMapData;
-  phaseSummary: PhaseSummary;
   themes: string[];
   modules: string[];
   painTableRows: PainTableRow[];
@@ -67,25 +59,6 @@ export function buildPainsDetailData(
     verbatim_quote: row.verbatim_quote,
   }));
 
-  // ─── Funnel phase aggregation (deals únicos por phase) ───────────────
-  const phasePreSale = new Set<string>();
-  const phaseClosed = new Set<string>();
-  const phasePostSale = new Set<string>();
-  for (const row of pains) {
-    const phase = getFunnelPhase(row.deal_stage);
-    if (!phase) continue;
-    const dealKey = row.deal_id || row.transcript_id;
-    if (!dealKey) continue;
-    if (phase === "pre_sale") phasePreSale.add(dealKey);
-    else if (phase === "closed") phaseClosed.add(dealKey);
-    else phasePostSale.add(dealKey);
-  }
-  const phaseSummary: PhaseSummary = {
-    pre_sale: phasePreSale.size,
-    closed: phaseClosed.size,
-    post_sale: phasePostSale.size,
-  };
-
   return {
     kpis: {
       total: pains.length,
@@ -94,7 +67,6 @@ export function buildPainsDetailData(
     },
     byModule: groupDistinctTranscripts(pains, "module_display", 12),
     themeStatusHeat: buildHeatMap(pains, "pain_theme", "module_status", 12, 4),
-    phaseSummary,
     themes,
     modules,
     painTableRows,
