@@ -154,25 +154,10 @@ export function PainsDetailView({ data, filteredRows }: Props) {
       {/* ─── Pains × Outcome (Won vs Lost) ─────────────────────────────── */}
       {painsByOutcome.length > 0 ? (
         <section className="space-y-3">
-          <div className="flex items-center gap-2">
-            <PageTitle
-              title="Pains × Outcome"
-              subtitle="¿Qué pains se asocian a deals ganados vs perdidos? (mínimo 5 deals cerrados)"
-            />
-            <span
-              className="cursor-help text-[14px] text-[var(--color-text-secondary)]"
-              title={
-                "Lectura del cuadro:\n" +
-                "🟢 Win-rate > 60%: el messaging resuena, los deals con este pain tienden a cerrar. Buen candidato para producir más contenido.\n" +
-                "⚠ Lost-rate > 55%: aparece fricción al cierre; conviene revisar objection handling.\n" +
-                "🔴 Lost-rate > 70%: deal killer, prioridad alta.\n\n" +
-                "Outcome usa deal_stage de HubSpot — Won = ganado; Lost o Postponed = perdido."
-              }
-              aria-label="Cómo leer este cuadro"
-            >
-              ℹ️
-            </span>
-          </div>
+          <PageTitle
+            title="Pains × Outcome"
+            subtitle="¿Qué pains se asocian a deals ganados vs perdidos? (mínimo 5 deals cerrados)"
+          />
 
           <ChartCard title="Win-rate y lost-rate por pain">
             <p className="mb-3 text-[12px] text-[var(--color-text-secondary)]">
