@@ -30,6 +30,14 @@ export type PhaseSummary = {
   post_sale: number;
 };
 
+export type PainByPhaseRow = {
+  pain: string;
+  pre_sale: number;
+  closed: number;
+  post_sale: number;
+  total: number;
+};
+
 export type PainsDetailData = {
   kpis: {
     total: number;
@@ -39,6 +47,7 @@ export type PainsDetailData = {
   byModule: NameValue[];
   themeStatusHeat: HeatMapData;
   phaseSummary: PhaseSummary;
+  topPainsByPhase: PainByPhaseRow[];
   themes: string[];
   modules: string[];
   painTableRows: PainTableRow[];
@@ -66,24 +75,50 @@ export function buildPainsDetailData(
     verbatim_quote: row.verbatim_quote,
   }));
 
-  // Funnel phase: deals únicos por phase (cheap O(n) pass).
+  // Funnel phase: deals únicos por phase + por (pain, phase). O(n) pass.
   const phasePreSale = new Set<string>();
   const phaseClosed = new Set<string>();
   const phasePostSale = new Set<string>();
+  const painPhaseDeals = new Map<string, { pre: Set<string>; cl: Set<string>; po: Set<string> }>();
+
   for (const row of pains) {
     const phase = getFunnelPhase(row.deal_stage);
     if (!phase) continue;
     const dealKey = row.deal_id || row.transcript_id;
     if (!dealKey) continue;
+
     if (phase === "pre_sale") phasePreSale.add(dealKey);
     else if (phase === "closed") phaseClosed.add(dealKey);
     else phasePostSale.add(dealKey);
+
+    const painName = row.insight_subtype_display;
+    if (!painName) continue;
+    let bucket = painPhaseDeals.get(painName);
+    if (!bucket) {
+      bucket = { pre: new Set<string>(), cl: new Set<string>(), po: new Set<string>() };
+      painPhaseDeals.set(painName, bucket);
+    }
+    if (phase === "pre_sale") bucket.pre.add(dealKey);
+    else if (phase === "closed") bucket.cl.add(dealKey);
+    else bucket.po.add(dealKey);
   }
+
   const phaseSummary: PhaseSummary = {
     pre_sale: phasePreSale.size,
     closed: phaseClosed.size,
     post_sale: phasePostSale.size,
   };
+
+  const topPainsByPhase: PainByPhaseRow[] = Array.from(painPhaseDeals.entries())
+    .map(([pain, b]) => {
+      const pre_sale = b.pre.size;
+      const closed = b.cl.size;
+      const post_sale = b.po.size;
+      return { pain, pre_sale, closed, post_sale, total: pre_sale + closed + post_sale };
+    })
+    .filter((r) => r.total > 0)
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 12);
 
   return {
     kpis: {
@@ -94,6 +129,7 @@ export function buildPainsDetailData(
     byModule: groupDistinctTranscripts(pains, "module_display", 12),
     themeStatusHeat: buildHeatMap(pains, "pain_theme", "module_status", 12, 4),
     phaseSummary,
+    topPainsByPhase,
     themes,
     modules,
     painTableRows,
