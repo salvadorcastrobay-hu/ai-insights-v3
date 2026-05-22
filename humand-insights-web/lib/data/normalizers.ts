@@ -145,3 +145,52 @@ export function shortSegmentLabel(value: string | null | undefined): string {
   if (!value) return "";
   return value.replace(/\s*\([^)]*\)\s*$/, "").trim();
 }
+
+// ─── Funnel phase ─────────────────────────────────────────────────────────────
+// raw_deals.deal_stage guarda la label de HubSpot (ej. "Lead 🐣"). Agrupamos
+// los 13 stages en 3 phases para charts de cross-reference Pain × Phase.
+//
+// IMPORTANTE: nada de regex con unicode property escapes — usamos includes()
+// sobre lowercased string para máxima compatibilidad cross-browser y SSR.
+
+export type FunnelPhase = "pre_sale" | "closed" | "post_sale";
+
+export const FUNNEL_PHASE_ORDER: FunnelPhase[] = ["pre_sale", "closed", "post_sale"];
+
+export const FUNNEL_PHASE_DISPLAY: Record<FunnelPhase, string> = {
+  pre_sale: "Pre-venta",
+  closed: "Cerrado",
+  post_sale: "Post-venta",
+};
+
+export const FUNNEL_PHASE_COLOR: Record<FunnelPhase, string> = {
+  pre_sale: "#5B7CFA",
+  closed: "#94A3B8",
+  post_sale: "#F59E0B",
+};
+
+// Listas de keywords lowercased — chequeamos si la deal_stage contiene alguna.
+// Orden importa: post_sale primero porque "Success Churned" matchearía "won"/"lost"
+// si lo tuviéramos invertido.
+const POST_SALE_KEYWORDS = ["onboarding churned", "success red list", "success churned"];
+const CLOSED_KEYWORDS = ["closed won", "closed lost", "postponed", "won", "lost"];
+const PRE_SALE_KEYWORDS = [
+  "lead",
+  "early stage",
+  "discovery",
+  "champion",
+  "decision maker",
+  "pilot",
+  "final negotiation",
+];
+
+export function getFunnelPhase(
+  dealStage: string | null | undefined,
+): FunnelPhase | null {
+  if (!dealStage || typeof dealStage !== "string") return null;
+  const lowered = dealStage.toLowerCase();
+  for (const kw of POST_SALE_KEYWORDS) if (lowered.includes(kw)) return "post_sale";
+  for (const kw of CLOSED_KEYWORDS) if (lowered.includes(kw)) return "closed";
+  for (const kw of PRE_SALE_KEYWORDS) if (lowered.includes(kw)) return "pre_sale";
+  return null;
+}
