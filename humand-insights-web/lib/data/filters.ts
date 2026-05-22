@@ -81,19 +81,22 @@ export function computeFilterOptions(rows: InsightRow[]): FilterOptions {
 }
 
 export function applyFilters(rows: InsightRow[], filters: Filters): InsightRow[] {
-  return rows.filter((row) => {
-    if (filters.types.length && !filters.types.includes(row.insight_type_display)) return false;
-    if (filters.regions.length && !filters.regions.includes(row.region ?? "")) return false;
-    if (filters.segments.length && !filters.segments.includes(row.segment ?? "")) return false;
-    if (filters.countries.length && !filters.countries.includes(row.country ?? "")) return false;
-    if (filters.industries.length && !filters.industries.includes(row.industry ?? "")) return false;
-    if (filters.owners.length && !filters.owners.includes(row.deal_owner ?? "")) return false;
-    if (filters.modules.length && !filters.modules.includes(row.module_display ?? "")) return false;
-    if (filters.categories.length && !filters.categories.includes(row.hr_category_display ?? "")) return false;
-    if (filters.channels.length && !filters.channels.includes(row.acquisition_channel ?? "")) return false;
-    if (filters.sources.length && !filters.sources.includes(row.deal_source ?? "")) return false;
-    if (filters.date_start && row.call_date && row.call_date < filters.date_start) return false;
-    if (filters.date_end && row.call_date && row.call_date > filters.date_end) return false;
-    return true;
-  });
+  return rows.filter((row) => matchesFilters(row, filters));
+}
+
+/** Single-row predicate. Reusable para hacer filter + type-check en una pasada. */
+export function matchesFilters(row: InsightRow, filters: Filters): boolean {
+  if (filters.types.length && !filters.types.includes(row.insight_type_display)) return false;
+  if (filters.regions.length && !filters.regions.includes(row.region ?? "")) return false;
+  if (filters.segments.length && !filters.segments.includes(row.segment ?? "")) return false;
+  if (filters.countries.length && !filters.countries.includes(row.country ?? "")) return false;
+  if (filters.industries.length && !filters.industries.includes(row.industry ?? "")) return false;
+  if (filters.owners.length && !filters.owners.includes(row.deal_owner ?? "")) return false;
+  if (filters.modules.length && !filters.modules.includes(row.module_display ?? "")) return false;
+  if (filters.categories.length && !filters.categories.includes(row.hr_category_display ?? "")) return false;
+  if (filters.channels.length && !filters.channels.includes(row.acquisition_channel ?? "")) return false;
+  if (filters.sources.length && !filters.sources.includes(row.deal_source ?? "")) return false;
+  if (filters.date_start && row.call_date && row.call_date < filters.date_start) return false;
+  if (filters.date_end && row.call_date && row.call_date > filters.date_end) return false;
+  return true;
 }

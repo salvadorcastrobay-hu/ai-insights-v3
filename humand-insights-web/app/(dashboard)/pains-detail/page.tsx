@@ -1,8 +1,40 @@
 import { PainsDetailView } from "@/components/pages/PainsDetailView";
-import { applyFilters } from "@/lib/data/filters";
+import { matchesFilters } from "@/lib/data/filters";
 import { buildPainsDetailData } from "@/lib/data/pains-detail-data";
 import { parseFiltersFromSearchParams } from "@/lib/data/search-params-filters";
 import { loadInsights } from "@/lib/supabase/queries";
+import type { InsightRow } from "@/lib/supabase/types";
+
+// Campos que el CSV download exporta para /pains-detail. Cualquier otro
+// campo del InsightRow no se usa en el cliente — lo dropeamos antes de
+// serializar a RSC para bajar el payload ~30%.
+const CSV_FIELDS = [
+  "id",
+  "transcript_id",
+  "call_date",
+  "company_name",
+  "segment",
+  "industry",
+  "region",
+  "country",
+  "deal_id",
+  "deal_name",
+  "deal_stage",
+  "deal_owner",
+  "amount",
+  "acquisition_channel",
+  "insight_type",
+  "insight_subtype_display",
+  "module_display",
+  "feature_display",
+  "gap_priority",
+  "competitor_name",
+  "competitor_relationship_display",
+  "summary",
+  "verbatim_quote",
+  "confidence",
+  "pain_theme",
+] as const satisfies ReadonlyArray<keyof InsightRow>;
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -15,13 +47,29 @@ export default async function Page({ searchParams }: PageProps) {
   const params = await searchParams;
   const filters = parseFiltersFromSearchParams(params);
   const rows = await loadInsights(process.env.NEXT_PUBLIC_PROMPT_VERSION ?? "v3.0");
-  // Memory optimization (Hobby plan 1024MB):
-  // 1. applyFilters una sola vez + filter por "pain" en la misma chain.
-  // 2. buildPainsDetailData ya no hace applyFilters internamente —
-  //    elimina duplicate work.
-  // 3. El array de pains se reusa para ambos: el builder y filteredRows
-  //    del cliente. Una sola alocación. ~5x menos payload RSC.
-  const painsOnly = applyFilters(rows, filters).filter((r) => r.insight_type === "pain");
+
+  // Memory optimization (Hobby plan 1024MB cap):
+  // Single-pass filter: type-check + matchesFilters en una sola iteración.
+  // Evita el array intermedio de applyFilters().filter() — el builder y
+  // el cliente comparten esta misma referencia.
+  const painsOnly: InsightRow[] = [];
+  for (const row of rows) {
+    if (row.insight_type !== "pain") continue;
+    if (!matchesFilters(row, filters)) continue;
+    painsOnly.push(row);
+  }
+
   const data = buildPainsDetailData(painsOnly, 0);
-  return <PainsDetailView data={data} filteredRows={painsOnly} />;
+
+  // Slim version para serializar a RSC: solo los campos que el cliente usa
+  // (CSV export + display). Drop ~10 campos no usados → -30% payload.
+  const filteredRowsSlim = painsOnly.map((row) => {
+    const slim: Partial<InsightRow> = {};
+    for (const field of CSV_FIELDS) {
+      (slim as Record<string, unknown>)[field] = row[field];
+    }
+    return slim as InsightRow;
+  });
+
+  return <PainsDetailView data={data} filteredRows={filteredRowsSlim} />;
 }
