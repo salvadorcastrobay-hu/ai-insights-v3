@@ -145,3 +145,57 @@ export function shortSegmentLabel(value: string | null | undefined): string {
   if (!value) return "";
   return value.replace(/\s*\([^)]*\)\s*$/, "").trim();
 }
+
+// ─── Funnel phase ─────────────────────────────────────────────────────────────
+// raw_deals.deal_stage guarda la label de HubSpot (ej. "Lead 🐣"). Agrupamos
+// los 13 stages en 3 phases para charts de cross-reference Pain × Phase.
+
+export type FunnelPhase = "pre_sale" | "closed" | "post_sale";
+
+export const FUNNEL_PHASE_ORDER: FunnelPhase[] = ["pre_sale", "closed", "post_sale"];
+
+export const FUNNEL_PHASE_DISPLAY: Record<FunnelPhase, string> = {
+  pre_sale: "Pre-venta",
+  closed: "Cerrado",
+  post_sale: "Post-venta",
+};
+
+export const FUNNEL_PHASE_COLOR: Record<FunnelPhase, string> = {
+  pre_sale: "#5B7CFA", // azul — activo
+  closed: "#94A3B8", // gris — cerrado (won/lost/postponed)
+  post_sale: "#F59E0B", // ámbar — customer lifecycle
+};
+
+const FUNNEL_PHASE_BY_PATTERN: Array<[RegExp, FunnelPhase]> = [
+  // Post-venta primero porque "churned" puede co-existir con otros términos
+  [/onboarding\s*churned|success\s*red\s*list|success\s*churned/, "post_sale"],
+  // Cerrado: won, lost, postponed
+  [/\b(closed\s*won|won|closed\s*lost|lost|postponed)\b/, "closed"],
+  // Pre-venta: todos los stages activos del pipeline
+  [
+    /\b(lead|early\s*stage|discovery|champion|decision\s*maker|pilot|final\s*negotiation)\b/,
+    "pre_sale",
+  ],
+];
+
+function stripEmojiAndLower(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "") // diacríticos
+    .replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, "")
+    .replace(/\s+/g, " ")
+    .toLowerCase()
+    .trim();
+}
+
+export function getFunnelPhase(
+  dealStage: string | null | undefined,
+): FunnelPhase | null {
+  if (!dealStage) return null;
+  const cleaned = stripEmojiAndLower(dealStage);
+  if (!cleaned) return null;
+  for (const [pattern, phase] of FUNNEL_PHASE_BY_PATTERN) {
+    if (pattern.test(cleaned)) return phase;
+  }
+  return null;
+}
