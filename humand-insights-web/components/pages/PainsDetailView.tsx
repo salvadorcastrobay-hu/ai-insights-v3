@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { ChartCard } from "@/components/charts/ChartCard";
 import { HorizontalBarChart } from "@/components/charts/BarChart";
 import { HeatMap } from "@/components/charts/HeatMap";
+import { StackedBarChart } from "@/components/charts/StackedBar";
 import { MetricCard } from "@/components/layout/MetricCard";
 import { PageTitle } from "@/components/pages/common";
 import { Input } from "@/components/ui/input";
@@ -14,8 +15,9 @@ import type { PainsDetailData } from "@/lib/data/pains-detail-data";
 type Props = { data: PainsDetailData; filteredRows: import("@/lib/supabase/types").InsightRow[] };
 
 export function PainsDetailView({ data, filteredRows }: Props) {
-  const { kpis, byModule, themeStatusHeat, phaseSummary, themes, modules, painTableRows } = data;
+  const { kpis, byModule, themeStatusHeat, phaseSummary, topPainsByPhase, themes, modules, painTableRows } = data;
   const phaseTotal = phaseSummary.pre_sale + phaseSummary.closed + phaseSummary.post_sale;
+  const pct = (n: number) => (phaseTotal > 0 ? `${Math.round((n / phaseTotal) * 100)}%` : "0%");
 
   const [theme, setTheme] = useState("");
   const [module, setModule] = useState("");
@@ -80,31 +82,57 @@ export function PainsDetailView({ data, filteredRows }: Props) {
       </section>
 
       {/* ─── Funnel phase cross-reference ─────────────────────────────── */}
-      {/* debug: gate removida temporalmente — si los 3 counts salen 0,
-          el mapping de deal_stage está fallando. */}
-      {true ? (
-        <section className="space-y-3" data-debug-phase-total={phaseTotal}>
+      {phaseTotal > 0 ? (
+        <section className="space-y-3">
           <PageTitle
             title="Pains × Funnel Phase"
             subtitle="¿En qué momento del journey aparece cada pain?"
           />
+
           <div className="grid gap-3 md:grid-cols-3">
             <MetricCard
               label="Pre-venta"
               value={phaseSummary.pre_sale}
-              caption="Deals activos (lead → final negotiation)"
+              caption={`${pct(phaseSummary.pre_sale)} del total · Deals activos (lead → final negotiation)`}
             />
             <MetricCard
               label="Cerrado"
               value={phaseSummary.closed}
-              caption="Won, lost o postponed"
+              caption={`${pct(phaseSummary.closed)} del total · Won, lost o postponed`}
             />
             <MetricCard
               label="Post-venta"
               value={phaseSummary.post_sale}
-              caption="Onboarding churned, red list, churned"
+              caption={`${pct(phaseSummary.post_sale)} del total · Onboarding churned, red list, churned`}
             />
           </div>
+
+          {topPainsByPhase.length > 0 ? (
+            <ChartCard title="Top pains, distribución por phase">
+              <p className="mb-2 text-[12px] text-[var(--color-text-secondary)]">
+                Top {topPainsByPhase.length} pains por volumen total. Cada barra muestra cuántos
+                deals únicos lo mencionaron, desglosado por phase del funnel. Útil para detectar
+                si un pain es objeción de venta, crónico (sigue post-deal), o de adopción.
+              </p>
+              <StackedBarChart
+                data={topPainsByPhase.map((r) => ({
+                  pain: r.pain,
+                  "Pre-venta": r.pre_sale,
+                  Cerrado: r.closed,
+                  "Post-venta": r.post_sale,
+                }))}
+                yKey="pain"
+                stackKeys={["Pre-venta", "Cerrado", "Post-venta"]}
+                colorMap={{
+                  "Pre-venta": "#5B7CFA",
+                  Cerrado: "#94A3B8",
+                  "Post-venta": "#F59E0B",
+                }}
+                exportFileName="pains-by-phase-stacked.csv"
+              />
+            </ChartCard>
+          ) : null}
+
           <p className="text-[12px] text-[var(--color-text-secondary)]">
             Phase derivada del <code>deal_stage</code> en HubSpot. Solo cuenta deals únicos con
             al menos un pain detectado.
