@@ -4,6 +4,12 @@ import {
   filterByType,
   groupDistinctTranscripts,
 } from "@/lib/data/dashboard-aggregations";
+import {
+  FUNNEL_PHASE_DISPLAY,
+  FUNNEL_PHASE_ORDER,
+  getFunnelPhase,
+  type FunnelPhase,
+} from "@/lib/data/normalizers";
 import type { InsightRow } from "@/lib/supabase/types";
 
 export type NameValue = { name: string; value: number };
@@ -24,14 +30,25 @@ export type PainTableRow = {
   verbatim_quote: string | null;
 };
 
+export type PainByPhaseRow = {
+  pain: string;
+  pre_sale: number;
+  closed: number;
+  post_sale: number;
+  total: number;
+};
+
 export type PainsDetailData = {
   kpis: {
     total: number;
     generales: number;
     vinculados: number;
+    withPhase: number;
   };
   byModule: NameValue[];
   themeStatusHeat: HeatMapData;
+  phaseSummary: NameValue[];
+  topPainsByPhase: PainByPhaseRow[];
   themes: string[];
   modules: string[];
   painTableRows: PainTableRow[];
@@ -59,14 +76,61 @@ export function buildPainsDetailData(
     verbatim_quote: row.verbatim_quote,
   }));
 
+  // ─── Funnel phase aggregations ────────────────────────────────────────
+  // Cuenta deals únicos por phase para que un deal con 10 pains no infle el total.
+  const phaseDeals: Record<FunnelPhase, Set<string>> = {
+    pre_sale: new Set(),
+    closed: new Set(),
+    post_sale: new Set(),
+  };
+  // Pain × phase: deals únicos por pain por phase
+  const painPhaseDeals = new Map<string, Record<FunnelPhase, Set<string>>>();
+
+  for (const row of pains) {
+    const phase = getFunnelPhase(row.deal_stage);
+    if (!phase) continue;
+    const dealKey = row.deal_id ?? row.transcript_id;
+    if (!dealKey) continue;
+    phaseDeals[phase].add(dealKey);
+
+    const painName = row.insight_subtype_display;
+    if (!painName) continue;
+    if (!painPhaseDeals.has(painName)) {
+      painPhaseDeals.set(painName, { pre_sale: new Set(), closed: new Set(), post_sale: new Set() });
+    }
+    painPhaseDeals.get(painName)![phase].add(dealKey);
+  }
+
+  const phaseSummary: NameValue[] = FUNNEL_PHASE_ORDER.map((phase) => ({
+    name: FUNNEL_PHASE_DISPLAY[phase],
+    value: phaseDeals[phase].size,
+  }));
+
+  const topPainsByPhase: PainByPhaseRow[] = [...painPhaseDeals.entries()]
+    .map(([pain, byPhase]) => {
+      const pre_sale = byPhase.pre_sale.size;
+      const closed = byPhase.closed.size;
+      const post_sale = byPhase.post_sale.size;
+      return { pain, pre_sale, closed, post_sale, total: pre_sale + closed + post_sale };
+    })
+    .filter((r) => r.total > 0)
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 12);
+
+  const withPhase =
+    phaseDeals.pre_sale.size + phaseDeals.closed.size + phaseDeals.post_sale.size;
+
   return {
     kpis: {
       total: pains.length,
       generales: pains.filter((row) => !row.module_display).length,
       vinculados: pains.filter((row) => row.module_display).length,
+      withPhase,
     },
     byModule: groupDistinctTranscripts(pains, "module_display", 12),
     themeStatusHeat: buildHeatMap(pains, "pain_theme", "module_status", 12, 4),
+    phaseSummary,
+    topPainsByPhase,
     themes,
     modules,
     painTableRows,
