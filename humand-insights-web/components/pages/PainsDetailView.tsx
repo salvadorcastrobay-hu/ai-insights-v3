@@ -5,28 +5,16 @@ import { useMemo, useState } from "react";
 import { ChartCard } from "@/components/charts/ChartCard";
 import { HorizontalBarChart } from "@/components/charts/BarChart";
 import { HeatMap } from "@/components/charts/HeatMap";
-import { CategoryPieChart } from "@/components/charts/PieChart";
-import { StackedBarChart } from "@/components/charts/StackedBar";
 import { MetricCard } from "@/components/layout/MetricCard";
 import { PageTitle } from "@/components/pages/common";
 import { Input } from "@/components/ui/input";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@/components/ui/table";
-import { FUNNEL_PHASE_COLOR, FUNNEL_PHASE_DISPLAY } from "@/lib/data/normalizers";
 import type { PainsDetailData } from "@/lib/data/pains-detail-data";
 
 type Props = { data: PainsDetailData; filteredRows: import("@/lib/supabase/types").InsightRow[] };
 
 export function PainsDetailView({ data, filteredRows }: Props) {
-  const {
-    kpis,
-    byModule,
-    themeStatusHeat,
-    phaseSummary,
-    topPainsByPhase,
-    themes,
-    modules,
-    painTableRows,
-  } = data;
+  const { kpis, byModule, themeStatusHeat, themes, modules, painTableRows } = data;
 
   const [theme, setTheme] = useState("");
   const [module, setModule] = useState("");
@@ -89,63 +77,6 @@ export function PainsDetailView({ data, filteredRows }: Props) {
           <HeatMap rowLabels={themeStatusHeat.rowLabels} colLabels={themeStatusHeat.colLabels} values={themeStatusHeat.values} height={Math.max(480, themeStatusHeat.rowLabels.length * 46 + 140)} />
         </ChartCard>
       </section>
-
-      {/* ─── Funnel phase cross-reference ─────────────────────────────── */}
-      {kpis.withPhase > 0 ? (
-        <section className="space-y-3">
-          <PageTitle
-            title="Pains × Funnel Phase"
-            subtitle="¿En qué momento del journey aparece cada pain? Pre-venta, cerrado o post-venta."
-          />
-
-          <div className="grid gap-3 lg:grid-cols-3">
-            <div className="lg:col-span-1">
-              <ChartCard title="Distribución de deals con pain por phase">
-                <p className="mb-2 text-[12px] text-[var(--color-text-secondary)]">
-                  Cantidad de deals únicos con al menos un pain, agrupados por phase del journey.
-                </p>
-                <CategoryPieChart data={phaseSummary} height={300} exportFileName="pains-by-phase.csv" />
-              </ChartCard>
-            </div>
-
-            <div className="lg:col-span-2">
-              <ChartCard title="Top pains, distribución por phase">
-                <p className="mb-2 text-[12px] text-[var(--color-text-secondary)]">
-                  Top {topPainsByPhase.length} pains por volumen total. Cada barra muestra cuántos
-                  deals únicos lo mencionaron, desglosado por phase del funnel.
-                </p>
-                <StackedBarChart
-                  data={topPainsByPhase.map((r) => ({
-                    pain: r.pain,
-                    [FUNNEL_PHASE_DISPLAY.pre_sale]: r.pre_sale,
-                    [FUNNEL_PHASE_DISPLAY.closed]: r.closed,
-                    [FUNNEL_PHASE_DISPLAY.post_sale]: r.post_sale,
-                  }))}
-                  yKey="pain"
-                  stackKeys={[
-                    FUNNEL_PHASE_DISPLAY.pre_sale,
-                    FUNNEL_PHASE_DISPLAY.closed,
-                    FUNNEL_PHASE_DISPLAY.post_sale,
-                  ]}
-                  colorMap={{
-                    [FUNNEL_PHASE_DISPLAY.pre_sale]: FUNNEL_PHASE_COLOR.pre_sale,
-                    [FUNNEL_PHASE_DISPLAY.closed]: FUNNEL_PHASE_COLOR.closed,
-                    [FUNNEL_PHASE_DISPLAY.post_sale]: FUNNEL_PHASE_COLOR.post_sale,
-                  }}
-                  exportFileName="pains-by-phase-stacked.csv"
-                />
-              </ChartCard>
-            </div>
-          </div>
-
-          <p className="text-[12px] text-[var(--color-text-secondary)]">
-            Phase derivada del <code>deal_stage</code> en HubSpot. <strong>Pre-venta</strong>:
-            lead → final negotiation. <strong>Cerrado</strong>: won / lost / postponed.{" "}
-            <strong>Post-venta</strong>: onboarding churned / red list / churned. Deals sin stage
-            asignado no se incluyen.
-          </p>
-        </section>
-      ) : null}
 
       <ChartCard title="Detalle por pain">
         <div className="mb-3 grid gap-2 md:grid-cols-3">
