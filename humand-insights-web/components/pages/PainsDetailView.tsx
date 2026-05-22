@@ -80,8 +80,10 @@ export function PainsDetailView({ data, filteredRows }: Props) {
       </section>
 
       {/* ─── Funnel phase cross-reference ─────────────────────────────── */}
-      {phaseTotal > 0 ? (
-        <section className="space-y-3">
+      {/* debug: gate removida temporalmente — si los 3 counts salen 0,
+          el mapping de deal_stage está fallando. */}
+      {true ? (
+        <section className="space-y-3" data-debug-phase-total={phaseTotal}>
           <PageTitle
             title="Pains × Funnel Phase"
             subtitle="¿En qué momento del journey aparece cada pain?"
