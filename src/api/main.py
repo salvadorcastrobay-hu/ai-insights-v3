@@ -48,6 +48,12 @@ from src.connectors.sql_chat_store import (
 )
 from src.skills.pipeline_stats import get_pipeline_breakdown
 from src.skills.segment_insights import get_segment_insights
+from src.api.token_tracker import (
+    check_quota,
+    clear_request_context,
+    get_usage_summary_for,
+    set_request_context,
+)
 
 app = FastAPI(title="Humand Insights API")
 
@@ -139,6 +145,12 @@ def verify_jwt(authorization: str = Header(...)) -> str:
 @app.get("/health")
 def healthcheck() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/usage/me")
+def usage_me(owner: str = Depends(verify_jwt)) -> dict[str, Any]:
+    """Token usage del user autenticado en ventanas 24h / 7d / 30d."""
+    return get_usage_summary_for(owner)
 
 
 _FILTER_LABELS: dict[str, str] = {
@@ -295,6 +307,10 @@ def sql_chat_query(body: ChatQueryBody, owner: str = Depends(verify_jwt)) -> dic
     if not question:
         raise HTTPException(status_code=400, detail="Question is required.")
 
+    # Token usage: setea contexto + chequea quota antes de hacer cualquier call.
+    set_request_context(owner, "sql-chat")
+    check_quota(owner)
+
     filters_payload = _normalize_filters_payload(body.filters)
     filter_context = _format_filter_context(filters_payload)
 
@@ -388,6 +404,8 @@ def load_sql_conversation(conv_id: str, owner: str = Depends(verify_jwt)) -> dic
 
 @app.post("/campaign-advisor/generate")
 def advisor_generate(body: AdvisorGenerateBody, owner: str = Depends(verify_jwt)) -> dict[str, Any]:
+    set_request_context(owner, "campaign-advisor-generate")
+    check_quota(owner)
     filters = dict(body.filters or {})
     question = body.question.strip()
     external_context, external_records, external_warnings = _build_external_context(body.external_sources)
@@ -436,6 +454,8 @@ def advisor_generate(body: AdvisorGenerateBody, owner: str = Depends(verify_jwt)
 
 @app.post("/campaign-advisor/followup")
 def advisor_followup(body: AdvisorFollowupBody, owner: str = Depends(verify_jwt)) -> dict[str, Any]:
+    set_request_context(owner, "campaign-advisor-followup")
+    check_quota(owner)
     question = body.question.strip()
     if not question:
         raise HTTPException(status_code=400, detail="Question is required.")
@@ -465,6 +485,8 @@ def advisor_followup(body: AdvisorFollowupBody, owner: str = Depends(verify_jwt)
 
 @app.post("/campaign-advisor/translate")
 def advisor_translate(body: AdvisorTranslateBody, owner: str = Depends(verify_jwt)) -> dict[str, Any]:
+    set_request_context(owner, "campaign-advisor-translate")
+    check_quota(owner)
     target_language = body.target_language.strip()
     if not target_language:
         raise HTTPException(status_code=400, detail="target_language is required.")

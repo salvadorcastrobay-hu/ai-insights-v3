@@ -3,6 +3,7 @@
 import { AlertCircle, Languages, Link as LinkIcon, Lock, Plus, SlidersHorizontal, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ChatInterface } from "@/components/chat/ChatInterface";
+import { UsageRing } from "@/components/usage/UsageRing";
 import type {
   AdvisorMetadata,
   ChatMessageModel,
@@ -507,6 +508,7 @@ export function CampaignAdvisorClient({ filterBar }: { filterBar?: ReactNode } =
       >
         <Languages size={12} strokeWidth={2.5} />
       </button>
+      <UsageRing visibleForOwners={["salvador.castrobay"]} />
     </div>
   );
 
