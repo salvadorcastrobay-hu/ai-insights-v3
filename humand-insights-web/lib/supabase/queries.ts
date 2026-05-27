@@ -157,6 +157,21 @@ export async function loadDealProperties(
   return Object.fromEntries(entries);
 }
 
+// Memory cap del Vercel Function en Hobby plan = 1024MB. Sin un date filter
+// la tabla crece linealmente y termina OOMeando. Default = 18 meses, suficiente
+// para análisis típicos. Tunable vía env LOAD_INSIGHTS_DAYS.
+const LOAD_INSIGHTS_DAYS = Number(process.env.LOAD_INSIGHTS_DAYS ?? "540");
+
+// Campos pesados (texto largo) que se truncan al load para reducir memoria.
+// Las pages que renderizan estos campos típicamente no muestran >500 chars.
+const TRUNCATE_AT = 500;
+
+function truncateField(value: unknown): string | null {
+  if (typeof value !== "string") return value as string | null;
+  if (value.length <= TRUNCATE_AT) return value;
+  return value.slice(0, TRUNCATE_AT - 1).trimEnd() + "…";
+}
+
 export async function loadInsightsImpl(
   promptVersion = "v3.0",
   _pageSize = 1000,
@@ -164,14 +179,35 @@ export async function loadInsightsImpl(
 ): Promise<InsightRow[]> {
   const sql = getPg();
 
-  // Bulk fetch via direct Postgres — one round-trip instead of ~96 paginated REST calls.
+  // Bulk fetch via direct Postgres con date filter para fit en memoria.
   // Quote column identifiers so reserved words like "module" work.
   const quotedCols = LOAD_DATA_COLUMNS.map((c) => `"${c}"`).join(", ");
   const rawRows = await sql.unsafe(
-    `SELECT ${quotedCols} FROM v_insights_dashboard WHERE prompt_version = $1 ORDER BY id`,
-    [promptVersion],
+    `SELECT ${quotedCols}
+       FROM v_insights_dashboard
+      WHERE prompt_version = $1
+        AND (call_date IS NULL OR call_date >= (CURRENT_DATE - $2::int))
+      ORDER BY id`,
+    [promptVersion, LOAD_INSIGHTS_DAYS],
   );
   const rows = rawRows as unknown as InsightRow[];
+
+  // Truncar campos de texto pesados in-place para bajar memoria de Sets/Maps
+  // y serialización RSC.
+  for (const row of rows) {
+    if (row.verbatim_quote && typeof row.verbatim_quote === "string" && row.verbatim_quote.length > TRUNCATE_AT) {
+      row.verbatim_quote = truncateField(row.verbatim_quote);
+    }
+    if (row.summary && typeof row.summary === "string" && row.summary.length > TRUNCATE_AT) {
+      row.summary = truncateField(row.summary) as string;
+    }
+    if ((row as { gap_description?: string | null }).gap_description) {
+      const desc = (row as { gap_description?: string | null }).gap_description;
+      if (typeof desc === "string" && desc.length > TRUNCATE_AT) {
+        (row as { gap_description?: string | null }).gap_description = truncateField(desc);
+      }
+    }
+  }
 
   const dealIds = [
     ...new Set(rows.map((row) => row.deal_id).filter((value): value is string => Boolean(value))),
