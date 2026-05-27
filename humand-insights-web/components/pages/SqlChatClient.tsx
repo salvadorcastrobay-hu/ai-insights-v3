@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { SlidersHorizontal, X } from "lucide-react";
 import { ChatInterface } from "@/components/chat/ChatInterface";
+import { UsageRing } from "@/components/usage/UsageRing";
 import type {
   ChartPayload,
   ChatMessageModel,
@@ -322,6 +323,7 @@ export function SqlChatClient({ filterBar }: { filterBar?: ReactNode } = {}) {
           </div>
         ) : undefined
       }
+      inputTrailing={<UsageRing visibleForOwners={["salvador.castrobay"]} />}
       starterPrompts={[
         "Top 10 pains en Enterprise en los últimos 90 días",
         "¿Cuáles son los competidores más mencionados en Mid Market?",
