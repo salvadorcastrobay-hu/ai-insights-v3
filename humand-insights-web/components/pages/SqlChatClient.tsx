@@ -91,8 +91,14 @@ function messagesFromLoaded(loaded: LoadedConversation): ChatMessageModel[] {
         content,
       } as ChatMessageModel;
     }
-    const payload = (m.payload as ChatApiResponse) ?? {};
-    return buildAssistantMessage(payload);
+    // Assistant: el backend guarda los campos del response spread directamente
+    // sobre la message (assistant_message = {role: "assistant", ...response}),
+    // así que content/summary/synthesis viven en el top-level de m. Fallback a
+    // m.payload por si en algún momento se guardaron wrappeados.
+    const payload = (m as unknown as ChatApiResponse) ?? {};
+    const wrapped = (m.payload as ChatApiResponse | undefined) ?? {};
+    const merged: ChatApiResponse = { ...wrapped, ...payload };
+    return buildAssistantMessage(merged);
   });
 }
 
