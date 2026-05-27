@@ -7,13 +7,28 @@ Persistencia de token usage por user. Append-only.
 from __future__ import annotations
 
 import logging
+import os
 from datetime import datetime, timedelta, timezone
 
-from shared import get_supabase
+from supabase import create_client
 
 logger = logging.getLogger(__name__)
 
 TABLE = "user_token_usage"
+
+
+def _get_supabase():
+    """Local helper — evitamos importar shared.py (depende de streamlit)
+    para no romper el boot de FastAPI en entornos sin streamlit instalado
+    o sin Streamlit Context."""
+    url = os.environ.get("SUPABASE_URL")
+    key = (
+        os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+        or os.environ.get("SUPABASE_KEY")
+    )
+    if not url or not key:
+        raise RuntimeError("SUPABASE_URL + SUPABASE_(SERVICE_ROLE_)KEY required.")
+    return create_client(url, key)
 
 
 # Precios por 1M de tokens (USD). Mantener sincronizado con
@@ -49,7 +64,7 @@ def log_usage(
         return
     try:
         cost = compute_cost_usd(model, input_tokens, output_tokens)
-        get_supabase().from_(TABLE).insert({
+        _get_supabase().from_(TABLE).insert({
             "user_email": user_email,
             "endpoint": endpoint,
             "model": model,
@@ -67,7 +82,7 @@ def get_usage_window(user_email: str, since: datetime) -> dict:
         return {"input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0, "calls": 0}
     try:
         res = (
-            get_supabase()
+            _get_supabase()
             .from_(TABLE)
             .select("input_tokens,output_tokens,cost_usd")
             .eq("user_email", user_email)
