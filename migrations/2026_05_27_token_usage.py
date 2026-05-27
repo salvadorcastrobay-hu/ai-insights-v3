@@ -9,7 +9,12 @@ pattern as migrate_schema.py. Idempotent (IF NOT EXISTS).
 """
 from __future__ import annotations
 
+import os
 import sys
+
+# Permitir correr desde subdir: agregamos el root del repo al path.
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 import config
 import psycopg2
 
