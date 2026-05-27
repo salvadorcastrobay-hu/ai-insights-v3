@@ -113,7 +113,8 @@ def check_quota(owner: str) -> None:
 def _install_openai_patch() -> None:
     """
     Patcha openai.resources.chat.completions.Completions.create para
-    loguear usage real después de cada respuesta. Idempotente.
+    loguear usage real después de cada respuesta. Idempotente y best-effort:
+    NUNCA debe romper el boot del proceso si algo falla.
     """
     try:
         from openai.resources.chat.completions import Completions
@@ -121,36 +122,43 @@ def _install_openai_patch() -> None:
         logger.warning(f"OpenAI Completions class not importable: {exc}")
         return
 
-    if getattr(Completions, "_token_tracker_patched", False):
-        return
+    try:
+        if getattr(Completions, "_token_tracker_patched", False):
+            return
 
-    _original_create = Completions.create
+        _original_create = Completions.create
 
-    def _tracked_create(self, *args, **kwargs):
-        response = _original_create(self, *args, **kwargs)
-        try:
-            owner = _current_owner.get()
-            endpoint = _current_endpoint.get() or "unknown"
-            if owner and getattr(response, "usage", None):
-                model = kwargs.get("model") or "unknown"
-                log_usage(
-                    user_email=owner,
-                    endpoint=endpoint,
-                    model=str(model),
-                    input_tokens=int(response.usage.prompt_tokens or 0),
-                    output_tokens=int(response.usage.completion_tokens or 0),
-                )
-        except Exception as exc:
-            logger.debug(f"token_tracker logging skipped: {exc}")
-        return response
+        def _tracked_create(self, *args, **kwargs):
+            response = _original_create(self, *args, **kwargs)
+            try:
+                owner = _current_owner.get()
+                endpoint = _current_endpoint.get() or "unknown"
+                if owner and getattr(response, "usage", None):
+                    model = kwargs.get("model") or "unknown"
+                    log_usage(
+                        user_email=owner,
+                        endpoint=endpoint,
+                        model=str(model),
+                        input_tokens=int(response.usage.prompt_tokens or 0),
+                        output_tokens=int(response.usage.completion_tokens or 0),
+                    )
+            except Exception as exc:
+                logger.debug(f"token_tracker logging skipped: {exc}")
+            return response
 
-    Completions.create = _tracked_create
-    Completions._token_tracker_patched = True
-    logger.info("OpenAI Completions.create patched for token tracking.")
+        Completions.create = _tracked_create
+        Completions._token_tracker_patched = True
+        logger.info("OpenAI Completions.create patched for token tracking.")
+    except Exception as exc:
+        logger.warning(f"OpenAI patch install failed (non-fatal): {exc}")
 
 
-# Auto-instalar al importar el módulo
-_install_openai_patch()
+# Best-effort: defendemos el boot del proceso ante cualquier falla del patch.
+# Si algo se rompe en este install, el FastAPI server tiene que arrancar igual.
+try:
+    _install_openai_patch()
+except Exception as _exc:
+    logger.warning(f"token_tracker init skipped: {_exc}")
 
 
 # ─── Usage summary para el endpoint /api/usage/me ───────────────────────
