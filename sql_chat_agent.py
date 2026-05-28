@@ -190,8 +190,19 @@ Columnas disponibles para filtros:
 - competitor_relationship: currently_using, evaluating, migrating_from, comparing, mentioned, previously_used
 - segment: contiene paréntesis con rango de empleados. Valores reales:
   'Enterprise (>1000 employees)', 'Mid Market (250-1000 employees)', 'SMB (<250 employees)'.
-  **IMPORTANTE**: NUNCA uses `segment ILIKE 'Enterprise%'` (no matchea por el sufijo).
+  **IMPORTANTE**: NUNCA uses `segment = 'Enterprise'` (no matchea por el sufijo).
   Usá `segment ILIKE 'Enterprise%'` (o 'Mid Market%' / 'SMB%') para matching por prefijo.
+- deal_stage: refleja el ESTADO ACTUAL del deal en HubSpot (no historial).
+  Un deal no puede estar en dos stages al mismo tiempo. Valores reales (con emojis):
+    Pre-venta: 'Lead 🐣', 'Early Stage 🌱', 'Discovery 🔍', 'Champion Engaged 🎯',
+               'Decision Maker Engaged 🚀', 'Pilot ⚠️', 'Final Negotiation 🥁'
+    Cerrado:   'Won 🍾', 'Lost ♻️', 'Postponed ⏱️'
+    Post-venta:'Onboarding Churned 💔', 'Success Red List 🆘', 'Success Churned 💔'
+  **IMPORTANTE**: Los stage names incluyen emojis. NUNCA uses 'Closed Won' o 'Closed Lost'
+  (no existen). Para matching robusto usá `deal_stage ILIKE 'Lost%'` o `ILIKE 'Won%'`,
+  similar a segment. Si el user pide algo tipo "deals que cerraron como Lost en Final
+  Negotiation", asumí que se refiere al estado actual (= Lost) — el deal pasó por
+  Final Negotiation pero ahora está Lost; no filtres por ambos stages.
 
 ## Ejemplos
 
