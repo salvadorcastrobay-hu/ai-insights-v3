@@ -105,10 +105,74 @@ def get_usage_window(user_email: str, since: datetime) -> dict:
 
 
 def get_usage_summary(user_email: str) -> dict:
-    """Devuelve usage en 3 ventanas estándar: 24h / 7d / 30d."""
-    now = datetime.now(timezone.utc)
-    return {
-        "daily":   get_usage_window(user_email, now - timedelta(hours=24)),
-        "weekly":  get_usage_window(user_email, now - timedelta(days=7)),
-        "monthly": get_usage_window(user_email, now - timedelta(days=30)),
-    }
+    """Devuelve usage en 3 ventanas estándar: 24h / 7d / 30d.
+
+    Optimización: usa get_usage_summary_aggregated() para fetchear una sola
+    vez los rows de los últimos 30d y agregarlos en Python con CASE-style
+    conditional sums. Antes hacía 3 queries separadas.
+    """
+    return get_usage_summary_aggregated(user_email)
+
+
+def get_usage_summary_aggregated(user_email: str) -> dict:
+    """Una sola query trae 30d de rows; agregamos en Python para las 3 ventanas.
+
+    Reduce 3 queries → 1 en la ruta /usage/me y check_quota. Para tablas de
+    miles/decenas de miles de rows por user, baja network round-trips y carga
+    en Supabase ~67%.
+    """
+    if not user_email:
+        return _empty_summary()
+    try:
+        now = datetime.now(timezone.utc)
+        cutoff_30d = now - timedelta(days=30)
+        res = (
+            _get_supabase()
+            .from_(TABLE)
+            .select("input_tokens,output_tokens,cost_usd,timestamp")
+            .eq("user_email", user_email)
+            .gte("timestamp", cutoff_30d.isoformat())
+            .execute()
+        )
+        rows = res.data or []
+    except Exception as exc:
+        logger.warning(f"token_usage_store.get_usage_summary_aggregated failed: {exc}")
+        return _empty_summary()
+
+    cutoff_24h = (now - timedelta(hours=24)).isoformat()
+    cutoff_7d = (now - timedelta(days=7)).isoformat()
+
+    daily = {"input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0, "calls": 0}
+    weekly = {"input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0, "calls": 0}
+    monthly = {"input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0, "calls": 0}
+
+    for r in rows:
+        i = int(r.get("input_tokens") or 0)
+        o = int(r.get("output_tokens") or 0)
+        c = float(r.get("cost_usd") or 0)
+        ts = str(r.get("timestamp") or "")
+        # Monthly: todos los rows ya están en ventana de 30d (filtrado en query)
+        monthly["input_tokens"] += i
+        monthly["output_tokens"] += o
+        monthly["cost_usd"] += c
+        monthly["calls"] += 1
+        if ts >= cutoff_7d:
+            weekly["input_tokens"] += i
+            weekly["output_tokens"] += o
+            weekly["cost_usd"] += c
+            weekly["calls"] += 1
+        if ts >= cutoff_24h:
+            daily["input_tokens"] += i
+            daily["output_tokens"] += o
+            daily["cost_usd"] += c
+            daily["calls"] += 1
+
+    for w in (daily, weekly, monthly):
+        w["cost_usd"] = round(w["cost_usd"], 4)
+
+    return {"daily": daily, "weekly": weekly, "monthly": monthly}
+
+
+def _empty_summary() -> dict:
+    empty = {"input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0, "calls": 0}
+    return {"daily": dict(empty), "weekly": dict(empty), "monthly": dict(empty)}

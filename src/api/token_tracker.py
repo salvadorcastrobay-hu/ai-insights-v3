@@ -16,13 +16,42 @@ from __future__ import annotations
 import contextvars
 import logging
 import os
+import time
 from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException
 
-from src.connectors.token_usage_store import get_usage_window, log_usage
+from src.connectors.token_usage_store import (
+    get_usage_summary_aggregated,
+    log_usage,
+)
 
 logger = logging.getLogger(__name__)
+
+# In-memory cache de usage summaries por user.
+# TTL corto (60s) para que el ring/check_quota no peguen a Supabase
+# en cada call dentro de una ventana de actividad alta. Trade-off: máx
+# 60s de staleness en el ring visible al user.
+_USAGE_CACHE_TTL = float(os.getenv("USAGE_CACHE_TTL_SECONDS", "60"))
+_usage_cache: dict[str, tuple[dict, float]] = {}
+
+
+def _get_cached_usage(user_email: str) -> dict:
+    """Lee summary del cache (si está fresco) o lo recomputa via 1 query."""
+    if not user_email:
+        return get_usage_summary_aggregated(user_email)
+    entry = _usage_cache.get(user_email)
+    now = time.time()
+    if entry is not None and (now - entry[1]) < _USAGE_CACHE_TTL:
+        return entry[0]
+    summary = get_usage_summary_aggregated(user_email)
+    _usage_cache[user_email] = (summary, now)
+    return summary
+
+
+def _invalidate_usage_cache(user_email: str) -> None:
+    """Después de loguear una call nueva, descarta el cache stale del user."""
+    _usage_cache.pop(user_email, None)
 
 # ─── Config ─────────────────────────────────────────────────────────────
 # Caps INICIALES generosos. Calibrar después de 1 semana de uso real.
@@ -64,12 +93,16 @@ def is_enforcement_enabled(owner: str | None) -> bool:
 # ─── Quota check ─────────────────────────────────────────────────────────
 
 def check_quota(owner: str) -> None:
-    """Raise HTTPException(429) si superó algún cap. No-op si no enforced."""
+    """Raise HTTPException(429) si superó algún cap. No-op si no enforced.
+
+    Optimización: 1 query (cacheada 60s) en vez de 3 separadas. Previo:
+    daily + weekly + monthly = 3 queries por cada chat send.
+    """
     if not is_enforcement_enabled(owner):
         return
-    now = datetime.now(timezone.utc)
-    daily = get_usage_window(owner, now - timedelta(hours=24))
-    daily_tokens = daily["input_tokens"] + daily["output_tokens"]
+
+    summary = _get_cached_usage(owner)
+    daily_tokens = summary["daily"]["input_tokens"] + summary["daily"]["output_tokens"]
     if daily_tokens >= DAILY_TOKEN_LIMIT:
         raise HTTPException(
             status_code=429,
@@ -81,8 +114,7 @@ def check_quota(owner: str) -> None:
             },
         )
 
-    weekly = get_usage_window(owner, now - timedelta(days=7))
-    weekly_tokens = weekly["input_tokens"] + weekly["output_tokens"]
+    weekly_tokens = summary["weekly"]["input_tokens"] + summary["weekly"]["output_tokens"]
     if weekly_tokens >= WEEKLY_TOKEN_LIMIT:
         raise HTTPException(
             status_code=429,
@@ -94,8 +126,7 @@ def check_quota(owner: str) -> None:
             },
         )
 
-    monthly = get_usage_window(owner, now - timedelta(days=30))
-    monthly_tokens = monthly["input_tokens"] + monthly["output_tokens"]
+    monthly_tokens = summary["monthly"]["input_tokens"] + summary["monthly"]["output_tokens"]
     if monthly_tokens >= MONTHLY_TOKEN_LIMIT:
         raise HTTPException(
             status_code=429,
@@ -142,6 +173,9 @@ def _install_openai_patch() -> None:
                         input_tokens=int(response.usage.prompt_tokens or 0),
                         output_tokens=int(response.usage.completion_tokens or 0),
                     )
+                    # Invalidamos el cache para que la próxima request del ring
+                    # vea el delta sin esperar el TTL.
+                    _invalidate_usage_cache(owner)
             except Exception as exc:
                 logger.debug(f"token_tracker logging skipped: {exc}")
             return response
@@ -164,11 +198,12 @@ except Exception as _exc:
 # ─── Usage summary para el endpoint /api/usage/me ───────────────────────
 
 def get_usage_summary_for(owner: str) -> dict:
-    """Estructura para el frontend: usage por ventana + limits + porcentajes."""
-    now = datetime.now(timezone.utc)
-    daily = get_usage_window(owner, now - timedelta(hours=24))
-    weekly = get_usage_window(owner, now - timedelta(days=7))
-    monthly = get_usage_window(owner, now - timedelta(days=30))
+    """Estructura para el frontend: usage por ventana + limits + porcentajes.
+
+    Optimización: usa el cache in-memory (60s TTL) y una sola query Postgres
+    en vez de 3. Antes cada poll del UsageRing pegaba 3 reads.
+    """
+    summary = _get_cached_usage(owner)
 
     def _pack(usage: dict, limit: int) -> dict:
         used = usage["input_tokens"] + usage["output_tokens"]
@@ -184,7 +219,7 @@ def get_usage_summary_for(owner: str) -> dict:
     return {
         "owner": owner,
         "enforcement_enabled": is_enforcement_enabled(owner),
-        "daily":   _pack(daily,   DAILY_TOKEN_LIMIT),
-        "weekly":  _pack(weekly,  WEEKLY_TOKEN_LIMIT),
-        "monthly": _pack(monthly, MONTHLY_TOKEN_LIMIT),
+        "daily":   _pack(summary["daily"],   DAILY_TOKEN_LIMIT),
+        "weekly":  _pack(summary["weekly"],  WEEKLY_TOKEN_LIMIT),
+        "monthly": _pack(summary["monthly"], MONTHLY_TOKEN_LIMIT),
     }
