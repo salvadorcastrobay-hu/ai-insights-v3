@@ -42,6 +42,7 @@ const USERS: SeedUser[] = [
   { email: "caro@humand.co", roles: ["viewer"], first_name: "Carolina", last_name: "Mendiondo" },
   { email: "juan.diego.alcocer@humand.co", roles: ["viewer"], first_name: "Juandi", last_name: "Alcocer" },
   { email: "luciano.paradiso@humand.co", roles: ["viewer"], first_name: "Lucho", last_name: "Paradiso" },
+  { email: "luciana.gonella@humand.co", roles: ["viewer"], first_name: "Luciana", last_name: "Gonella" },
   { email: "manuela.cavallo@humand.co", roles: ["viewer"], first_name: "Manuela", last_name: "Cavallo" },
   { email: "marcos.palacio@humand.co", roles: ["viewer"], first_name: "Marcos", last_name: "Palacio" },
   { email: "nico.cordes@humand.co", roles: ["viewer"], first_name: "Nico", last_name: "Cordes" },
