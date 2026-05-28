@@ -292,6 +292,10 @@ def _build_plan(question: str, top_n_override: int | None = None) -> QueryPlan:
         return heuristic_plan
 
     model_name = os.getenv("INSIGHTS_COPILOT_MODEL", os.getenv("OPENAI_MODEL", "gpt-4o-mini"))
+    # Inyectamos fecha actual ART para resolver bien 'últimos N días' al filtrar.
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    today_iso = datetime.now(ZoneInfo("America/Argentina/Buenos_Aires")).date().isoformat()
     system_prompt = (
         "You are an analytics planner. Convert the user question into a strict JSON object with keys: "
         "intent, metric, top_n, filters. "
@@ -299,6 +303,8 @@ def _build_plan(question: str, top_n_override: int | None = None) -> QueryPlan:
         "Allowed metric: mentions, unique_deals, revenue. "
         "filters must be an object with lists for region/country/segment/deal_stage/module and optional "
         "start_date/end_date in YYYY-MM-DD. "
+        f"Today is {today_iso} (Argentina TZ). Use this date for any relative time references "
+        "('last 90 days', 'this week', etc.), NOT your training cutoff. "
         "Do not include SQL. Output JSON only."
     )
 

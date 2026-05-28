@@ -962,7 +962,21 @@ def _parse_search_content(content: str) -> dict:
 
 def generate_response(client: OpenAI, question: str, history: list[dict]) -> tuple[str, str]:
     """Main entry point: ask GPT and return (mode, content)."""
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    # Inyectamos la fecha actual en ART para que el modelo no use su knowledge
+    # cutoff (que puede estar meses atrasado) para resolver 'hoy', 'últimos N días',
+    # etc. Sin esto, preguntas tipo 'últimos 90 días' resolvían a fechas de 2023.
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    today_art = datetime.now(ZoneInfo("America/Argentina/Buenos_Aires"))
+    date_context = (
+        f"\n\n## Fecha actual\n"
+        f"Hoy es **{today_art.strftime('%A')} {today_art.date().isoformat()}** "
+        f"(zona horaria America/Argentina/Buenos_Aires, UTC-3).\n"
+        f"Cualquier referencia temporal del usuario ('hoy', 'esta semana', 'últimos 90 días', etc.) "
+        f"debe resolverse contra esta fecha, NO contra tu fecha de entrenamiento. "
+        f"En SQL podés usar CURRENT_DATE — Postgres también la resuelve a la fecha real."
+    )
+    messages = [{"role": "system", "content": SYSTEM_PROMPT + date_context}]
     messages.extend(history)
     messages.append({"role": "user", "content": question})
 
