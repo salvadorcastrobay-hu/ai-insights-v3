@@ -8,7 +8,9 @@ type Props = {
   /** Si está presente, sólo renderiza para emails que matcheen estos valores
    *  (compara contra el prefijo del email — owner del backend). */
   visibleForOwners?: string[];
-  /** ms entre auto-refresh. Default: 30s. */
+  /** ms entre auto-refresh. Default: 90s (los chat clients llaman refresh()
+   *  manualmente después de cada send, así que el polling solo sirve para
+   *  detectar uso desde otras pestañas). */
   autoRefreshMs?: number;
 };
 
@@ -23,7 +25,7 @@ function colorForPct(pct: number): string {
   return "#10B981"; // emerald-500
 }
 
-export function UsageRing({ visibleForOwners, autoRefreshMs = 30000 }: Props) {
+export function UsageRing({ visibleForOwners, autoRefreshMs = 90000 }: Props) {
   const { data, loading, error } = useUsage(autoRefreshMs);
   const [open, setOpen] = useState(false);
 
