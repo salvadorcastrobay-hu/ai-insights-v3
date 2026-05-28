@@ -2,8 +2,55 @@
 
 import { Check, ChevronDown, ChevronRight, Copy, Download } from "lucide-react";
 import { useState, type ReactNode } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { downloadMarkdown, messageToMarkdown } from "./messageToMarkdown";
 import type { ChatMessageModel, ChartPayload, DataTablePayload, MarketingRecommendation } from "./types";
+
+/** Renderer compartido para contenido markdown de respuestas del chat.
+ *  Mismo estilo que AskChart, para consistencia visual entre features. */
+function AssistantMarkdown({ content }: { content: string }) {
+  return (
+    <div className="chat-assistant-md text-[13px] leading-6 text-[var(--color-text-default)]">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          p: (props) => <p className="mb-2 last:mb-0 leading-relaxed" {...props} />,
+          ul: (props) => <ul className="mb-2 list-disc space-y-1 pl-5 last:mb-0" {...props} />,
+          ol: (props) => <ol className="mb-2 list-decimal space-y-1 pl-5 last:mb-0" {...props} />,
+          li: (props) => <li className="leading-relaxed" {...props} />,
+          strong: (props) => <strong className="font-semibold" {...props} />,
+          em: (props) => <em className="italic" {...props} />,
+          code: (props) => (
+            <code className="rounded bg-[var(--color-neutral-100)] px-1 py-0.5 font-mono text-[12px]" {...props} />
+          ),
+          pre: (props) => (
+            <pre className="my-2 overflow-x-auto rounded bg-[var(--color-neutral-100)] p-2 font-mono text-[12px]" {...props} />
+          ),
+          h1: (props) => <h4 className="mb-1 mt-3 text-[15px] font-semibold" {...props} />,
+          h2: (props) => <h4 className="mb-1 mt-3 text-[14px] font-semibold" {...props} />,
+          h3: (props) => <h4 className="mb-1 mt-2 text-[13px] font-semibold" {...props} />,
+          h4: (props) => <h4 className="mb-1 mt-2 text-[13px] font-semibold" {...props} />,
+          a: (props) => (
+            <a className="text-[var(--color-brand-500)] underline" target="_blank" rel="noreferrer" {...props} />
+          ),
+          blockquote: (props) => (
+            <blockquote className="my-2 border-l-2 border-[var(--color-brand-400)] pl-2 italic text-[var(--color-text-secondary)]" {...props} />
+          ),
+          table: (props) => (
+            <div className="my-2 overflow-x-auto">
+              <table className="min-w-full border-collapse text-[12px]" {...props} />
+            </div>
+          ),
+          th: (props) => <th className="border-b border-[var(--color-neutral-200)] px-2 py-1 text-left font-semibold" {...props} />,
+          td: (props) => <td className="border-b border-[var(--color-neutral-100)] px-2 py-1" {...props} />,
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+    </div>
+  );
+}
 
 function TableView({ table }: { table: DataTablePayload }) {
   return (
@@ -310,7 +357,13 @@ export function ChatMessage({
           })()
         : null}
 
-      <div className="mt-3 whitespace-pre-wrap text-[13px] leading-6 text-[var(--color-text-default)]">{message.content}</div>
+      <div className="mt-3">
+        {message.role === "assistant" && message.content ? (
+          <AssistantMarkdown content={message.content} />
+        ) : (
+          <div className="whitespace-pre-wrap text-[13px] leading-6 text-[var(--color-text-default)]">{message.content}</div>
+        )}
+      </div>
 
       {message.warnings?.length ? (
         <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">

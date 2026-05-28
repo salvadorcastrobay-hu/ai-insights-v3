@@ -15,6 +15,19 @@
 
 const INITIAL_PASSWORD = "12345678";
 
+// Auto-load .env.local o .env.qa para no tener que pasar env vars inline.
+import fs from "node:fs";
+import path from "node:path";
+for (const envFile of [".env.local", ".env.qa"]) {
+  const envPath = path.join(process.cwd(), envFile);
+  if (!fs.existsSync(envPath)) continue;
+  for (const line of fs.readFileSync(envPath, "utf8").split("\n")) {
+    const m = line.match(/^([A-Z0-9_]+)=(?:"([^"]*)"|(.*))$/);
+    if (m) process.env[m[1]] ??= m[2] ?? m[3];
+  }
+  break;
+}
+
 import { createClient } from "@supabase/supabase-js";
 
 type AppRole = "admin" | "campaign_advisor" | "viewer";
