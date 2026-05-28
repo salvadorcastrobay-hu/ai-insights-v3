@@ -9,8 +9,38 @@ from __future__ import annotations
 import logging
 import os
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from supabase import create_client
+
+# Zona horaria para los cortes de ventanas calendario. Default Argentina
+# porque ahí está el equipo; tunable via env si en algún momento el target
+# cambia.
+USAGE_TZ = ZoneInfo(os.environ.get("USAGE_TIMEZONE", "America/Argentina/Buenos_Aires"))
+
+
+def _start_of_today_local() -> datetime:
+    """Inicio del día actual en USAGE_TZ, expresado como UTC datetime."""
+    now_local = datetime.now(USAGE_TZ)
+    start_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+    return start_local.astimezone(timezone.utc)
+
+
+def _start_of_week_local() -> datetime:
+    """Lunes 00:00 de esta semana en USAGE_TZ, expresado como UTC datetime."""
+    now_local = datetime.now(USAGE_TZ)
+    days_since_monday = now_local.weekday()  # Monday = 0
+    monday_local = (now_local - timedelta(days=days_since_monday)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    return monday_local.astimezone(timezone.utc)
+
+
+def _start_of_month_local() -> datetime:
+    """Día 1 00:00 de este mes en USAGE_TZ, expresado como UTC datetime."""
+    now_local = datetime.now(USAGE_TZ)
+    first_local = now_local.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    return first_local.astimezone(timezone.utc)
 
 logger = logging.getLogger(__name__)
 
@@ -115,32 +145,35 @@ def get_usage_summary(user_email: str) -> dict:
 
 
 def get_usage_summary_aggregated(user_email: str) -> dict:
-    """Una sola query trae 30d de rows; agregamos en Python para las 3 ventanas.
+    """Una sola query trae rows del mes actual; agregamos en Python para
+    las 3 ventanas calendario en USAGE_TZ (default ART).
 
-    Reduce 3 queries → 1 en la ruta /usage/me y check_quota. Para tablas de
-    miles/decenas de miles de rows por user, baja network round-trips y carga
-    en Supabase ~67%.
+      - daily   = desde HOY 00:00 local hasta ahora
+      - weekly  = desde LUNES 00:00 local hasta ahora
+      - monthly = desde DÍA 1 00:00 local hasta ahora
+
+    Reset natural a medianoche local. No ventana deslizante.
     """
     if not user_email:
         return _empty_summary()
+
+    cutoff_today = _start_of_today_local()
+    cutoff_week = _start_of_week_local()
+    cutoff_month = _start_of_month_local()
+
     try:
-        now = datetime.now(timezone.utc)
-        cutoff_30d = now - timedelta(days=30)
         res = (
             _get_supabase()
             .from_(TABLE)
             .select("input_tokens,output_tokens,cost_usd,timestamp")
             .eq("user_email", user_email)
-            .gte("timestamp", cutoff_30d.isoformat())
+            .gte("timestamp", cutoff_month.isoformat())
             .execute()
         )
         rows = res.data or []
     except Exception as exc:
         logger.warning(f"token_usage_store.get_usage_summary_aggregated failed: {exc}")
         return _empty_summary()
-
-    cutoff_24h = now - timedelta(hours=24)
-    cutoff_7d = now - timedelta(days=7)
 
     daily = {"input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0, "calls": 0}
     weekly = {"input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0, "calls": 0}
@@ -151,19 +184,19 @@ def get_usage_summary_aggregated(user_email: str) -> dict:
         o = int(r.get("output_tokens") or 0)
         c = float(r.get("cost_usd") or 0)
         ts = _parse_ts(r.get("timestamp"))
-        # Monthly: todos los rows ya están en ventana de 30d (filtrado en query)
+        # Monthly: todos los rows ya están en ventana del mes (filtrado en query)
         monthly["input_tokens"] += i
         monthly["output_tokens"] += o
         monthly["cost_usd"] += c
         monthly["calls"] += 1
         if ts is None:
             continue
-        if ts >= cutoff_7d:
+        if ts >= cutoff_week:
             weekly["input_tokens"] += i
             weekly["output_tokens"] += o
             weekly["cost_usd"] += c
             weekly["calls"] += 1
-        if ts >= cutoff_24h:
+        if ts >= cutoff_today:
             daily["input_tokens"] += i
             daily["output_tokens"] += o
             daily["cost_usd"] += c
