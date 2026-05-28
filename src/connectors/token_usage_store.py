@@ -139,8 +139,8 @@ def get_usage_summary_aggregated(user_email: str) -> dict:
         logger.warning(f"token_usage_store.get_usage_summary_aggregated failed: {exc}")
         return _empty_summary()
 
-    cutoff_24h = (now - timedelta(hours=24)).isoformat()
-    cutoff_7d = (now - timedelta(days=7)).isoformat()
+    cutoff_24h = now - timedelta(hours=24)
+    cutoff_7d = now - timedelta(days=7)
 
     daily = {"input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0, "calls": 0}
     weekly = {"input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0, "calls": 0}
@@ -150,12 +150,14 @@ def get_usage_summary_aggregated(user_email: str) -> dict:
         i = int(r.get("input_tokens") or 0)
         o = int(r.get("output_tokens") or 0)
         c = float(r.get("cost_usd") or 0)
-        ts = str(r.get("timestamp") or "")
+        ts = _parse_ts(r.get("timestamp"))
         # Monthly: todos los rows ya están en ventana de 30d (filtrado en query)
         monthly["input_tokens"] += i
         monthly["output_tokens"] += o
         monthly["cost_usd"] += c
         monthly["calls"] += 1
+        if ts is None:
+            continue
         if ts >= cutoff_7d:
             weekly["input_tokens"] += i
             weekly["output_tokens"] += o
@@ -171,6 +173,25 @@ def get_usage_summary_aggregated(user_email: str) -> dict:
         w["cost_usd"] = round(w["cost_usd"], 4)
 
     return {"daily": daily, "weekly": weekly, "monthly": monthly}
+
+
+def _parse_ts(value) -> datetime | None:
+    """Parsea timestamps de Supabase (ISO 8601 con timezone) a datetime UTC."""
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    s = str(value).strip()
+    if not s:
+        return None
+    # fromisoformat en Python <3.11 no soporta 'Z'; lo normalizamos.
+    if s.endswith("Z"):
+        s = s[:-1] + "+00:00"
+    try:
+        dt = datetime.fromisoformat(s)
+    except ValueError:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
 
 def _empty_summary() -> dict:
