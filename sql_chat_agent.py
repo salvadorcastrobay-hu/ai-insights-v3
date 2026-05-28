@@ -192,17 +192,41 @@ Columnas disponibles para filtros:
   'Enterprise (>1000 employees)', 'Mid Market (250-1000 employees)', 'SMB (<250 employees)'.
   **IMPORTANTE**: NUNCA uses `segment = 'Enterprise'` (no matchea por el sufijo).
   Usá `segment ILIKE 'Enterprise%'` (o 'Mid Market%' / 'SMB%') para matching por prefijo.
-- deal_stage: refleja el ESTADO ACTUAL del deal en HubSpot (no historial).
-  Un deal no puede estar en dos stages al mismo tiempo. Valores reales (con emojis):
+- deal_stage: **OJO — hay DOS fuentes distintas, no confundir**:
+    • `v_insights_dashboard.deal_stage` = SNAPSHOT del stage al momento en que
+      se extrajo el insight. NO refleja el estado actual del deal — es histórico.
+    • `raw_deals.deal_stage` = ESTADO ACTUAL del deal (refresca diariamente
+      desde HubSpot). Para preguntas tipo "deals que cerraron Lost", "deals
+      activos", "Won del último trimestre", etc., siempre JOIN contra raw_deals.
+
+  Valores reales (mismos en ambas tablas, incluyen emojis):
     Pre-venta: 'Lead 🐣', 'Early Stage 🌱', 'Discovery 🔍', 'Champion Engaged 🎯',
                'Decision Maker Engaged 🚀', 'Pilot ⚠️', 'Final Negotiation 🥁'
     Cerrado:   'Won 🍾', 'Lost ♻️', 'Postponed ⏱️'
     Post-venta:'Onboarding Churned 💔', 'Success Red List 🆘', 'Success Churned 💔'
-  **IMPORTANTE**: Los stage names incluyen emojis. NUNCA uses 'Closed Won' o 'Closed Lost'
-  (no existen). Para matching robusto usá `deal_stage ILIKE 'Lost%'` o `ILIKE 'Won%'`,
-  similar a segment. Si el user pide algo tipo "deals que cerraron como Lost en Final
-  Negotiation", asumí que se refiere al estado actual (= Lost) — el deal pasó por
-  Final Negotiation pero ahora está Lost; no filtres por ambos stages.
+
+  **NUNCA** uses 'Closed Won' o 'Closed Lost' (no existen). Usá ILIKE 'Lost%',
+  'Won%', etc. para robusto.
+
+  **Patrón "pains/insights en deals que cerraron Lost"**:
+  ```
+  SELECT vi.insight_subtype_display, COUNT(*) AS n
+  FROM v_insights_dashboard vi
+  JOIN raw_deals rd ON vi.deal_id = rd.deal_id
+  WHERE vi.insight_type = 'pain'
+    AND rd.deal_stage ILIKE 'Lost%'
+  GROUP BY 1 ORDER BY n DESC LIMIT 10;
+  ```
+
+  **Patrón "deals que pasaron por Final Negotiation y terminaron Lost"**
+  (cruce histórico + actual):
+  ```
+  ...
+  WHERE vi.deal_stage ILIKE 'Final Negotiation%'  -- en el momento del insight
+    AND rd.deal_stage ILIKE 'Lost%'               -- hoy
+  ```
+
+  Si la pregunta es ambigua, default = estado actual (raw_deals.deal_stage).
 
 ## Ejemplos
 
