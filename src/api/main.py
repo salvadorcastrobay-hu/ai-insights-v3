@@ -793,7 +793,22 @@ def _execute_hybrid_mode(client: OpenAI, question: str, content: str) -> dict[st
             warnings.append(f"Qualitative SQL failed: {exc}")
 
     if not quant_rows and not qual_rows:
-        raise HTTPException(status_code=404, detail="HYBRID queries returned no rows.")
+        # Fallback: en vez de tirar 404 al cliente (UI ve JSON crudo rojo),
+        # devolvemos una respuesta normal explicando que no hay data y
+        # sugiriendo qué probar. Menos abrupto para el user.
+        return {
+            "mode": "hybrid",
+            "content": (
+                "No encontré datos que coincidan con esa pregunta. "
+                "Sugerencias para probar:\n"
+                "1. Ampliá el rango de fechas (ej. 'en los últimos 6 meses').\n"
+                "2. Verificá los valores del filtro (ej. segment ILIKE 'Enterprise%', no '= Enterprise').\n"
+                "3. Quitá un filtro a la vez para ver si la query con menos restricciones devuelve algo."
+            ),
+            "quant_sql": quant_sql,
+            "qual_sql": qual_sql,
+            "warnings": warnings,
+        }
 
     try:
         summary = summarize_hybrid_results(client, question, quant_columns, quant_rows, qual_columns, qual_rows)
