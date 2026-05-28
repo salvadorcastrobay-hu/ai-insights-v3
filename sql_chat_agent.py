@@ -188,7 +188,10 @@ Columnas disponibles para filtros:
 - insight_type: pain, product_gap, competitive_signal, deal_friction, faq
 - gap_priority: must_have, nice_to_have, dealbreaker
 - competitor_relationship: currently_using, evaluating, migrating_from, comparing, mentioned, previously_used
-- segment: 'Enterprise', 'Mid-Market', 'SMB', etc.
+- segment: contiene paréntesis con rango de empleados. Valores reales:
+  'Enterprise (>1000 employees)', 'Mid Market (250-1000 employees)', 'SMB (<250 employees)'.
+  **IMPORTANTE**: NUNCA uses `segment ILIKE 'Enterprise%'` (no matchea por el sufijo).
+  Usá `segment ILIKE 'Enterprise%'` (o 'Mid Market%' / 'SMB%') para matching por prefijo.
 
 ## Ejemplos
 
@@ -232,7 +235,7 @@ herramienta actual que usan, plataforma actual, sistema que tienen hoy
 ---SQL---
 SELECT company_name, competitor_name, competitor_relationship_display, COUNT(*) AS menciones
 FROM v_insights_dashboard
-WHERE insight_type = 'competitive_signal' AND segment = 'Enterprise' AND region = 'LATAM'
+WHERE insight_type = 'competitive_signal' AND segment ILIKE 'Enterprise%' AND region = 'LATAM'
   AND competitor_name IS NOT NULL
 GROUP BY company_name, competitor_name, competitor_relationship_display
 ORDER BY menciones DESC
@@ -248,14 +251,14 @@ HYBRID:
 ---CUANTITATIVO---
 SELECT insight_subtype_display AS pain, pain_theme, COUNT(*) AS frecuencia
 FROM v_insights_dashboard
-WHERE insight_type = 'pain' AND segment = 'Enterprise'
+WHERE insight_type = 'pain' AND segment ILIKE 'Enterprise%'
 GROUP BY insight_subtype_display, pain_theme
 ORDER BY frecuencia DESC
 LIMIT 10;
 ---CUALITATIVO---
 SELECT insight_subtype_display AS pain, summary, verbatim_quote, company_name, deal_name
 FROM v_insights_dashboard
-WHERE insight_type = 'pain' AND segment = 'Enterprise'
+WHERE insight_type = 'pain' AND segment ILIKE 'Enterprise%'
   AND (summary IS NOT NULL OR verbatim_quote IS NOT NULL)
 ORDER BY insight_subtype_display
 LIMIT 25;
