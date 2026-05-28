@@ -100,9 +100,9 @@ export function UsageRing({ visibleForOwners, autoRefreshMs = 90000 }: Props) {
           <p className="mb-2 mt-1 text-[11px] text-[var(--color-text-secondary)]">
             {data.owner}
           </p>
-          <UsageBar label="24h"      window={data.daily} />
-          <UsageBar label="7 días"   window={data.weekly} />
-          <UsageBar label="30 días"  window={data.monthly} />
+          <UsageBar label="Hoy"          window={data.daily} />
+          <UsageBar label="Esta semana"  window={data.weekly} />
+          <UsageBar label="Este mes"     window={data.monthly} />
         </div>
       ) : null}
     </div>
