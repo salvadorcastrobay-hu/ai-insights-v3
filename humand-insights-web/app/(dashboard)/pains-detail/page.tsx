@@ -2,7 +2,10 @@ import { PainsDetailView } from "@/components/pages/PainsDetailView";
 import { matchesFilters } from "@/lib/data/filters";
 import { buildPainsDetailData } from "@/lib/data/pains-detail-data";
 import { parseFiltersFromSearchParams } from "@/lib/data/search-params-filters";
+import { redactQuotesForRoles } from "@/lib/data/redact-quotes";
 import { loadInsights } from "@/lib/supabase/queries";
+import { getServerUserRoles } from "@/lib/supabase/server";
+import type { AppRole } from "@/lib/auth/roles";
 import type { InsightRow } from "@/lib/supabase/types";
 
 // Campos que el CSV download exporta para /pains-detail. Cualquier otro
@@ -46,7 +49,11 @@ type PageProps = {
 export default async function Page({ searchParams }: PageProps) {
   const params = await searchParams;
   const filters = parseFiltersFromSearchParams(params);
-  const rows = await loadInsights(process.env.NEXT_PUBLIC_PROMPT_VERSION ?? "v3.0");
+  const [rows, userRoles] = await Promise.all([
+    loadInsights(process.env.NEXT_PUBLIC_PROMPT_VERSION ?? "v3.0"),
+    getServerUserRoles(),
+  ]);
+  const roles = userRoles as AppRole[];
 
   // Memory optimization (Hobby plan 1024MB cap):
   // Single-pass filter: type-check + matchesFilters en una sola iteración.
@@ -71,5 +78,9 @@ export default async function Page({ searchParams }: PageProps) {
     return slim as InsightRow;
   });
 
-  return <PainsDetailView data={data} filteredRows={filteredRowsSlim} />;
+  // Si el user no es admin, dropear verbatim_quote y gap_description antes
+  // del RSC boundary. Tables/CSV muestran "—" en su lugar.
+  const filteredRowsSafe = redactQuotesForRoles(filteredRowsSlim, roles);
+
+  return <PainsDetailView data={data} filteredRows={filteredRowsSafe} />;
 }

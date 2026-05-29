@@ -150,9 +150,11 @@ function subDimensionFor(dim: DrillDimension): keyof InsightRow {
 export async function POST(req: Request) {
   const supabase = await createClient();
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session) return new Response("Unauthorized", { status: 401 });
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return new Response("Unauthorized", { status: 401 });
+  const userRoles = (user.app_metadata?.roles as string[]) ?? [];
+  const isAdminUser = userRoles.includes("admin");
 
   let body: Body;
   try {
@@ -181,7 +183,10 @@ export async function POST(req: Request) {
   const industrySplit = topN(matched, "industry", 8);
   const stageSplit = topN(matched, "deal_stage", 8);
 
-  const quotes = extractQuotes(matched, 20);
+  // Quotes solo se devuelven al cliente si es admin. Para viewers/CA, la
+  // tarjeta de drill-down igual muestra counts + breakdowns, pero sin
+  // verbatim quotes (data sensible).
+  const quotes = isAdminUser ? extractQuotes(matched, 20) : [];
 
   return Response.json({
     dimension,

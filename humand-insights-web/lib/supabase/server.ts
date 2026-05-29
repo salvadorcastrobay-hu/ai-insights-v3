@@ -92,3 +92,18 @@ export function applySupabaseCookies(source: NextResponse, target: NextResponse)
 }
 
 export const createClient = createServerSupabaseClient;
+
+/**
+ * Convenience helper para Server Components / API routes: devuelve los
+ * roles del user autenticado (vacío si no hay sesión).
+ *
+ * Importante: vive acá (no en lib/auth/roles.ts) porque depende de
+ * next/headers via createClient — y roles.ts es usado por middleware
+ * que corre en edge context donde cookies() no aplica.
+ */
+export async function getServerUserRoles(): Promise<string[]> {
+  const supabase = await createServerSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  const raw = user?.app_metadata?.roles;
+  return Array.isArray(raw) ? raw.filter((r): r is string => typeof r === "string") : [];
+}

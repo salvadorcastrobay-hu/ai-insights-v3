@@ -49,6 +49,19 @@ export function canAccessCampaignAdvisor(userRoles: readonly AppRole[]): boolean
   return hasAnyRole(userRoles, CAMPAIGN_ADVISOR_ROLES);
 }
 
+export function isAdmin(userRoles: readonly AppRole[]): boolean {
+  return hasRole(userRoles, "admin");
+}
+
+/**
+ * Gating de data textual sensible (verbatim_quote, gap_description) en UI
+ * y CSV. El backend / AI chat siempre tienen acceso al data completo —
+ * esta función solo controla qué cruza el RSC boundary al cliente.
+ */
+export function canSeeRawQuotes(userRoles: readonly AppRole[]): boolean {
+  return isAdmin(userRoles);
+}
+
 export function formatRole(role: AppRole): string {
   switch (role) {
     case "admin":
