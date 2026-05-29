@@ -508,7 +508,7 @@ export function CampaignAdvisorClient({ filterBar }: { filterBar?: ReactNode } =
       >
         <Languages size={12} strokeWidth={2.5} />
       </button>
-      <UsageRing visibleForOwners={["salvador.castrobay"]} />
+      <UsageRing visibleForOwners={["salvador.castrobay", "laura.flores"]} />
     </div>
   );
 
