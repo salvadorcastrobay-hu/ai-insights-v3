@@ -30,6 +30,11 @@ ENV PYTHON_SERVICE_URL=$PYTHON_SERVICE_URL
 # Skip telemetry, no-color para logs limpios en Railway
 ENV NEXT_TELEMETRY_DISABLED=1
 
+# El proyecto no tiene carpeta public/ — creamos placeholder vacío para que
+# el COPY del runner stage no falle. Next.js no la requiere si no hay
+# assets estáticos.
+RUN mkdir -p public
+
 RUN npm run build
 
 # ─── Stage 3: runner ───────────────────────────────────────────────────
