@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // 'standalone' genera un build self-contained con solo las deps usadas en
+  // runtime (.next/standalone/). Necesario para que el Dockerfile de Railway
+  // produzca una imagen chica (~150MB en vez de ~500MB con node_modules full).
+  output: "standalone",
   eslint: {
     ignoreDuringBuilds: true,
   },
