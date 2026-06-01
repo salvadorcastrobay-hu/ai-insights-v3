@@ -2,7 +2,7 @@ import { ExecutiveSummaryView } from "@/components/pages/ExecutiveSummaryView";
 import { applyFilters } from "@/lib/data/filters";
 import { buildExecutiveSummaryData } from "@/lib/data/executive-summary-data";
 import { parseFiltersFromSearchParams } from "@/lib/data/search-params-filters";
-import { redactQuotesForRoles } from "@/lib/data/redact-quotes";
+import { prepareRowsForClient } from "@/lib/data/redact-quotes";
 import { loadInsights, loadTotalTranscriptsCount } from "@/lib/supabase/queries";
 import { getServerUserRoles } from "@/lib/supabase/server";
 import type { AppRole } from "@/lib/auth/roles";
@@ -27,6 +27,6 @@ export default async function Page({ searchParams }: PageProps) {
 
   const data = buildExecutiveSummaryData(rows, totalTranscripts, filters);
   const filteredRows = applyFilters(rows, filters);
-  const filteredRowsSafe = redactQuotesForRoles(filteredRows, userRoles as AppRole[]);
+  const filteredRowsSafe = prepareRowsForClient(filteredRows, userRoles as AppRole[]);
   return <ExecutiveSummaryView data={data} filteredRows={filteredRowsSafe} />;
 }

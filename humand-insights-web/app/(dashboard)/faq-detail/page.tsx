@@ -4,7 +4,7 @@ import { buildFaqDetailData } from "@/lib/data/faq-detail-data";
 import { parseFiltersFromSearchParams } from "@/lib/data/search-params-filters";
 import { loadInsights } from "@/lib/supabase/queries";
 import { getServerUserRoles } from "@/lib/supabase/server";
-import { redactQuotesForRoles } from "@/lib/data/redact-quotes";
+import { prepareRowsForClient } from "@/lib/data/redact-quotes";
 import type { AppRole } from "@/lib/auth/roles";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +23,6 @@ export default async function Page({ searchParams }: PageProps) {
   ]);
   const data = buildFaqDetailData(rows, 0, filters);
   const filteredRows = applyFilters(rows, filters);
-  const filteredRowsSafe = redactQuotesForRoles(filteredRows, userRoles as AppRole[]);
+  const filteredRowsSafe = prepareRowsForClient(filteredRows, userRoles as AppRole[]);
   return <FaqDetailView data={data} filteredRows={filteredRowsSafe} />;
 }
