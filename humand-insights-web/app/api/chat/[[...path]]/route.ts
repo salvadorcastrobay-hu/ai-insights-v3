@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { getAuthenticatedSession } from "@/lib/supabase/server";
 
 type RouteContext = {
   params: Promise<{ path?: string[] }>;
@@ -15,10 +15,7 @@ async function resolveUpstream(context: RouteContext): Promise<string> {
 }
 
 async function getSessionOrUnauthorized() {
-  const supabase = await createClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
+  const session = await getAuthenticatedSession();
   if (!session) return { session: null, response: new Response("Unauthorized", { status: 401 }) };
   return { session, response: null };
 }

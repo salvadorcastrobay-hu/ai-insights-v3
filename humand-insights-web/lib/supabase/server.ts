@@ -94,6 +94,27 @@ export function applySupabaseCookies(source: NextResponse, target: NextResponse)
 export const createClient = createServerSupabaseClient;
 
 /**
+ * Devuelve la sesión autenticada (con access_token usable para forward a
+ * Railway) DESPUÉS de validar el user con el Auth server.
+ *
+ * Reemplaza el patrón `supabase.auth.getSession()` que disparaba el
+ * warning de seguridad: `getSession()` lee cookies (spoofables);
+ * `getUser()` valida con el servidor. Llamamos `getUser()` primero
+ * para autenticar y después leemos la session local para tomar el
+ * access_token (ya seguro porque user fue validado).
+ *
+ * Devuelve null si el user no está autenticado.
+ */
+export async function getAuthenticatedSession() {
+  const supabase = await createServerSupabaseClient();
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  if (userError || !user) return null;
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) return null;
+  return session;
+}
+
+/**
  * Convenience helper para Server Components / API routes: devuelve los
  * roles del user autenticado (vacío si no hay sesión).
  *

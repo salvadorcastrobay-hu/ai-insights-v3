@@ -3,7 +3,7 @@ import { openai } from "@ai-sdk/openai";
 
 import { applyFilters, EMPTY_FILTERS, type Filters } from "@/lib/data/filters";
 import { loadInsights } from "@/lib/supabase/queries";
-import { createClient } from "@/lib/supabase/server";
+import { getAuthenticatedSession } from "@/lib/supabase/server";
 import type { InsightRow } from "@/lib/supabase/types";
 
 export const runtime = "nodejs";
@@ -268,8 +268,7 @@ function buildContext(rows: InsightRow[], pathname: string, filters: Filters): s
 }
 
 export async function POST(req: Request) {
-  const supabase = await createClient();
-  const { data: { session } } = await supabase.auth.getSession();
+  const session = await getAuthenticatedSession();
   if (!session) return new Response("Unauthorized", { status: 401 });
 
   let body: Body;

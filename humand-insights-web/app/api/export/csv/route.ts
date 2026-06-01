@@ -2,7 +2,7 @@ import { applyFilters } from "@/lib/data/filters";
 import { parseFiltersFromSearchParams } from "@/lib/data/search-params-filters";
 import { redactQuotesForRoles } from "@/lib/data/redact-quotes";
 import { loadInsights } from "@/lib/supabase/queries";
-import { createClient, getServerUserRoles } from "@/lib/supabase/server";
+import { getAuthenticatedSession, getServerUserRoles } from "@/lib/supabase/server";
 import { LOAD_DATA_COLUMNS, type InsightRow } from "@/lib/supabase/types";
 import { canSeeRawQuotes, type AppRole } from "@/lib/auth/roles";
 
@@ -37,11 +37,7 @@ function toCsv(rows: InsightRow[], columns: readonly string[] = EXPORT_COLUMNS):
 }
 
 export async function GET(request: Request) {
-  const supabase = await createClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
+  const session = await getAuthenticatedSession();
   if (!session) return new Response("Unauthorized", { status: 401 });
 
   const { searchParams } = new URL(request.url);
