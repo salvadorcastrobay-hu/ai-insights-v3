@@ -1,0 +1,39 @@
+# Build artifacts (we'll build fresh inside the container)
+.next
+out
+dist
+node_modules
+
+# Env files (Railway injects via env vars, don't bake into image)
+.env
+.env.local
+.env.development
+.env.production
+.env.qa
+.env.vercel-prod
+.env.local.example
+
+# Git / OS
+.git
+.gitignore
+.DS_Store
+
+# Tests / scripts not needed at runtime
+__tests__
+*.test.ts
+*.test.tsx
+scripts/qa-*.ts
+scripts/migrate-users.ts
+scripts/pull-gap-quotes.ts
+scripts/update-modules.ts
+
+# Docs
+*.md
+!README.md
+
+# IDE
+.vscode
+.idea
+
+# Vercel
+.vercel
