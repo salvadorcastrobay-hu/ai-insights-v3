@@ -35,6 +35,12 @@ PYTHON_SERVICE_URL=https://humand-insights-api.railway.internal
 # Si la comunicación interna no funciona, usá la URL pública del FastAPI:
 # PYTHON_SERVICE_URL=https://humand-insights-api-production.up.railway.app
 
+# Conexión directa a Postgres via Supabase pooler.
+# CRÍTICO: Railway no soporta IPv6 → la conexión directa de Supabase
+# (*.supabase.co:5432) NO funciona. Hay que usar el transaction pooler.
+# Obtenelo en Supabase → Settings → Database → Connection string → URI → Transaction
+SUPABASE_DB_URL=postgresql://postgres.<PROJECT_REF>:<PASSWORD>@aws-0-us-west-2.pooler.supabase.com:6543/postgres
+
 # Feature flag para Phase 2 RPC (opcional)
 USE_RPC_AGGREGATIONS=false
 ```
