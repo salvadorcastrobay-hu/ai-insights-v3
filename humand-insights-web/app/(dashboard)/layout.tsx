@@ -18,16 +18,14 @@ export const maxDuration = 300;
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
   const supabase = await createClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
+  const { data: { user } } = await supabase.auth.getUser();
 
-  if (!session) {
+  if (!user) {
     redirect("/login");
   }
 
-  const roles: string[] = session.user.app_metadata?.roles ?? [];
-  const userEmail = session.user.email ?? null;
+  const roles: string[] = user.app_metadata?.roles ?? [];
+  const userEmail = user.email ?? null;
 
   return (
     <Suspense fallback={null}>

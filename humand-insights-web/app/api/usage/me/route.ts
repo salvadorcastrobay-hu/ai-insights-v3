@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { getAuthenticatedSession } from "@/lib/supabase/server";
 
 export async function GET(): Promise<Response> {
   const base = process.env.PYTHON_SERVICE_URL;
@@ -9,10 +9,7 @@ export async function GET(): Promise<Response> {
     });
   }
 
-  const supabase = await createClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
+  const session = await getAuthenticatedSession();
   if (!session) {
     return new Response("Unauthorized", { status: 401 });
   }

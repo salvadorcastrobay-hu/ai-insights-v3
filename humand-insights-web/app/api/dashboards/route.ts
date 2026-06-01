@@ -3,12 +3,12 @@ import { createClient } from "@/lib/supabase/server";
 export async function GET() {
   const supabase = await createClient();
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (!session) return new Response("Unauthorized", { status: 401 });
+  if (!user) return new Response("Unauthorized", { status: 401 });
 
-  const owner = session.user.email;
+  const owner = user.email;
   const { data, error } = await supabase
     .from("custom_dashboards")
     .select("*")
@@ -22,13 +22,13 @@ export async function GET() {
 export async function POST(req: Request) {
   const supabase = await createClient();
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (!session) return new Response("Unauthorized", { status: 401 });
+  if (!user) return new Response("Unauthorized", { status: 401 });
 
   const body = await req.json();
-  const owner = session.user.email;
+  const owner = user.email;
 
   const { data, error } = await supabase
     .from("custom_dashboards")
@@ -48,10 +48,10 @@ export async function POST(req: Request) {
 export async function PATCH(req: Request) {
   const supabase = await createClient();
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (!session) return new Response("Unauthorized", { status: 401 });
+  if (!user) return new Response("Unauthorized", { status: 401 });
 
   const body = await req.json();
   const { data, error } = await supabase
@@ -73,10 +73,10 @@ export async function PATCH(req: Request) {
 export async function DELETE(req: Request) {
   const supabase = await createClient();
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (!session) return new Response("Unauthorized", { status: 401 });
+  if (!user) return new Response("Unauthorized", { status: 401 });
 
   const { id } = (await req.json()) as { id?: string };
   if (!id) return Response.json({ error: "id is required" }, { status: 400 });

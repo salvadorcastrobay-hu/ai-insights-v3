@@ -3,15 +3,15 @@ import { createClient } from "@/lib/supabase/server";
 export async function GET() {
   const supabase = await createClient();
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (!session) return new Response("Unauthorized", { status: 401 });
+  if (!user) return new Response("Unauthorized", { status: 401 });
 
   const { data, error } = await supabase
     .from("user_preferences")
     .select("filter_prefs")
-    .eq("user_id", session.user.id)
+    .eq("user_id", user.id)
     .maybeSingle();
 
   if (error) return Response.json({ error: error.message }, { status: 500 });
@@ -21,16 +21,16 @@ export async function GET() {
 export async function POST(req: Request) {
   const supabase = await createClient();
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (!session) return new Response("Unauthorized", { status: 401 });
+  if (!user) return new Response("Unauthorized", { status: 401 });
 
   const body = await req.json();
   const { error } = await supabase
     .from("user_preferences")
     .upsert({
-      user_id: session.user.id,
+      user_id: user.id,
       filter_prefs: body.filter_prefs ?? {},
       updated_at: new Date().toISOString(),
     });
