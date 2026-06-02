@@ -5,7 +5,9 @@ const OFFICIAL_REGION_SET = new Set<string>(OFFICIAL_REGION_OPTIONS);
 
 export { OFFICIAL_REGION_OPTIONS };
 
-const REGION_ALIASES: Record<string, (typeof OFFICIAL_REGION_OPTIONS)[number]> = {
+type OfficialRegion = (typeof OFFICIAL_REGION_OPTIONS)[number];
+
+const REGION_ALIASES: Record<string, OfficialRegion> = {
   latam: "HISPAM",
   hispam: "HISPAM",
   "santa fe province": "HISPAM",
@@ -31,6 +33,118 @@ const REGION_ALIASES: Record<string, (typeof OFFICIAL_REGION_OPTIONS)[number]> =
   mena: "MENA",
   brasil: "Brazil",
   brazil: "Brazil",
+};
+
+// País → región canónica. Fuente de verdad cuando el campo `region` de la DB
+// trae ciudades/provincias/estados sueltos (ej: "Montevideo Department",
+// "Île-de-France", "Texas") que no podemos enumerar exhaustivamente.
+// Las keys se comparan con normalizeKey() (lowercase + sin acentos).
+const COUNTRY_TO_REGION: Record<string, OfficialRegion> = {
+  // HISPAM (LATAM hispanohablante)
+  argentina: "HISPAM",
+  mexico: "HISPAM",
+  colombia: "HISPAM",
+  chile: "HISPAM",
+  peru: "HISPAM",
+  uruguay: "HISPAM",
+  paraguay: "HISPAM",
+  bolivia: "HISPAM",
+  ecuador: "HISPAM",
+  venezuela: "HISPAM",
+  "costa rica": "HISPAM",
+  panama: "HISPAM",
+  guatemala: "HISPAM",
+  honduras: "HISPAM",
+  "el salvador": "HISPAM",
+  nicaragua: "HISPAM",
+  "dominican republic": "HISPAM",
+  "republica dominicana": "HISPAM",
+  cuba: "HISPAM",
+  "puerto rico": "HISPAM",
+  // Brazil
+  brazil: "Brazil",
+  brasil: "Brazil",
+  // ANGLO AMERICA
+  "united states": "ANGLO AMERICA",
+  usa: "ANGLO AMERICA",
+  us: "ANGLO AMERICA",
+  "united states of america": "ANGLO AMERICA",
+  canada: "ANGLO AMERICA",
+  // EMEA
+  spain: "EMEA",
+  espana: "EMEA",
+  france: "EMEA",
+  germany: "EMEA",
+  italy: "EMEA",
+  italia: "EMEA",
+  portugal: "EMEA",
+  netherlands: "EMEA",
+  belgium: "EMEA",
+  switzerland: "EMEA",
+  austria: "EMEA",
+  sweden: "EMEA",
+  norway: "EMEA",
+  denmark: "EMEA",
+  finland: "EMEA",
+  poland: "EMEA",
+  ireland: "EMEA",
+  greece: "EMEA",
+  "czech republic": "EMEA",
+  czechia: "EMEA",
+  romania: "EMEA",
+  hungary: "EMEA",
+  "united kingdom": "EMEA",
+  uk: "EMEA",
+  "great britain": "EMEA",
+  england: "EMEA",
+  scotland: "EMEA",
+  wales: "EMEA",
+  "northern ireland": "EMEA",
+  bulgaria: "EMEA",
+  croatia: "EMEA",
+  slovakia: "EMEA",
+  slovenia: "EMEA",
+  estonia: "EMEA",
+  latvia: "EMEA",
+  lithuania: "EMEA",
+  ukraine: "EMEA",
+  serbia: "EMEA",
+  // South Africa cae típicamente en EMEA en go-to-market B2B
+  "south africa": "EMEA",
+  nigeria: "EMEA",
+  kenya: "EMEA",
+  // APAC
+  japan: "APAC",
+  china: "APAC",
+  india: "APAC",
+  australia: "APAC",
+  "new zealand": "APAC",
+  singapore: "APAC",
+  thailand: "APAC",
+  vietnam: "APAC",
+  philippines: "APAC",
+  indonesia: "APAC",
+  malaysia: "APAC",
+  "south korea": "APAC",
+  korea: "APAC",
+  "hong kong": "APAC",
+  taiwan: "APAC",
+  // MENA
+  "united arab emirates": "MENA",
+  uae: "MENA",
+  "saudi arabia": "MENA",
+  egypt: "MENA",
+  israel: "MENA",
+  turkey: "MENA",
+  qatar: "MENA",
+  kuwait: "MENA",
+  bahrain: "MENA",
+  oman: "MENA",
+  jordan: "MENA",
+  lebanon: "MENA",
+  morocco: "MENA",
+  tunisia: "MENA",
+  algeria: "MENA",
 };
 
 const COMPETITOR_ALIASES: Record<string, string> = {
@@ -101,14 +215,26 @@ function normalizeKey(value: string): string {
     .replace(/\s+/g, " ");
 }
 
-export function normalizeRegion(value: string | null | undefined): string | null {
-  if (!value) return null;
-  const cleaned = value.trim().replace(/\s+/g, " ");
-  // Lookup with accent-stripped lowercase key for robustness
-  const normalized = REGION_ALIASES[normalizeKey(cleaned)];
-  if (normalized) return normalized;
-  if (OFFICIAL_REGION_SET.has(cleaned)) return cleaned;
-  return cleaned;
+export function normalizeRegion(
+  value: string | null | undefined,
+  country?: string | null | undefined,
+): string | null {
+  // 1) Si `region` ya es una región oficial → usarla.
+  if (value) {
+    const cleaned = value.trim().replace(/\s+/g, " ");
+    if (OFFICIAL_REGION_SET.has(cleaned)) return cleaned;
+    const aliased = REGION_ALIASES[normalizeKey(cleaned)];
+    if (aliased) return aliased;
+  }
+  // 2) Fallback al país. Para valores sucios como "Montevideo Department" o
+  //    "Île-de-France", el `country` de HubSpot es la única señal confiable.
+  if (country) {
+    const byCountry = COUNTRY_TO_REGION[normalizeKey(country)];
+    if (byCountry) return byCountry;
+  }
+  // 3) Sin match: devolvemos null para que las páginas que agregan por región
+  //    excluyan estas filas en vez de mostrarlas como columnas sueltas.
+  return null;
 }
 
 export function normalizeCompetitor(value: string | null | undefined): string | null {

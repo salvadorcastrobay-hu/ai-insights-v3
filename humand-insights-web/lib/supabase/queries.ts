@@ -107,7 +107,7 @@ export function enrichWithDealSource(
 
   return {
     ...row,
-    region: normalizeRegion(row.region),
+    region: normalizeRegion(row.region, row.country),
     competitor_name: normalizeCompetitor(row.competitor_name),
     is_own_brand_competitor: isOwnBrand(row.competitor_name),
     call_date: toIsoDate(row.call_date),
