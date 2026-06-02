@@ -204,6 +204,64 @@ function fmtList(pairs: Array<[string, number]>): string {
   return pairs.map(([label, n]) => `  - ${label}: ${n}`).join("\n");
 }
 
+// Pain × Región (% de demos en esa región). Replica la lógica del heatmap de
+// /regional-gtm para que el chat libre tenga la matriz cuando el usuario
+// pregunta "qué pasa con X pain en Y región" sin clickear el chart.
+function buildPainRegionMatrix(rows: InsightRow[]): string {
+  const pains = rows.filter((r) => r.insight_type === "pain");
+  if (pains.length === 0) return "";
+
+  const demosByRegion = new Map<string, Set<string>>();
+  const painByRegion = new Map<string, Map<string, Set<string>>>();
+  for (const row of pains) {
+    if (!row.region || !row.transcript_id) continue;
+    const sub = row.insight_subtype_display;
+    if (!sub) continue;
+    const ds = demosByRegion.get(row.region) ?? new Set<string>();
+    ds.add(row.transcript_id);
+    demosByRegion.set(row.region, ds);
+    const m = painByRegion.get(row.region) ?? new Map<string, Set<string>>();
+    const s = m.get(sub) ?? new Set<string>();
+    s.add(row.transcript_id);
+    m.set(sub, s);
+    painByRegion.set(row.region, m);
+  }
+  if (painByRegion.size === 0) return "";
+
+  // Regiones ordenadas por # demos
+  const regions = [...demosByRegion.entries()]
+    .sort((a, b) => b[1].size - a[1].size)
+    .map(([r]) => r);
+
+  // Top 5 pains globales por demos únicas
+  const globalPain = new Map<string, Set<string>>();
+  for (const [, m] of painByRegion) {
+    for (const [pain, set] of m) {
+      const acc = globalPain.get(pain) ?? new Set<string>();
+      for (const t of set) acc.add(t);
+      globalPain.set(pain, acc);
+    }
+  }
+  const topPains = [...globalPain.entries()]
+    .sort((a, b) => b[1].size - a[1].size)
+    .slice(0, 8)
+    .map(([p]) => p);
+
+  const header = `PAIN × REGIÓN (% de demos en esa región — top ${topPains.length} pains × ${regions.length} regiones):`;
+  const colHeader = `  pain \\ región | ${regions.map((r) => `${r} (n=${demosByRegion.get(r)?.size ?? 0})`).join(" | ")}`;
+  const lines = topPains.map((pain) => {
+    const cells = regions.map((region) => {
+      const demosInRegion = demosByRegion.get(region)?.size ?? 0;
+      const demosWithPain = painByRegion.get(region)?.get(pain)?.size ?? 0;
+      if (demosInRegion === 0 || demosWithPain === 0) return "—";
+      const pct = (demosWithPain / demosInRegion) * 100;
+      return `${pct.toFixed(1)}% (${demosWithPain}/${demosInRegion})`;
+    });
+    return `  ${pain} | ${cells.join(" | ")}`;
+  });
+  return [header, colHeader, ...lines].join("\n");
+}
+
 function buildContext(rows: InsightRow[], pathname: string, filters: Filters): string {
   const pageLabel = PAGE_LABELS[pathname] ?? pathname;
 
@@ -264,7 +322,11 @@ function buildContext(rows: InsightRow[], pathname: string, filters: Filters): s
     `TOP FRICCIONES (insight_subtype_display):\n${fmtList(topN(frictions, "insight_subtype_display"))}`,
     "",
     `TOP FAQs (insight_subtype_display):\n${fmtList(topN(faqs, "insight_subtype_display"))}`,
-  ].join("\n");
+    "",
+    buildPainRegionMatrix(rows),
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 export async function POST(req: Request) {

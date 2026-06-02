@@ -104,7 +104,33 @@ export function RegionalGtmView({ data }: Props) {
         title="C. ¿Qué encontramos en cada mercado?"
         description="Top 3 pains por región como % de las demos únicas en esa región — comparable entre mercados de distinto tamaño."
       />
-      <ChartCard title="Top 3 Pains por Región (% de demos)">
+      <ChartCard
+        title="Top 3 Pains por Región (% de demos)"
+        ask={{
+          chartTitle: "Top 3 Pains por Región (% de demos)",
+          chartKind: "heatmap",
+          description:
+            "Matriz pain × región. Cada celda muestra el % de demos en esa región donde apareció el pain. Solo el top 3 por región.",
+          dimension: "insight_subtype_display",
+          scopeType: "pain",
+          rows: painRegionHeatPct.rowLabels.flatMap((pain, r) =>
+            painRegionHeatPct.colLabels
+              .map((region, c) => ({
+                label: `${pain} — ${region}`,
+                value: painRegionHeatPct.values[r]?.[c] ?? 0,
+                extra: {
+                  pain,
+                  region,
+                  pct: `${(painRegionHeatPct.values[r]?.[c] ?? 0).toFixed(1)}%`,
+                  demos: painRegionHeatPct.absolute[r]?.[c] ?? 0,
+                },
+              }))
+              .filter((cell) => Number(cell.value) > 0),
+          ),
+          notes:
+            "El pipeline ya enriquece quotes por pain (insight_subtype_display). Las citas mostradas son globales para el pain (no filtradas por región).",
+        }}
+      >
         {painRegionHeatPct.rowLabels.length === 0 ? (
           <p className="text-[13px] text-[var(--color-text-secondary)]">Sin datos suficientes.</p>
         ) : (
