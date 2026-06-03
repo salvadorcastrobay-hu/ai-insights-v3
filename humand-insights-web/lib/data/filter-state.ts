@@ -1,4 +1,7 @@
+import { useTransition } from "react";
 import { parseAsArrayOf, parseAsFloat, parseAsString, useQueryStates } from "nuqs";
+
+import { useFilterTransition } from "@/components/layout/FilterTransition";
 
 export const FILTER_PARSERS = {
   types: parseAsArrayOf(parseAsString).withDefault([]),
@@ -18,6 +21,34 @@ export const FILTER_PARSERS = {
   min_confidence: parseAsFloat,
 };
 
+/**
+ * Estado global de filtros sincronizado a la URL.
+ *
+ * `shallow: false` es CRÍTICO: las pages del dashboard son Server Components
+ * que leen searchParams y re-agregan la data. Sin esto, cambiar un filtro
+ * solo actualiza la URL en el cliente y los charts NO se refrescan (parece
+ * que el filtro no hace nada). Con shallow:false, Next refetchea el RSC con
+ * los nuevos searchParams.
+ *
+ * `startTransition` expone `isPending` mientras Next recomputa del lado del
+ * server → lo usamos para mostrar feedback ("Actualizando…") y que el usuario
+ * sepa que algo está pasando.
+ *
+ * Devuelve [filters, setFilters, isPending]. Los dos primeros son
+ * backward-compatible con los consumers que destructuran [filters, setFilters].
+ */
 export function useGlobalFilters() {
-  return useQueryStates(FILTER_PARSERS);
+  // Si hay un FilterTransitionProvider arriba (dashboard layout), compartimos
+  // su transition para que la barra y el overlay de contenido reflejen el
+  // mismo pending. Si no, usamos una transition local (fallback robusto).
+  const shared = useFilterTransition();
+  const [localPending, localStart] = useTransition();
+  const isPending = shared?.isPending ?? localPending;
+  const startTransition = shared?.startTransition ?? localStart;
+  const [filters, setFilters] = useQueryStates(FILTER_PARSERS, {
+    shallow: false,
+    startTransition,
+    clearOnDefault: true,
+  });
+  return [filters, setFilters, isPending] as const;
 }
