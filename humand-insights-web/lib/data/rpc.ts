@@ -48,6 +48,7 @@ function filtersToJsonb(filters: Filters): Record<string, unknown> {
     sources: filters.sources ?? [],
     date_start: filters.date_start ?? null,
     date_end: filters.date_end ?? null,
+    min_confidence: filters.min_confidence ?? null,
   };
 }
 
