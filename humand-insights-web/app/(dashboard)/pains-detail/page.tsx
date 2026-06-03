@@ -1,9 +1,11 @@
 import { PainsDetailView } from "@/components/pages/PainsDetailView";
+import { DataQualityFooter } from "@/components/layout/DataQualityFooter";
 import { matchesFilters } from "@/lib/data/filters";
 import { buildPainsDetailData } from "@/lib/data/pains-detail-data";
+import { computeSampleStats } from "@/lib/data/sample-stats";
 import { parseFiltersFromSearchParams } from "@/lib/data/search-params-filters";
 import { redactQuotesForRoles } from "@/lib/data/redact-quotes";
-import { loadInsights } from "@/lib/supabase/queries";
+import { loadInsights, loadTotalTranscriptsCount } from "@/lib/supabase/queries";
 import { getServerUserRoles } from "@/lib/supabase/server";
 import type { AppRole } from "@/lib/auth/roles";
 import type { InsightRow } from "@/lib/supabase/types";
@@ -49,9 +51,10 @@ type PageProps = {
 export default async function Page({ searchParams }: PageProps) {
   const params = await searchParams;
   const filters = parseFiltersFromSearchParams(params);
-  const [rows, userRoles] = await Promise.all([
+  const [rows, userRoles, totalTranscripts] = await Promise.all([
     loadInsights(process.env.NEXT_PUBLIC_PROMPT_VERSION ?? "v3.0"),
     getServerUserRoles(),
+    loadTotalTranscriptsCount(),
   ]);
   const roles = userRoles as AppRole[];
 
@@ -81,6 +84,12 @@ export default async function Page({ searchParams }: PageProps) {
   // Si el user no es admin, dropear verbatim_quote y gap_description antes
   // del RSC boundary. Tables/CSV muestran "—" en su lugar.
   const filteredRowsSafe = redactQuotesForRoles(filteredRowsSlim, roles);
+  const stats = computeSampleStats(painsOnly, totalTranscripts);
 
-  return <PainsDetailView data={data} filteredRows={filteredRowsSafe} />;
+  return (
+    <>
+      <PainsDetailView data={data} filteredRows={filteredRowsSafe} />
+      <DataQualityFooter stats={stats} pageLabel="Pains — Detalle" />
+    </>
+  );
 }

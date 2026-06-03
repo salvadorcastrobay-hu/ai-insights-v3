@@ -14,7 +14,7 @@ import {
 import type { InsightRow } from "@/lib/supabase/types";
 import { cn } from "@/lib/utils";
 
-type FilterMultiKey = Exclude<keyof Filters, "date_start" | "date_end">;
+type FilterMultiKey = Exclude<keyof Filters, "date_start" | "date_end" | "min_confidence">;
 
 type FilterFieldConfig = {
   key: FilterMultiKey;
@@ -203,7 +203,44 @@ export function FilterControls({
         max={options.date_max}
         onChange={(next) => setFilters({ date_end: next })}
       />
+      <ConfidenceToggle
+        value={filters.min_confidence}
+        onChange={(next) => setFilters({ min_confidence: next })}
+      />
     </div>
+  );
+}
+
+/**
+ * Toggle "Solo alta confianza (≥0.7)". Al activarse setea min_confidence=0.7,
+ * al desactivarse vuelve a null (sin filtro).
+ */
+function ConfidenceToggle({
+  value,
+  onChange,
+}: {
+  value: number | null;
+  onChange: (next: number | null) => void;
+}) {
+  const active = value != null && value > 0;
+  return (
+    <label
+      className={cn(
+        "flex cursor-pointer items-center gap-2 rounded-[var(--radius-s)] border px-2 py-2 text-[12px] transition",
+        active
+          ? "border-[var(--color-brand-400)] bg-[var(--color-brand-50)] text-[var(--color-brand-500)]"
+          : "border-[var(--color-neutral-200)] bg-[var(--color-bg-card)] text-[var(--color-text-secondary)] hover:border-[var(--color-neutral-300)]",
+      )}
+      title="Excluí insights con confidence < 0.7. Filas sin confidence se mantienen."
+    >
+      <input
+        type="checkbox"
+        className="h-3.5 w-3.5"
+        checked={active}
+        onChange={(e) => onChange(e.target.checked ? 0.7 : null)}
+      />
+      <span className="font-medium">Solo alta confianza (≥0.7)</span>
+    </label>
   );
 }
 
@@ -212,6 +249,7 @@ function countActive(filters: Filters): number {
   for (const key of ARRAY_FILTER_KEYS) n += filters[key].length;
   if (filters.date_start) n++;
   if (filters.date_end) n++;
+  if (filters.min_confidence != null && filters.min_confidence > 0) n++;
   return n;
 }
 

@@ -20,6 +20,7 @@ export type GapTableRow = {
   gap_description: string | null;
   summary: string | null;
   isDealbreaker: boolean;
+  confidence: number | null;
 };
 
 export type PriorityRow = {
@@ -258,6 +259,7 @@ export function buildProductGapsDetailData(
     gap_description: row.gap_description,
     summary: row.summary,
     isDealbreaker: row.gap_priority === "dealbreaker",
+    confidence: row.confidence ?? null,
   }));
 
   return {

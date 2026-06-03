@@ -1,6 +1,8 @@
 import { ExecutiveSummaryView } from "@/components/pages/ExecutiveSummaryView";
+import { DataQualityFooter } from "@/components/layout/DataQualityFooter";
 import { applyFilters } from "@/lib/data/filters";
 import { buildExecutiveSummaryData } from "@/lib/data/executive-summary-data";
+import { computeSampleStats } from "@/lib/data/sample-stats";
 import { parseFiltersFromSearchParams } from "@/lib/data/search-params-filters";
 import { prepareRowsForClient } from "@/lib/data/redact-quotes";
 import { getKpis, rpcEnabled } from "@/lib/data/rpc";
@@ -50,5 +52,11 @@ export default async function Page({ searchParams }: PageProps) {
 
   const filteredRows = applyFilters(rows, filters);
   const filteredRowsSafe = prepareRowsForClient(filteredRows, userRoles as AppRole[]);
-  return <ExecutiveSummaryView data={data} filteredRows={filteredRowsSafe} />;
+  const stats = computeSampleStats(filteredRows, totalTranscripts);
+  return (
+    <>
+      <ExecutiveSummaryView data={data} filteredRows={filteredRowsSafe} />
+      <DataQualityFooter stats={stats} pageLabel="Executive Summary" />
+    </>
+  );
 }

@@ -36,5 +36,12 @@ export function parseFiltersFromSearchParams(
     sources: getArray("sources"),
     date_start: getString("date_start"),
     date_end: getString("date_end"),
+    min_confidence: (() => {
+      const raw = getString("min_confidence");
+      if (raw == null) return null;
+      const parsed = Number(raw);
+      if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1) return null;
+      return parsed;
+    })(),
   };
 }

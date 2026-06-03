@@ -1,8 +1,10 @@
 import { SalesEnablementView } from "@/components/pages/SalesEnablementView";
+import { DataQualityFooter } from "@/components/layout/DataQualityFooter";
 import { applyFilters } from "@/lib/data/filters";
 import { buildSalesEnablementData } from "@/lib/data/sales-enablement-data";
+import { computeSampleStats } from "@/lib/data/sample-stats";
 import { parseFiltersFromSearchParams } from "@/lib/data/search-params-filters";
-import { loadInsights } from "@/lib/supabase/queries";
+import { loadInsights, loadTotalTranscriptsCount } from "@/lib/supabase/queries";
 import { getServerUserRoles } from "@/lib/supabase/server";
 import { prepareRowsForClient } from "@/lib/data/redact-quotes";
 import type { AppRole } from "@/lib/auth/roles";
@@ -17,12 +19,19 @@ type PageProps = {
 export default async function Page({ searchParams }: PageProps) {
   const params = await searchParams;
   const filters = parseFiltersFromSearchParams(params);
-  const [rows, userRoles] = await Promise.all([
+  const [rows, userRoles, totalTranscripts] = await Promise.all([
     loadInsights(process.env.NEXT_PUBLIC_PROMPT_VERSION ?? "v3.0"),
     getServerUserRoles(),
+    loadTotalTranscriptsCount(),
   ]);
   const data = buildSalesEnablementData(rows, 0, filters);
   const filteredRows = applyFilters(rows, filters);
   const filteredRowsSafe = prepareRowsForClient(filteredRows, userRoles as AppRole[]);
-  return <SalesEnablementView data={data} filteredRows={filteredRowsSafe} />;
+  const stats = computeSampleStats(filteredRows, totalTranscripts);
+  return (
+    <>
+      <SalesEnablementView data={data} filteredRows={filteredRowsSafe} />
+      <DataQualityFooter stats={stats} pageLabel="Sales Enablement" />
+    </>
+  );
 }

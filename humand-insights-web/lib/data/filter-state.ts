@@ -1,4 +1,4 @@
-import { parseAsArrayOf, parseAsString, useQueryStates } from "nuqs";
+import { parseAsArrayOf, parseAsFloat, parseAsString, useQueryStates } from "nuqs";
 
 export const FILTER_PARSERS = {
   types: parseAsArrayOf(parseAsString).withDefault([]),
@@ -13,6 +13,9 @@ export const FILTER_PARSERS = {
   sources: parseAsArrayOf(parseAsString).withDefault([]),
   date_start: parseAsString,
   date_end: parseAsString,
+  // null = sin filtro de confianza. 0.7 = solo filas con confidence >= 0.7
+  // (las filas sin confidence se mantienen).
+  min_confidence: parseAsFloat,
 };
 
 export function useGlobalFilters() {

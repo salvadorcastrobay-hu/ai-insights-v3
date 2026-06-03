@@ -8,6 +8,7 @@ import { HeatMap } from "@/components/charts/HeatMap";
 import { StackedBarChart } from "@/components/charts/StackedBar";
 import { MetricCard } from "@/components/layout/MetricCard";
 import { PageTitle } from "@/components/pages/common";
+import { ConfidenceBadge } from "@/components/ui/ConfidenceBadge";
 import { Input } from "@/components/ui/input";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@/components/ui/table";
 import type { PainsDetailData } from "@/lib/data/pains-detail-data";
@@ -231,6 +232,7 @@ export function PainsDetailView({ data, filteredRows }: Props) {
                 <Th>Module</Th>
                 <Th>Segment</Th>
                 <Th>Company</Th>
+                <Th>Conf.</Th>
                 <Th>Summary</Th>
                 <Th>Quote</Th>
               </Tr>
@@ -243,6 +245,7 @@ export function PainsDetailView({ data, filteredRows }: Props) {
                   <Td>{row.module_display}</Td>
                   <Td>{row.segment}</Td>
                   <Td>{row.company_name}</Td>
+                  <Td><ConfidenceBadge value={row.confidence} /></Td>
                   <Td>{row.summary}</Td>
                   <Td>{row.verbatim_quote}</Td>
                 </Tr>

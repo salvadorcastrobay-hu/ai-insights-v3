@@ -104,6 +104,7 @@ const emptyFilters: Filters = {
   sources: [],
   date_start: null,
   date_end: null,
+  min_confidence: null,
 };
 
 test("applyFilters combines categorical and date filters", () => {

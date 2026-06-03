@@ -10,6 +10,7 @@ import { useDrillDown } from "@/components/drill-down/DrillDownProvider";
 import { MetricCard } from "@/components/layout/MetricCard";
 import { SectionHeader } from "@/components/layout/SectionHeader";
 import { PageTitle } from "@/components/pages/common";
+import { ConfidenceBadge } from "@/components/ui/ConfidenceBadge";
 import { Input } from "@/components/ui/input";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@/components/ui/table";
 import type { ProductGapsDetailData } from "@/lib/data/product-gaps-detail-data";
@@ -269,6 +270,7 @@ export function ProductGapsDetailView({ data, filteredRows }: Props) {
                 <Th>País</Th>
                 <Th>Etapa</Th>
                 <Th>AE</Th>
+                <Th>Conf.</Th>
                 <Th>Resumen</Th>
               </Tr>
             </Thead>
@@ -286,6 +288,7 @@ export function ProductGapsDetailView({ data, filteredRows }: Props) {
                   <Td>{row.country}</Td>
                   <Td>{row.deal_stage}</Td>
                   <Td>{row.deal_owner}</Td>
+                  <Td><ConfidenceBadge value={row.confidence} /></Td>
                   <Td>{row.summary ?? row.gap_description}</Td>
                 </Tr>
               ))}
