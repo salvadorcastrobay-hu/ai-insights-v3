@@ -123,7 +123,7 @@ BEGIN
             SELECT transcript_id, NULLIF(btrim(%1$I::text), '') AS v
             FROM _filter_insights($1) t
             WHERE ($2 IS NULL OR t.insight_type = $2)
-              AND (NOT $3 OR COALESCE(t.is_own_brand_competitor, false) = false)
+              AND (NOT $3 OR COALESCE(lower(btrim(t.competitor_name)), '') NOT IN ('humand','human','human d'))
         ) s
         WHERE v IS NOT NULL
         GROUP BY v
@@ -167,7 +167,7 @@ BEGIN
             SELECT transcript_id, NULLIF(btrim(%1$I::text), '') AS v
             FROM _filter_insights($1) t
             WHERE ($2 IS NULL OR t.insight_type = $2)
-              AND (NOT $3 OR COALESCE(t.is_own_brand_competitor, false) = false)
+              AND (NOT $3 OR COALESCE(lower(btrim(t.competitor_name)), '') NOT IN ('humand','human','human d'))
         ) s
         WHERE v IS NOT NULL
         GROUP BY v
@@ -208,7 +208,7 @@ BEGIN
                 SELECT NULLIF(btrim(%1$I::text), '') AS v, deal_id, amount
                 FROM _filter_insights($1) t
                 WHERE ($2 IS NULL OR t.insight_type = $2)
-                  AND (NOT $3 OR COALESCE(t.is_own_brand_competitor, false) = false)
+                  AND (NOT $3 OR COALESCE(lower(btrim(t.competitor_name)), '') NOT IN ('humand','human','human d'))
             ) s
             WHERE v IS NOT NULL AND deal_id IS NOT NULL AND amount IS NOT NULL
             ORDER BY v, deal_id, amount DESC
@@ -281,10 +281,14 @@ def main() -> int:
         for k, v in zip(cols, row):
             print(f"  {k}: {v}")
 
+        # Usamos 'segment' (no se normaliza en TS → matchea el dashboard 1:1).
+        # OJO: 'region' y 'competitor_name' SÍ se normalizan en TS, así que
+        # agruparlos crudo NO matchea — eso se resuelve en F2.1c (columnas
+        # normalizadas en la vista).
         cur.execute(
-            f"SELECT name, value FROM rpc_group_distinct('{f}'::jsonb, 'region', NULL, false, 8);"
+            f"SELECT name, value FROM rpc_group_distinct('{f}'::jsonb, 'segment', NULL, false, 8);"
         )
-        print("\nSanity — rpc_group_distinct(region, top 8):")
+        print("\nSanity — rpc_group_distinct(segment, top 8):")
         for name, value in cur.fetchall():
             print(f"  {name}: {value}")
         return 0
