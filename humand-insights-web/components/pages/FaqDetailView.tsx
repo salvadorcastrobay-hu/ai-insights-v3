@@ -6,6 +6,7 @@ import { ChartCard } from "@/components/charts/ChartCard";
 import { HorizontalBarChart } from "@/components/charts/BarChart";
 import { MetricCard } from "@/components/layout/MetricCard";
 import { PageTitle } from "@/components/pages/common";
+import { ConfidenceBadge } from "@/components/ui/ConfidenceBadge";
 import { Input } from "@/components/ui/input";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@/components/ui/table";
 import type { FaqDetailData } from "@/lib/data/faq-detail-data";
@@ -94,11 +95,12 @@ export function FaqDetailView({ data, filteredRows }: Props) {
         </div>
         <div className="max-h-[420px] overflow-auto">
           <Table>
-            <Thead><Tr><Th>Topic</Th><Th>Pregunta</Th><Th>Cita textual</Th></Tr></Thead>
+            <Thead><Tr><Th>Topic</Th><Th>Conf.</Th><Th>Pregunta</Th><Th>Cita textual</Th></Tr></Thead>
             <Tbody>
               {tableRows.map((row) => (
                 <Tr key={row.id}>
                   <Td>{row.insight_subtype_display}</Td>
+                  <Td><ConfidenceBadge value={row.confidence} /></Td>
                   <Td>{row.summary}</Td>
                   <Td>{row.verbatim_quote}</Td>
                 </Tr>

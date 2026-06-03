@@ -14,6 +14,13 @@ export type Filters = {
   sources: string[];
   date_start: string | null;
   date_end: string | null;
+  /**
+   * Filtro de confianza mínima del LLM (campo `confidence` en cada insight).
+   * Rango [0, 1]. Cuando está seteado, excluye filas con confidence < threshold.
+   * Filas sin confidence (null) se mantienen — no penalizar data legacy.
+   * Default toggle UI: 0.7.
+   */
+  min_confidence: number | null;
 };
 
 export type FilterOptions = {
@@ -44,6 +51,7 @@ export const EMPTY_FILTERS: Filters = {
   sources: [],
   date_start: null,
   date_end: null,
+  min_confidence: null,
 };
 
 function unique(values: Array<string | null | undefined>): string[] {
@@ -98,5 +106,13 @@ export function matchesFilters(row: InsightRow, filters: Filters): boolean {
   if (filters.sources.length && !filters.sources.includes(row.deal_source ?? "")) return false;
   if (filters.date_start && row.call_date && row.call_date < filters.date_start) return false;
   if (filters.date_end && row.call_date && row.call_date > filters.date_end) return false;
+  if (
+    filters.min_confidence != null &&
+    typeof row.confidence === "number" &&
+    Number.isFinite(row.confidence) &&
+    row.confidence < filters.min_confidence
+  ) {
+    return false;
+  }
   return true;
 }

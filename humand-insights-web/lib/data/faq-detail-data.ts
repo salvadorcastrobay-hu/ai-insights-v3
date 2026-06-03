@@ -13,6 +13,7 @@ export type FaqTableRow = {
   insight_subtype_display: string;
   summary: string;
   verbatim_quote: string | null;
+  confidence: number | null;
 };
 
 export type FaqDetailData = {
@@ -58,6 +59,7 @@ export function buildFaqDetailData(
     insight_subtype_display: row.insight_subtype_display,
     summary: row.summary,
     verbatim_quote: row.verbatim_quote,
+    confidence: row.confidence ?? null,
   }));
 
   return {

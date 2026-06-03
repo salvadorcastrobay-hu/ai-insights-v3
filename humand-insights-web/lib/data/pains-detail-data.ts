@@ -22,6 +22,7 @@ export type PainTableRow = {
   company_name: string | null;
   summary: string;
   verbatim_quote: string | null;
+  confidence: number | null;
 };
 
 export type PhaseSummary = {
@@ -83,6 +84,7 @@ export function buildPainsDetailData(
     company_name: row.company_name,
     summary: row.summary,
     verbatim_quote: row.verbatim_quote,
+    confidence: row.confidence ?? null,
   }));
 
   // Funnel phase + outcome: deals únicos por (pain, phase) y (pain, won/lost).
