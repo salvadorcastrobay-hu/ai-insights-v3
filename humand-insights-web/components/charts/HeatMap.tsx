@@ -26,6 +26,12 @@ function compactLabel(label: string): string {
   return label.replace(/\s*\(\s*[^)]*employees?[^)]*\)\s*$/i, "").trim() || label;
 }
 
+/** Truncate con ellipsis para que labels largos no se solapen en el eje. */
+function truncate(label: string, max: number): string {
+  if (label.length <= max) return label;
+  return label.slice(0, max - 1).trimEnd() + "…";
+}
+
 function hexToRgb(hex: string) {
   const clean = hex.replace("#", "");
   const normalized = clean.length === 3
@@ -73,7 +79,6 @@ export function HeatMap({
   // Floor row height at 40px so few-row heatmaps don't collapse into tiny cells.
   const MIN_CELL_HEIGHT = 40;
   const computedHeight = height ?? Math.max(360, rows * 44 + 130);
-  const topPadding = 110;
   // Adaptive left padding: enough to fit the longest row label, no more.
   // Avoids huge whitespace when labels are short (e.g. "processes", "talent").
   const longestRow = rowLabels.reduce((m, l) => Math.max(m, l.length), 0);
@@ -86,13 +91,6 @@ export function HeatMap({
     [values],
   );
 
-  const rawInnerHeight = computedHeight - topPadding - bottomPadding;
-  const rawCellHeight = rows > 0 ? rawInnerHeight / rows : 0;
-  const cellHeight = Math.max(rawCellHeight, MIN_CELL_HEIGHT);
-  const innerHeight = cellHeight * rows;
-  // If we expanded cellHeight beyond what the parent height accommodated,
-  // grow the svg viewBox so the rows aren't clipped.
-  const finalHeight = innerHeight + topPadding + bottomPadding;
   const viewWidth = 1000;
   const innerWidth = viewWidth - leftPadding - rightPadding;
   // Cap cell width so few-column heatmaps don't get stretched into giant
@@ -103,27 +101,51 @@ export function HeatMap({
   const cellWidth = Math.min(rawCellWidth, maxCellWidth);
   const matrixWidth = cellWidth * cols;
   const xOffset = leftPadding + (innerWidth - matrixWidth) / 2;
-  // Rotate column labels only when cells are narrow enough that horizontal
-  // text would overlap. Wide cells (≥ 90px) get horizontal centred labels.
-  const rotateColLabels = cellWidth < 90;
+
+  // Column label legibility: rotamos cuando la celda es angosta O cuando hay
+  // labels largos (ej: "Software Companies & IT Services") que horizontales
+  // se solaparían. Truncamos a un máximo de chars que entran en el ancho
+  // disponible de la celda rotada.
+  const longestCol = colLabels.reduce((m, l) => Math.max(m, compactLabel(l).length), 0);
+  const rotateColLabels = cellWidth < 110 || longestCol > 12;
+  // A -35° el alto de la diagonal del texto ≈ len*charPx*sin(35°). Limitamos
+  // el largo visible para que el padding superior no explote.
+  const COL_LABEL_MAX_CHARS = rotateColLabels ? 26 : Math.max(8, Math.floor(cellWidth / 7));
+  const longestColTrunc = Math.min(longestCol, COL_LABEL_MAX_CHARS);
+  // topPadding adaptativo: si rotamos, reservamos espacio para la diagonal.
+  const topPadding = rotateColLabels
+    ? Math.min(190, Math.max(90, Math.round(longestColTrunc * 6.6 * Math.sin((35 * Math.PI) / 180)) + 46))
+    : 90;
+
+  const rawInnerHeight = computedHeight - topPadding - bottomPadding;
+  const rawCellHeight = rows > 0 ? rawInnerHeight / rows : 0;
+  const cellHeight = Math.max(rawCellHeight, MIN_CELL_HEIGHT);
+  const innerHeight = cellHeight * rows;
+  // If we expanded cellHeight beyond what the parent height accommodated,
+  // grow the svg viewBox so the rows aren't clipped.
+  const finalHeight = innerHeight + topPadding + bottomPadding;
 
   return (
     <div className="w-full overflow-x-auto">
       <svg width="100%" viewBox={`0 0 ${viewWidth} ${finalHeight}`}>
         {colLabels.map((label, c) => {
           const x = xOffset + c * cellWidth + cellWidth / 2;
-          const display = compactLabel(label);
+          const display = truncate(compactLabel(label), COL_LABEL_MAX_CHARS);
+          // Cuando rotamos, anclamos el final del texto cerca del borde
+          // superior de la columna (baseline a la altura del matrix top).
+          const labelY = topPadding - 8;
           return (
             <text
               key={`col-${label}-${c}`}
               x={x}
-              y={rotateColLabels ? 70 : 90}
-              textAnchor="middle"
-              transform={rotateColLabels ? `rotate(-30 ${x} 70)` : undefined}
+              y={labelY}
+              textAnchor={rotateColLabels ? "end" : "middle"}
+              transform={rotateColLabels ? `rotate(-35 ${x} ${labelY})` : undefined}
               fontSize={12}
               fontWeight={600}
               fill="#303036"
             >
+              {rotateColLabels ? <title>{label}</title> : null}
               {display}
             </text>
           );
