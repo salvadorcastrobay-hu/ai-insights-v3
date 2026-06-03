@@ -102,20 +102,15 @@ export function HeatMap({
   const matrixWidth = cellWidth * cols;
   const xOffset = leftPadding + (innerWidth - matrixWidth) / 2;
 
-  // Column label legibility: rotamos cuando la celda es angosta O cuando hay
-  // labels largos (ej: "Software Companies & IT Services") que horizontales
-  // se solaparían. Truncamos a un máximo de chars que entran en el ancho
-  // disponible de la celda rotada.
-  const longestCol = colLabels.reduce((m, l) => Math.max(m, compactLabel(l).length), 0);
-  const rotateColLabels = cellWidth < 110 || longestCol > 12;
-  // A -35° el alto de la diagonal del texto ≈ len*charPx*sin(35°). Limitamos
-  // el largo visible para que el padding superior no explote.
-  const COL_LABEL_MAX_CHARS = rotateColLabels ? 26 : Math.max(8, Math.floor(cellWidth / 7));
-  const longestColTrunc = Math.min(longestCol, COL_LABEL_MAX_CHARS);
-  // topPadding adaptativo: si rotamos, reservamos espacio para la diagonal.
-  const topPadding = rotateColLabels
-    ? Math.min(190, Math.max(90, Math.round(longestColTrunc * 6.6 * Math.sin((35 * Math.PI) / 180)) + 46))
-    : 90;
+  // Column label legibility: en vez de rotar (frágil — se recorta arriba con
+  // celdas anchas y se solapa con celdas angostas), las dejamos SIEMPRE
+  // horizontales y las truncamos para que cada label entre en el ancho de su
+  // propia celda. El nombre completo va en <title> (hover). Nunca se solapa
+  // (cada label está acotado a su celda) ni se recorta (una sola línea).
+  const CHAR_PX = 6.6; // ancho aprox de char a fontSize 12, fontWeight 600
+  const colLabelMaxChars = Math.max(3, Math.floor((cellWidth - 8) / CHAR_PX));
+  // Una línea horizontal sobre la matriz — padding chico y fijo.
+  const topPadding = 56;
 
   const rawInnerHeight = computedHeight - topPadding - bottomPadding;
   const rawCellHeight = rows > 0 ? rawInnerHeight / rows : 0;
@@ -130,22 +125,20 @@ export function HeatMap({
       <svg width="100%" viewBox={`0 0 ${viewWidth} ${finalHeight}`}>
         {colLabels.map((label, c) => {
           const x = xOffset + c * cellWidth + cellWidth / 2;
-          const display = truncate(compactLabel(label), COL_LABEL_MAX_CHARS);
-          // Cuando rotamos, anclamos el final del texto cerca del borde
-          // superior de la columna (baseline a la altura del matrix top).
-          const labelY = topPadding - 8;
+          const compact = compactLabel(label);
+          const display = truncate(compact, colLabelMaxChars);
+          const truncated = display !== compact;
           return (
             <text
               key={`col-${label}-${c}`}
               x={x}
-              y={labelY}
-              textAnchor={rotateColLabels ? "end" : "middle"}
-              transform={rotateColLabels ? `rotate(-35 ${x} ${labelY})` : undefined}
+              y={topPadding - 14}
+              textAnchor="middle"
               fontSize={12}
               fontWeight={600}
               fill="#303036"
             >
-              {rotateColLabels ? <title>{label}</title> : null}
+              {truncated ? <title>{label}</title> : null}
               {display}
             </text>
           );
