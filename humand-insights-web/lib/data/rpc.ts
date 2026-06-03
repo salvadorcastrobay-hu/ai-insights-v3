@@ -94,6 +94,151 @@ export async function getKpis(filters: Filters): Promise<KpisResult> {
   }
 }
 
+// ─── RPC genéricas (espejo de dashboard-aggregations.ts) ──────────────
+
+export type NameValue = { name: string; value: number };
+export type NameValuePct = { name: string; value: number; pct: number };
+
+type ScopeOpts = {
+  /** insight_type raw: "pain" | "product_gap" | "competitive_signal" | ... */
+  scope?: string | null;
+  /** excluir is_own_brand_competitor (para competitive_signal) */
+  excludeOwnBrand?: boolean;
+  n?: number;
+};
+
+/** Top N labels por # de transcripts distintos. Espeja groupDistinctTranscripts(). */
+export async function rpcGroupDistinct(
+  filters: Filters,
+  dim: string,
+  opts: ScopeOpts = {},
+): Promise<NameValue[]> {
+  try {
+    const supabase = getServiceClient();
+    const { data, error } = await supabase.rpc("rpc_group_distinct", {
+      f: filtersToJsonb(filters),
+      dim,
+      scope: opts.scope ?? null,
+      exclude_own_brand: opts.excludeOwnBrand ?? false,
+      n: opts.n ?? 15,
+    });
+    if (error) {
+      console.warn("[rpc.groupDistinct] error:", error.message);
+      return [];
+    }
+    return (data ?? []).map((r: { name: string; value: number | string }) => ({
+      name: r.name,
+      value: Number(r.value ?? 0),
+    }));
+  } catch (exc) {
+    console.warn("[rpc.groupDistinct] threw:", exc);
+    return [];
+  }
+}
+
+/** Top N con % sobre `total`. Espeja groupWithPct()/painsWithPct(). */
+export async function rpcGroupWithPct(
+  filters: Filters,
+  dim: string,
+  total: number,
+  opts: ScopeOpts = {},
+): Promise<NameValuePct[]> {
+  try {
+    const supabase = getServiceClient();
+    const { data, error } = await supabase.rpc("rpc_group_with_pct", {
+      f: filtersToJsonb(filters),
+      dim,
+      total,
+      scope: opts.scope ?? null,
+      exclude_own_brand: opts.excludeOwnBrand ?? false,
+      n: opts.n ?? 15,
+    });
+    if (error) {
+      console.warn("[rpc.groupWithPct] error:", error.message);
+      return [];
+    }
+    return (data ?? []).map(
+      (r: { name: string; value: number | string; pct: number | string }) => ({
+        name: r.name,
+        value: Number(r.value ?? 0),
+        pct: Number(r.pct ?? 0),
+      }),
+    );
+  } catch (exc) {
+    console.warn("[rpc.groupWithPct] threw:", exc);
+    return [];
+  }
+}
+
+/** Suma de amount por deal único, agrupado por dim. Espeja revenueByFeature(). */
+export async function rpcRevenueBy(
+  filters: Filters,
+  dim: string,
+  opts: ScopeOpts = {},
+): Promise<NameValue[]> {
+  try {
+    const supabase = getServiceClient();
+    const { data, error } = await supabase.rpc("rpc_revenue_by", {
+      f: filtersToJsonb(filters),
+      dim,
+      scope: opts.scope ?? null,
+      exclude_own_brand: opts.excludeOwnBrand ?? false,
+      n: opts.n ?? 15,
+    });
+    if (error) {
+      console.warn("[rpc.revenueBy] error:", error.message);
+      return [];
+    }
+    return (data ?? []).map((r: { name: string; value: number | string }) => ({
+      name: r.name,
+      value: Number(r.value ?? 0),
+    }));
+  } catch (exc) {
+    console.warn("[rpc.revenueBy] threw:", exc);
+    return [];
+  }
+}
+
+// ─── rpc_sample_stats → DataQualityFooter ─────────────────────────────
+
+export type SampleStatsRpc = {
+  unique_calls: number;
+  unique_deals: number;
+  insights_count: number;
+  period_start: string | null;
+  period_end: string | null;
+  avg_confidence: number | null;
+  high_confidence_pct: number | null;
+};
+
+export async function rpcSampleStats(filters: Filters): Promise<SampleStatsRpc | null> {
+  try {
+    const supabase = getServiceClient();
+    const { data, error } = await supabase.rpc("rpc_sample_stats", {
+      f: filtersToJsonb(filters),
+    });
+    if (error) {
+      console.warn("[rpc.sampleStats] error:", error.message);
+      return null;
+    }
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row) return null;
+    return {
+      unique_calls: Number(row.unique_calls ?? 0),
+      unique_deals: Number(row.unique_deals ?? 0),
+      insights_count: Number(row.insights_count ?? 0),
+      period_start: row.period_start ?? null,
+      period_end: row.period_end ?? null,
+      avg_confidence: row.avg_confidence == null ? null : Number(row.avg_confidence),
+      high_confidence_pct:
+        row.high_confidence_pct == null ? null : Number(row.high_confidence_pct),
+    };
+  } catch (exc) {
+    console.warn("[rpc.sampleStats] threw:", exc);
+    return null;
+  }
+}
+
 // ─── Feature flag: usar RPC en lugar de buildXData JS ─────────────────
 
 /** Si `USE_RPC_AGGREGATIONS=true`, las pages migradas usan las RPCs.
