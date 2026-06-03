@@ -7,6 +7,7 @@ import { DrillDownProvider } from "@/components/drill-down/DrillDownProvider";
 import { DrillDownSheet } from "@/components/drill-down/DrillDownSheet";
 import { AsyncFilterBar } from "@/components/layout/AsyncFilterBar";
 import { FilterBarSlot } from "@/components/layout/FilterBarSlot";
+import { FilterPendingOverlay, FilterTransitionProvider } from "@/components/layout/FilterTransition";
 import { GlobalFilterBar } from "@/components/layout/GlobalFilterBar";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { createClient } from "@/lib/supabase/server";
@@ -31,6 +32,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     <Suspense fallback={null}>
       <AskChartProvider>
         <DrillDownProvider>
+        <FilterTransitionProvider>
         <div className="flex h-screen overflow-hidden bg-[var(--color-bg-page)]">
           <Sidebar roles={roles} userEmail={userEmail} />
           <div className="flex h-screen flex-1 flex-col overflow-hidden">
@@ -41,7 +43,8 @@ export default async function DashboardLayout({ children }: { children: ReactNod
                 </Suspense>
               </header>
             </FilterBarSlot>
-            <main className="flex-1 overflow-y-auto px-4 py-4 md:px-6 md:py-4">
+            <main className="relative flex-1 overflow-y-auto px-4 py-4 md:px-6 md:py-4">
+              <FilterPendingOverlay />
               {children}
             </main>
           </div>
@@ -49,6 +52,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
           <AskChartSheet />
           <DrillDownSheet />
         </div>
+        </FilterTransitionProvider>
         </DrillDownProvider>
       </AskChartProvider>
     </Suspense>

@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, ChevronRight, Download, Eraser, SlidersHorizontal, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Download, Eraser, Loader2, SlidersHorizontal, X } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { MultiSelectCombobox } from "@/components/layout/MultiSelectCombobox";
@@ -262,7 +262,7 @@ export function GlobalFilterBar({
   options?: FilterOptions;
   className?: string;
 }) {
-  const [filters, setFilters] = useGlobalFilters();
+  const [filters, setFilters, isPending] = useGlobalFilters();
   const computedOptions = useMemo(() => options ?? computeFilterOptions(rows ?? []), [options, rows]);
   const mergedFilters = { ...EMPTY_FILTERS, ...filters } satisfies Filters;
   const csvExportHref = useMemo(() => buildCsvExportHref(mergedFilters), [mergedFilters]);
@@ -271,8 +271,10 @@ export function GlobalFilterBar({
 
   return (
     <section
+      aria-busy={isPending}
       className={cn(
-        "rounded-[var(--radius-m)] border border-[var(--color-neutral-200)] bg-[var(--color-bg-card)]",
+        "rounded-[var(--radius-m)] border bg-[var(--color-bg-card)] transition-colors",
+        isPending ? "border-[var(--color-brand-400)]" : "border-[var(--color-neutral-200)]",
         className,
       )}
     >
@@ -296,6 +298,16 @@ export function GlobalFilterBar({
             {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
           </span>
         </button>
+
+        {isPending ? (
+          <span
+            role="status"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[var(--color-brand-50)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-brand-500)]"
+          >
+            <Loader2 size={12} className="animate-spin" />
+            Actualizando…
+          </span>
+        ) : null}
 
         {active > 0 && !expanded ? (
           <div className="min-w-0 flex-1">
