@@ -64,14 +64,17 @@ export function OverviewView({ data, coveragePct }: Props) {
           <div>
             <div className="text-[30px] font-semibold leading-none">{fmt(recap.activity.dealsThisWeek)}</div>
             <div className="text-[12px] text-[var(--color-text-secondary)]">
-              Deals · prom {fmt(recap.activity.avgWeeklyDeals)}/sem
+              Deals · <span className="font-semibold text-[var(--color-brand-500)]">{fmt(recap.activity.inboundDealsThisWeek)} inbound</span>
+              {recap.activity.dealsThisWeek > 0
+                ? ` (${Math.round((recap.activity.inboundDealsThisWeek / recap.activity.dealsThisWeek) * 100)}%)`
+                : ""}
             </div>
           </div>
         </div>
 
-        {/* Dolores (pains) que cambiaron en importancia */}
+        {/* Pains (pains) que cambiaron en importancia */}
         <div className="mb-1 text-[12px] font-semibold text-[var(--color-text-default)]">
-          Dolores que mencionan los prospectos
+          Pains que mencionan los prospectos
           <span className="ml-1.5 font-normal text-[var(--color-text-secondary)]">
             — % de demos que los mencionan, esta semana vs. promedio
           </span>
@@ -114,7 +117,7 @@ export function OverviewView({ data, coveragePct }: Props) {
         {recap.snapshotPains.length > 0 ? (
           <div className="mt-3 border-t border-[var(--color-brand-100)] pt-3">
             <div className="mb-1.5 text-[12px] font-semibold text-[var(--color-text-secondary)]">
-              🔝 Dolores más hablados esta semana (% de demos)
+              🔝 Pains más hablados esta semana (% de demos)
             </div>
             <div className="flex flex-wrap gap-x-2 gap-y-1.5 text-[13px]">
               {recap.snapshotPains.map((p) => (
@@ -146,7 +149,7 @@ export function OverviewView({ data, coveragePct }: Props) {
 
       {/* Top 5 pains + FAQs */}
       <section className="grid gap-4 lg:grid-cols-2">
-        <ChartCard title="Dolores principales (pains)">
+        <ChartCard title="Pains principales">
           <p className="mb-2 text-[12px] text-[var(--color-text-secondary)]">% de demos donde se mencionó</p>
           <div className="space-y-2.5">
             {topPains.length === 0 ? (
