@@ -33,7 +33,7 @@ export type OverviewData = {
     deals: WeekDelta;
     risers: RecapMover[]; // pains que más subieron
     fallers: RecapMover[]; // pains que más bajaron
-    newCompetitors: string[]; // mencionados esta semana, no la previa
+    topCompetitors: string[]; // más mencionados esta semana (reales, no one-offs)
   };
   topPains: NameValuePct[];
   topFaqs: NameValue[];
@@ -100,7 +100,6 @@ export async function buildOverviewData(filters: Filters): Promise<OverviewData>
     curPains,
     prevPains,
     curComp,
-    prevComp,
   ] = await Promise.all([
     rpcSampleStats(filters),
     rpcGroupWithPct(filters, "insight_subtype_display", 0, { scope: "pain", n: 5 }),
@@ -114,12 +113,7 @@ export async function buildOverviewData(filters: Filters): Promise<OverviewData>
     rpcGroupDistinct(curWin, "competitor_name", {
       scope: "competitive_signal",
       excludeOwnBrand: true,
-      n: 50,
-    }),
-    rpcGroupDistinct(prevWin, "competitor_name", {
-      scope: "competitive_signal",
-      excludeOwnBrand: true,
-      n: 50,
+      n: 20,
     }),
   ]);
 
@@ -134,9 +128,13 @@ export async function buildOverviewData(filters: Filters): Promise<OverviewData>
 
   const { risers, fallers } = buildMoversAndNew(curPains, prevPains);
 
-  const prevCompSet = new Set(prevComp.map((c) => c.name));
-  const newCompetitors = curComp
-    .filter((c) => !prevCompSet.has(c.name))
+  // "Competidores top de la semana" en vez de "nuevos": los más mencionados
+  // son los reales (SAP, Buk...); los raros/one-off suelen ser ruido de
+  // extracción (Fathom = nuestra tool, Prode = módulo propio, clientes, etc.).
+  // Denylist explícita para lo que sabemos que NO es competidor.
+  const NON_COMPETITORS = new Set(["fathom", "prode", "humand"]);
+  const topCompetitors = curComp
+    .filter((c) => c.value > 0 && !NON_COMPETITORS.has(c.name.toLowerCase().trim()))
     .slice(0, 5)
     .map((c) => c.name);
 
@@ -165,7 +163,7 @@ export async function buildOverviewData(filters: Filters): Promise<OverviewData>
       deals: delta(curStats?.unique_deals ?? 0, prevStats?.unique_deals ?? 0),
       risers,
       fallers,
-      newCompetitors,
+      topCompetitors,
     },
     topPains: topPainsPct,
     topFaqs,
