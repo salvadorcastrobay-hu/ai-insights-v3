@@ -43,7 +43,15 @@ def _load_f21c():
 
 _F21C = _load_f21c()
 SQL_NORMKEY = _F21C.SQL_NORMKEY
-SQL_NORM_REGION = _F21C.SQL_NORM_REGION
+# Bake SET search_path=public + qualify _normkey → public._normkey, así
+# _norm_region resuelve la función sin depender del search_path del caller
+# (la causa real del "function _normkey does not exist").
+SQL_NORM_REGION = (
+    _F21C.SQL_NORM_REGION
+    .replace("LANGUAGE plpgsql IMMUTABLE\nAS $$", "LANGUAGE plpgsql IMMUTABLE\nSET search_path = public\nAS $$")
+    .replace("_normkey(region)", "public._normkey(region)")
+    .replace("_normkey(country)", "public._normkey(country)")
+)
 
 
 # Re-creamos las funciones de normalización con llamadas a _normkey
