@@ -23,10 +23,27 @@ Usage:
 """
 from __future__ import annotations
 
+import importlib.util
 import os
 import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+
+def _load_f21c():
+    """Carga el módulo de F2.1c (nombre empieza con dígito → no se puede
+    importar normal) para reusar las definiciones EXACTAS de _normkey y
+    _norm_region (evita transcribir mal el CASE gigante)."""
+    path = os.path.join(os.path.dirname(__file__), "2026_06_03b_sql_normalization.py")
+    spec = importlib.util.spec_from_file_location("_f21c", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+_F21C = _load_f21c()
+SQL_NORMKEY = _F21C.SQL_NORMKEY
+SQL_NORM_REGION = _F21C.SQL_NORM_REGION
 
 
 # Re-creamos las funciones de normalización con llamadas a _normkey
@@ -202,6 +219,10 @@ STEPS = [
     # por fila) corre una única vez acá y puede pasar el límite default.
     ("set search_path + statement_timeout for this session",
      "SET search_path TO public; SET statement_timeout = '600s';"),
+    # Self-contained: re-creamos _normkey y _norm_region en public (en F2.1c
+    # pudieron quedar en otro schema → de ahí "function _normkey does not exist").
+    ("recreate _normkey (public)", SQL_NORMKEY),
+    ("recreate _norm_region (public)", SQL_NORM_REGION),
     ("recreate _is_own_brand / _norm_competitor (schema-qualified)", SQL_FIX_FUNCS),
     ("create materialized view mv_insights_norm", SQL_CREATE_MV),
     ("indexes", SQL_INDEXES),
