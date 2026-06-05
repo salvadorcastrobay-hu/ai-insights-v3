@@ -43,6 +43,7 @@ export type OverviewData = {
     lost: ShareMover[]; // pains que perdieron relevancia (share ↓)
     snapshotPains: NameValuePct[]; // top pains de ESTA semana, en %
     topQuestions: NameValue[]; // top preguntas de esta semana
+    competitorTop: NameValue[]; // competidores más mencionados esta semana
     competitorRisers: ShareMover[]; // competidores cuyo share de menciones creció
   };
   topPains: NameValuePct[];
@@ -178,6 +179,7 @@ export async function buildOverviewData(filters: Filters): Promise<OverviewData>
     baseTotal,
     2,
   );
+  const competitorTop = compClean(curComp).slice(0, 5);
 
   const avgWeeklyDemos = baseTotal / BASELINE_WEEKS;
   const avgWeeklyDeals = (baseStats?.unique_deals ?? 0) / BASELINE_WEEKS;
@@ -210,6 +212,7 @@ export async function buildOverviewData(filters: Filters): Promise<OverviewData>
       lost,
       snapshotPains,
       topQuestions: curQuestions,
+      competitorTop,
       competitorRisers,
     },
     topPains: topPainsPct,

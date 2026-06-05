@@ -69,25 +69,44 @@ export function OverviewView({ data, coveragePct }: Props) {
           </div>
         </div>
 
-        {/* Qué cambió en importancia (share) */}
+        {/* Dolores (pains) que cambiaron en importancia */}
+        <div className="mb-1 text-[12px] font-semibold text-[var(--color-text-default)]">
+          Dolores que mencionan los prospectos
+          <span className="ml-1.5 font-normal text-[var(--color-text-secondary)]">
+            — % de demos que los mencionan, esta semana vs. promedio
+          </span>
+        </div>
         <div className="space-y-1.5 text-[13px]">
           <ShareLine
-            label="▲ Ganó relevancia"
+            label="📈 Más mencionados"
             tone="up"
-            items={recap.gained.map((m) => `${m.name} ${m.baselinePct}%→${m.thisWeekPct}% (+${m.deltaPts}pts)`)}
+            items={recap.gained.map((m) => `${m.name}: ${m.baselinePct}% → ${m.thisWeekPct}% (+${m.deltaPts} pts)`)}
             empty="nada se destacó"
           />
           <ShareLine
-            label="▼ Perdió relevancia"
+            label="📉 Menos mencionados"
             tone="down"
-            items={recap.lost.map((m) => `${m.name} ${m.baselinePct}%→${m.thisWeekPct}% (${m.deltaPts}pts)`)}
+            items={recap.lost.map((m) => `${m.name}: ${m.baselinePct}% → ${m.thisWeekPct}% (${m.deltaPts} pts)`)}
             empty="nada cayó"
           />
+        </div>
+
+        {/* Competidores: más mencionados + en alza */}
+        <div className="mt-3 mb-1 text-[12px] font-semibold text-[var(--color-text-default)]">
+          Competidores mencionados en las demos
+        </div>
+        <div className="space-y-1.5 text-[13px]">
           <ShareLine
-            label="⚔ Competidores en alza"
+            label="🏆 Más mencionados"
             tone="new"
-            items={recap.competitorRisers.map((m) => `${m.name} (+${m.deltaPts}pts)`)}
-            empty="sin cambios"
+            items={recap.competitorTop.map((c) => `${c.name} (${c.value})`)}
+            empty="sin menciones"
+          />
+          <ShareLine
+            label="📈 En alza"
+            tone="up"
+            items={recap.competitorRisers.map((m) => `${m.name}: ${m.baselinePct}% → ${m.thisWeekPct}% (+${m.deltaPts} pts)`)}
+            empty="ninguno creció"
           />
         </div>
 
@@ -95,7 +114,7 @@ export function OverviewView({ data, coveragePct }: Props) {
         {recap.snapshotPains.length > 0 ? (
           <div className="mt-3 border-t border-[var(--color-brand-100)] pt-3">
             <div className="mb-1.5 text-[12px] font-semibold text-[var(--color-text-secondary)]">
-              🔝 Lo más hablado esta semana
+              🔝 Dolores más hablados esta semana (% de demos)
             </div>
             <div className="flex flex-wrap gap-x-2 gap-y-1.5 text-[13px]">
               {recap.snapshotPains.map((p) => (
@@ -127,8 +146,8 @@ export function OverviewView({ data, coveragePct }: Props) {
 
       {/* Top 5 pains + FAQs */}
       <section className="grid gap-4 lg:grid-cols-2">
-        <ChartCard title="Top 5 Pains">
-          <p className="mb-2 text-[12px] text-[var(--color-text-secondary)]">% de demos donde apareció</p>
+        <ChartCard title="Dolores principales (pains)">
+          <p className="mb-2 text-[12px] text-[var(--color-text-secondary)]">% de demos donde se mencionó</p>
           <div className="space-y-2.5">
             {topPains.length === 0 ? (
               <p className="text-[13px] text-[var(--color-text-secondary)]">Sin datos.</p>
@@ -151,18 +170,18 @@ export function OverviewView({ data, coveragePct }: Props) {
           </div>
         </ChartCard>
 
-        <ChartCard title="Top 5 Preguntas (FAQ)">
+        <ChartCard title="Preguntas frecuentes">
           <p className="mb-2 text-[12px] text-[var(--color-text-secondary)]">por cantidad de demos</p>
           <TopList rows={topFaqs} />
         </ChartCard>
       </section>
 
-      {/* Top 5 industrias + segmentos */}
+      {/* Industrias + segmentos */}
       <section className="grid gap-4 lg:grid-cols-2">
-        <ChartCard title="Top 5 Industrias">
+        <ChartCard title="Industrias">
           <TopList rows={topIndustries} />
         </ChartCard>
-        <ChartCard title="Top 5 Segmentos">
+        <ChartCard title="Segmentos">
           <TopList rows={topSegments} />
         </ChartCard>
       </section>
