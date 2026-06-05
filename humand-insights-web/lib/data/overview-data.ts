@@ -172,7 +172,10 @@ export async function buildOverviewData(filters: Filters): Promise<OverviewData>
       wonDemos: r.won_demos,
       lostDemos: r.lost_demos,
     }))
-    .sort((a, b) => b.lostPct - a.lostPct)
+    // Ordenado por gap (lost − won) desc: arriba los pains relativamente más
+    // asociados a PERDER. (En esta data casi todos pesan más en ganados —
+    // articular el dolor = más engagement = más conversión.)
+    .sort((a, b) => b.lostPct - b.wonPct - (a.lostPct - a.wonPct))
     .slice(0, 6);
 
   // top pains all-time con pct sobre demos del set
