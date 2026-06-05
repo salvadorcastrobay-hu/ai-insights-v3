@@ -179,16 +179,6 @@ export function OverviewView({ data, coveragePct }: Props) {
         </ChartCard>
       </section>
 
-      {/* Industrias + segmentos */}
-      <section className="grid gap-4 lg:grid-cols-2">
-        <ChartCard title="Industrias">
-          <TopList rows={topIndustries} />
-        </ChartCard>
-        <ChartCard title="Segmentos">
-          <TopList rows={topSegments} />
-        </ChartCard>
-      </section>
-
       {/* Pains en deals perdidos vs ganados */}
       {wonLostPains.length > 0 ? (
         <ChartCard title="Pains en deals perdidos vs. ganados">
@@ -224,6 +214,16 @@ export function OverviewView({ data, coveragePct }: Props) {
           </Table>
         </ChartCard>
       ) : null}
+
+      {/* Industrias + segmentos */}
+      <section className="grid gap-4 lg:grid-cols-2">
+        <ChartCard title="Industrias">
+          <TopList rows={topIndustries} />
+        </ChartCard>
+        <ChartCard title="Segmentos">
+          <TopList rows={topSegments} />
+        </ChartCard>
+      </section>
     </div>
   );
 }
