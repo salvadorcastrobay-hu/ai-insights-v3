@@ -128,3 +128,10 @@ export async function getServerUserRoles(): Promise<string[]> {
   const raw = user?.app_metadata?.roles;
   return Array.isArray(raw) ? raw.filter((r): r is string => typeof r === "string") : [];
 }
+
+/** Email del user autenticado (null si no hay sesión). Para gatear features WIP. */
+export async function getServerUserEmail(): Promise<string | null> {
+  const supabase = await createServerSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  return user?.email ?? null;
+}
