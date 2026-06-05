@@ -3,9 +3,19 @@ import {
   rpcGroupDistinct,
   rpcGroupWithPct,
   rpcSampleStats,
+  rpcWonLostPains,
   type NameValue,
   type NameValuePct,
 } from "@/lib/data/rpc";
+
+/** Pain con su presencia en deals ganados vs perdidos (% de cada cohorte). */
+export type WonLostPain = {
+  name: string;
+  wonPct: number;
+  lostPct: number;
+  wonDemos: number;
+  lostDemos: number;
+};
 
 /** Cambio en % de demos (share) de esta semana vs. el promedio del baseline. */
 export type ShareMover = {
@@ -51,6 +61,7 @@ export type OverviewData = {
   topFaqs: NameValue[];
   topIndustries: NameValue[];
   topSegments: NameValue[];
+  wonLostPains: WonLostPain[];
 };
 
 function isoDaysAgo(days: number): string {
@@ -125,6 +136,7 @@ export async function buildOverviewData(filters: Filters): Promise<OverviewData>
     curQuestions,
     curComp,
     baseComp,
+    wonLostRaw,
   ] = await Promise.all([
     rpcSampleStats(filters),
     rpcGroupWithPct(filters, "insight_subtype_display", 0, { scope: "pain", n: 5 }),
@@ -147,7 +159,21 @@ export async function buildOverviewData(filters: Filters): Promise<OverviewData>
       excludeOwnBrand: true,
       n: 200,
     }),
+    rpcWonLostPains(filters, 8),
   ]);
+
+  // Pains presentes en deals perdidos vs ganados (% de cada cohorte).
+  // Ordenados por mayor presencia en perdidos (señal de que pesan en perder).
+  const wonLostPains: WonLostPain[] = wonLostRaw
+    .map((r) => ({
+      name: r.pain,
+      wonPct: r.won_total > 0 ? Math.round((r.won_demos / r.won_total) * 1000) / 10 : 0,
+      lostPct: r.lost_total > 0 ? Math.round((r.lost_demos / r.lost_total) * 1000) / 10 : 0,
+      wonDemos: r.won_demos,
+      lostDemos: r.lost_demos,
+    }))
+    .sort((a, b) => b.lostPct - a.lostPct)
+    .slice(0, 6);
 
   // top pains all-time con pct sobre demos del set
   const callsBasis = stats?.unique_calls ?? 0;
@@ -223,6 +249,7 @@ export async function buildOverviewData(filters: Filters): Promise<OverviewData>
     topFaqs,
     topIndustries,
     topSegments,
+    wonLostPains,
   };
 }
 

@@ -479,6 +479,27 @@ export const rpcFaqModuleHeat = (f: Filters, topModules = 10, topTopics = 6) =>
 export const rpcMonthlyTrend = (f: Filters, scope?: string | null) =>
   rpcJson<Array<Record<string, string | number>>>("rpc_monthly_trend", f, { scope: scope ?? null }, []);
 
+// ─── won vs lost pains (Overview) ─────────────────────────────────────
+
+export type WonLostPainRpc = {
+  pain: string;
+  won_demos: number;
+  lost_demos: number;
+  won_total: number;
+  lost_total: number;
+};
+
+export const rpcWonLostPains = (f: Filters, n = 8) =>
+  rpcRows<WonLostPainRpc>("rpc_won_lost_pains", f, { n }).then((rows) =>
+    rows.map((r) => ({
+      pain: r.pain,
+      won_demos: Number(r.won_demos),
+      lost_demos: Number(r.lost_demos),
+      won_total: Number(r.won_total),
+      lost_total: Number(r.lost_total),
+    })),
+  );
+
 // ─── Feature flag: usar RPC en lugar de buildXData JS ─────────────────
 
 /** Si `USE_RPC_AGGREGATIONS=true`, las pages migradas usan las RPCs.
