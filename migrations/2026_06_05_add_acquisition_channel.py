@@ -113,6 +113,7 @@ CREATE INDEX IF NOT EXISTS mv_insights_norm_channel_idx ON mv_insights_norm (acq
 """
 
 SQL_FILTER_NORM = """
+DROP FUNCTION IF EXISTS _filter_insights_norm(jsonb);
 CREATE OR REPLACE FUNCTION _filter_insights_norm(f jsonb)
 RETURNS TABLE(
     transcript_id text, deal_id text, amount numeric, call_date date,
