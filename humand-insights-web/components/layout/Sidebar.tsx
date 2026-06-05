@@ -8,6 +8,7 @@ import {
   Globe2,
   HeartCrack,
   HelpCircle,
+  Home,
   LayoutDashboard,
   LayoutGrid,
   LogOut,
@@ -29,9 +30,12 @@ type Item = {
   section: string;
   icon: LucideIcon;
   roles?: string[];
+  /** WIP: solo visible para estos prefijos de email. Mantener en sync con la page. */
+  ownerPrefixes?: string[];
 };
 
 const ITEMS: Item[] = [
+  { href: "/overview", label: "Overview", section: "Dashboards", icon: Home, ownerPrefixes: ["salvador.castrobay"] },
   { href: "/executive-summary", label: "Executive Summary", section: "Dashboards", icon: LayoutDashboard },
   { href: "/product-intelligence", label: "Product Intelligence", section: "Dashboards", icon: Package },
   { href: "/competitive-intelligence", label: "Competitive Intel", section: "Dashboards", icon: Target },
@@ -54,7 +58,9 @@ type Props = {
 
 export function Sidebar({ roles, userEmail }: Props) {
   const pathname = usePathname();
+  const emailPrefix = (userEmail ?? "").split("@")[0]?.toLowerCase() ?? "";
   const available = ITEMS.filter((item) => {
+    if (item.ownerPrefixes && !item.ownerPrefixes.includes(emailPrefix)) return false;
     if (!item.roles) return true;
     return item.roles.some((role) => roles.includes(role));
   });
