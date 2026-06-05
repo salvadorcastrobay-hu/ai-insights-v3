@@ -152,9 +152,13 @@ GRANT EXECUTE ON FUNCTION refresh_insights_mv() TO service_role;
 
 
 STEPS = [
-    # Subimos el timeout solo para esta sesión: la materialización inicial
-    # (162K filas + normalización por fila) corre una única vez acá.
-    ("raise statement_timeout for this session", "SET statement_timeout = '600s';"),
+    # search_path: la sesión de migración puede no incluir 'public', y al crear
+    # la MV Postgres inlinea _is_own_brand → necesita resolver _normkey. Sin
+    # esto falla con "function _normkey does not exist".
+    # statement_timeout: la materialización inicial (162K filas + normalización
+    # por fila) corre una única vez acá y puede pasar el límite default.
+    ("set search_path + statement_timeout for this session",
+     "SET search_path TO public; SET statement_timeout = '600s';"),
     ("create materialized view mv_insights_norm", SQL_CREATE_MV),
     ("indexes", SQL_INDEXES),
     ("_filter_insights_norm → MV", SQL_FILTER_NORM_MV),
