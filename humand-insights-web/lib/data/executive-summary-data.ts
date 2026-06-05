@@ -8,6 +8,20 @@ import {
   stackBy,
 } from "@/lib/data/dashboard-aggregations";
 import { painsWithPct, uniqueDealsRevenue } from "@/lib/data/computations";
+import {
+  rpcFaqModuleBreakdown,
+  rpcFaqModuleHeat,
+  rpcGroupDistinct,
+  rpcHeatmap,
+  rpcKpisNorm,
+  rpcModuleDemand,
+  rpcMonthlyTrend,
+  rpcPainThemeSiblings,
+  rpcRevenueBy,
+  rpcSampleStats,
+  rpcStack,
+  rpcTopBreakdowns,
+} from "@/lib/data/rpc";
 import type { InsightRow } from "@/lib/supabase/types";
 
 export type GroupPoint = { name: string; value: number };
@@ -342,5 +356,116 @@ export function buildExecutiveSummaryData(
       data: trendData,
       keys: trendKeys,
     },
+  };
+}
+
+/**
+ * Versión RPC-native de buildExecutiveSummaryData: misma ExecutiveSummaryData
+ * desde la MV (sin loadInsights). Validar lado a lado antes de promover.
+ */
+export async function buildExecutiveSummaryDataRpc(
+  filters: Filters,
+  totalTranscripts: number,
+): Promise<ExecutiveSummaryData> {
+  // distinct deals entre product_gap (para el % de gaps.byFreq)
+  const gapFilters: Filters = { ...filters, types: ["Feature Faltante"] };
+
+  const [
+    kpis,
+    byIndustry,
+    bySegment,
+    byCountry,
+    insightTypes,
+    topPainsRaw,
+    painThemeSiblings,
+    painByModuleBreakdown,
+    painSegmentHeat,
+    moduleDemandRaw,
+    gapsByFreqRaw,
+    gapsByRevenue,
+    gapStats,
+    competitors,
+    fricTop,
+    fricBreakdown,
+    fricByRevenue,
+    faqTop,
+    faqModuleHeat,
+    faqTopicModuleBreakdown,
+    trendData,
+  ] = await Promise.all([
+    rpcKpisNorm(filters),
+    rpcGroupDistinct(filters, "industry", { n: 15 }),
+    rpcGroupDistinct(filters, "segment", { n: 8 }),
+    rpcGroupDistinct(filters, "country", { n: 15 }),
+    rpcGroupDistinct(filters, "insight_type_display", { n: 20 }),
+    rpcGroupDistinct(filters, "insight_subtype_display", { scope: "pain", n: 10 }),
+    rpcPainThemeSiblings(filters, 2),
+    rpcTopBreakdowns(filters, "insight_subtype_display", "module_display", {
+      scope: "pain",
+      topPrimary: 2,
+      topBreakdown: 6,
+    }),
+    rpcHeatmap(filters, "insight_subtype_display", "segment", {
+      scope: "pain",
+      nRows: 15,
+      nCols: 8,
+    }),
+    rpcModuleDemand(filters, 12),
+    rpcGroupDistinct(filters, "feature_display", { scope: "product_gap", n: 20 }),
+    rpcRevenueBy(filters, "feature_display", { scope: "product_gap", n: 20 }),
+    rpcSampleStats(gapFilters),
+    rpcStack(filters, "competitor_name", "competitor_relationship_display", {
+      scope: "competitive_signal",
+      excludeOwnBrand: true,
+      n: 12,
+    }),
+    rpcGroupDistinct(filters, "insight_subtype_display", { scope: "deal_friction", n: 10 }),
+    rpcTopBreakdowns(filters, "insight_subtype_display", "deal_stage", {
+      scope: "deal_friction",
+      topPrimary: 2,
+      topBreakdown: 8,
+    }),
+    rpcRevenueBy(filters, "insight_subtype_display", { scope: "deal_friction", n: 10 }),
+    rpcGroupDistinct(filters, "insight_subtype_display", { scope: "faq", n: 10 }),
+    rpcFaqModuleHeat(filters, 10, 6),
+    rpcFaqModuleBreakdown(filters, 2),
+    rpcMonthlyTrend(filters),
+  ]);
+
+  const t = totalTranscripts;
+  const topPains: PctPoint[] = topPainsRaw.map((p) => ({
+    ...p,
+    pct: t > 0 ? (p.value / t) * 100 : 0,
+  }));
+  const moduleDemand: PctPoint[] = moduleDemandRaw.map((p) => ({
+    ...p,
+    pct: t > 0 ? (p.value / t) * 100 : 0,
+  }));
+  const gapDeals = gapStats?.unique_deals ?? 0;
+  const byFreq: PctPoint[] = gapsByFreqRaw.map((p) => ({
+    ...p,
+    pct: gapDeals > 0 ? (p.value / gapDeals) * 100 : 0,
+  }));
+  const trendKeys = [
+    ...new Set(trendData.flatMap((d) => Object.keys(d).filter((k) => k !== "month"))),
+  ];
+
+  return {
+    kpis: {
+      insightsPerCall: kpis.insights_per_call.toFixed(1),
+      totalCalls: kpis.total_calls,
+      dealsMatched: kpis.deals_matched,
+      revenue: kpis.revenue,
+      callsWithInsights: t > 0 ? ((kpis.total_calls / t) * 100).toFixed(1) : "0.0",
+    },
+    composition: { byIndustry, bySegment, byCountry },
+    insightTypes,
+    pains: { topPains, painThemeSiblings, painByModuleBreakdown, painSegmentHeat },
+    moduleDemand,
+    gaps: { byFreq, byRevenue: gapsByRevenue },
+    competitors,
+    frictions: { top: fricTop, breakdown: fricBreakdown, byRevenue: fricByRevenue },
+    faqs: { top: faqTop, moduleHeat: faqModuleHeat, topicModuleBreakdown: faqTopicModuleBreakdown },
+    trend: { data: trendData, keys: trendKeys },
   };
 }

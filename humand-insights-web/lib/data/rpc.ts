@@ -314,10 +314,14 @@ export type CompetitorCountryRowRpc = {
   top_relationship: string;
 };
 
-async function rpcRows<T>(fn: string, filters: Filters): Promise<T[]> {
+async function rpcRows<T>(
+  fn: string,
+  filters: Filters,
+  extra: Record<string, unknown> = {},
+): Promise<T[]> {
   try {
     const supabase = getServiceClient();
-    const { data, error } = await supabase.rpc(fn, { f: filtersToJsonb(filters) });
+    const { data, error } = await supabase.rpc(fn, { f: filtersToJsonb(filters), ...extra });
     if (error) {
       console.warn(`[rpc.${fn}] error:`, error.message);
       return [];
@@ -396,6 +400,84 @@ export const rpcMigrationRows = (f: Filters) =>
   rpcRows<MigrationRowRpc>("rpc_migration_rows", f).then((rows) =>
     rows.map((r) => ({ ...r, revenue: Number(r.revenue) })),
   );
+
+// ─── executive-summary ────────────────────────────────────────────────
+
+export type BreakdownGroup = { name: string; data: NameValue[] };
+export type KpisNormRpc = {
+  total_calls: number;
+  deals_matched: number;
+  revenue: number;
+  insights_per_call: number;
+};
+
+async function rpcJson<T>(fn: string, filters: Filters, extra: Record<string, unknown> = {}, fallback: T): Promise<T> {
+  try {
+    const supabase = getServiceClient();
+    const { data, error } = await supabase.rpc(fn, { f: filtersToJsonb(filters), ...extra });
+    if (error) {
+      console.warn(`[rpc.${fn}] error:`, error.message);
+      return fallback;
+    }
+    return (data as T) ?? fallback;
+  } catch (exc) {
+    console.warn(`[rpc.${fn}] threw:`, exc);
+    return fallback;
+  }
+}
+
+export async function rpcKpisNorm(filters: Filters): Promise<KpisNormRpc> {
+  const empty: KpisNormRpc = { total_calls: 0, deals_matched: 0, revenue: 0, insights_per_call: 0 };
+  const row = await rpcRows<KpisNormRpc>("rpc_kpis_norm", filters);
+  const r = row[0];
+  if (!r) return empty;
+  return {
+    total_calls: Number(r.total_calls ?? 0),
+    deals_matched: Number(r.deals_matched ?? 0),
+    revenue: Number(r.revenue ?? 0),
+    insights_per_call: Number(r.insights_per_call ?? 0),
+  };
+}
+
+export const rpcModuleDemand = (f: Filters, n = 12) =>
+  rpcRows<{ name: string; value: number | string }>("rpc_module_demand", f, { n }).then((rows) =>
+    rows.map((r) => ({ name: r.name, value: Number(r.value) })),
+  );
+
+export const rpcTopBreakdowns = (
+  f: Filters,
+  primaryDim: string,
+  breakdownDim: string,
+  opts: { scope?: string | null; topPrimary?: number; topBreakdown?: number } = {},
+) =>
+  rpcJson<BreakdownGroup[]>(
+    "rpc_top_breakdowns",
+    f,
+    {
+      primary_dim: primaryDim,
+      breakdown_dim: breakdownDim,
+      scope: opts.scope ?? null,
+      top_primary: opts.topPrimary ?? 2,
+      top_breakdown: opts.topBreakdown ?? 6,
+    },
+    [],
+  );
+
+export const rpcPainThemeSiblings = (f: Filters, topN = 2) =>
+  rpcJson<BreakdownGroup[]>("rpc_pain_theme_siblings", f, { top_n: topN }, []);
+
+export const rpcFaqModuleBreakdown = (f: Filters, topTopics = 2) =>
+  rpcJson<BreakdownGroup[]>("rpc_faq_module_breakdown", f, { top_topics: topTopics }, []);
+
+export const rpcFaqModuleHeat = (f: Filters, topModules = 10, topTopics = 6) =>
+  rpcJson<HeatmapResult>("rpc_faq_module_heat", f, { top_modules: topModules, top_topics: topTopics }, {
+    rowLabels: [],
+    colLabels: [],
+    values: [],
+  });
+
+export const rpcMonthlyTrend = (f: Filters, scope?: string | null) =>
+  rpcJson<Array<Record<string, string | number>>>("rpc_monthly_trend", f, { scope: scope ?? null }, []);
 
 // ─── Feature flag: usar RPC en lugar de buildXData JS ─────────────────
 
