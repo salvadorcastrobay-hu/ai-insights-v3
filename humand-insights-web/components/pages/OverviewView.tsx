@@ -33,7 +33,7 @@ function DeltaBadge({ deltaPct }: { deltaPct: number | null }) {
 }
 
 export function OverviewView({ data, coveragePct }: Props) {
-  const { kpis, recap, topPains, topFaqs, topIndustries, topSegments, wonLostPains } = data;
+  const { kpis, recap, topPains, topFaqs, topIndustries, topSegments, wonLostPains, winRateBaseline } = data;
   const maxPain = topPains.reduce((m, p) => Math.max(m, p.pct), 0) || 1;
 
   return (
@@ -179,33 +179,36 @@ export function OverviewView({ data, coveragePct }: Props) {
         </ChartCard>
       </section>
 
-      {/* Pains en deals perdidos vs ganados */}
+      {/* Win-rate por pain */}
       {wonLostPains.length > 0 ? (
-        <ChartCard title="Pains en deals perdidos vs. ganados">
+        <ChartCard title="Win-rate por pain">
           <p className="mb-3 text-[12px] text-[var(--color-text-secondary)]">
-            % de demos donde apareció cada pain, dentro de los deals perdidos vs. los ganados.
-            La mayoría pesa más en ganados (articular el dolor = más engagement = más conversión).
-            Mirá el <b>gap</b>: 🔴 = relativamente más en perdidos · 🟢 = más en ganados.
+            De los deals <b>cerrados</b> donde apareció cada pain, qué % ganamos.
+            Comparado con el win-rate general (<b>{winRateBaseline}%</b>):
+            por encima 🟢 = ese dolor acompaña deals que cerramos · por debajo 🔴 = ojo.
           </p>
           <Table>
             <Thead>
               <Tr>
                 <Th>Pain</Th>
-                <Th>En perdidos</Th>
-                <Th>En ganados</Th>
-                <Th>Gap</Th>
+                <Th>Deals cerrados</Th>
+                <Th>Win-rate</Th>
+                <Th>vs. general</Th>
               </Tr>
             </Thead>
             <Tbody>
               {wonLostPains.map((p) => {
-                const gap = Math.round((p.lostPct - p.wonPct) * 10) / 10;
+                const diff = Math.round((p.winRate - winRateBaseline) * 10) / 10;
+                const above = diff >= 0;
                 return (
                   <Tr key={p.name}>
                     <Td>{p.name}</Td>
-                    <Td className="font-semibold text-rose-600">{p.lostPct}%</Td>
-                    <Td className="font-semibold text-emerald-700">{p.wonPct}%</Td>
+                    <Td className="tabular-nums text-[var(--color-text-secondary)]">{fmt(p.closed)}</Td>
+                    <Td className={`font-semibold tabular-nums ${above ? "text-emerald-700" : "text-rose-600"}`}>
+                      {p.winRate}%
+                    </Td>
                     <Td className="tabular-nums">
-                      {gap > 0 ? `🔴 +${gap}` : gap < 0 ? `🟢 ${gap}` : "—"} pts
+                      {above ? "🟢 +" : "🔴 "}{diff} pts
                     </Td>
                   </Tr>
                 );
