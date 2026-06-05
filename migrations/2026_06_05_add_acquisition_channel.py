@@ -30,24 +30,37 @@ LANGUAGE plpgsql IMMUTABLE
 SET search_path = public
 AS $$
 DECLARE
+    p jsonb;
     src text;
     det text;
     v text;
     lv text;
 BEGIN
     IF props IS NULL THEN RETURN 'Otros'; END IF;
+    -- raw_deals.properties está doble-encodeada: jsonb cuyo valor es un string
+    -- de JSON. Si es string, re-parseamos el JSON interno (igual que asObject()
+    -- en TS hace JSON.parse). Si ya es objeto, lo usamos directo.
+    IF jsonb_typeof(props) = 'string' THEN
+        BEGIN
+            p := (props #>> '{}')::jsonb;
+        EXCEPTION WHEN others THEN
+            RETURN 'Otros';
+        END;
+    ELSE
+        p := props;
+    END IF;
     src := COALESCE(
-        NULLIF(btrim(props->>'origen_del_contacto__from_where_we_got_the_call_'), ''),
-        NULLIF(btrim(props->>'deal_source__bdr_'), ''),
-        NULLIF(btrim(props->>'sqo_source_channel'), ''),
-        NULLIF(btrim(props->>'hs_analytics_source'), ''),
-        NULLIF(btrim(props->>'hs_object_source_label'), '')
+        NULLIF(btrim(p->>'origen_del_contacto__from_where_we_got_the_call_'), ''),
+        NULLIF(btrim(p->>'deal_source__bdr_'), ''),
+        NULLIF(btrim(p->>'sqo_source_channel'), ''),
+        NULLIF(btrim(p->>'hs_analytics_source'), ''),
+        NULLIF(btrim(p->>'hs_object_source_label'), '')
     );
     det := COALESCE(
-        NULLIF(btrim(props->>'inbound_source'), ''),
-        NULLIF(btrim(props->>'partner_name'), ''),
-        NULLIF(btrim(props->>'hs_analytics_source_data_1'), ''),
-        NULLIF(btrim(props->>'hs_analytics_latest_source_data_1'), '')
+        NULLIF(btrim(p->>'inbound_source'), ''),
+        NULLIF(btrim(p->>'partner_name'), ''),
+        NULLIF(btrim(p->>'hs_analytics_source_data_1'), ''),
+        NULLIF(btrim(p->>'hs_analytics_latest_source_data_1'), '')
     );
     FOREACH v IN ARRAY ARRAY[src, det] LOOP
         IF v IS NULL THEN CONTINUE; END IF;
