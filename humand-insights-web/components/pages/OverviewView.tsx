@@ -33,7 +33,7 @@ function DeltaBadge({ deltaPct }: { deltaPct: number | null }) {
 }
 
 export function OverviewView({ data, coveragePct }: Props) {
-  const { kpis, recap, topPains, topFaqs, topIndustries, topSegments } = data;
+  const { kpis, recap, topPains, topFaqs, topIndustries, topSegments, wonLostPains } = data;
   const maxPain = topPains.reduce((m, p) => Math.max(m, p.pct), 0) || 1;
 
   return (
@@ -188,6 +188,41 @@ export function OverviewView({ data, coveragePct }: Props) {
           <TopList rows={topSegments} />
         </ChartCard>
       </section>
+
+      {/* Pains en deals perdidos vs ganados */}
+      {wonLostPains.length > 0 ? (
+        <ChartCard title="Pains en deals perdidos vs. ganados">
+          <p className="mb-3 text-[12px] text-[var(--color-text-secondary)]">
+            % de demos donde apareció cada pain, dentro de los deals perdidos vs. los ganados.
+            Si pesa más en perdidos (🔴), es señal de que ese dolor influye en perder.
+          </p>
+          <Table>
+            <Thead>
+              <Tr>
+                <Th>Pain</Th>
+                <Th>En perdidos</Th>
+                <Th>En ganados</Th>
+                <Th>Gap</Th>
+              </Tr>
+            </Thead>
+            <Tbody>
+              {wonLostPains.map((p) => {
+                const gap = Math.round((p.lostPct - p.wonPct) * 10) / 10;
+                return (
+                  <Tr key={p.name}>
+                    <Td>{p.name}</Td>
+                    <Td className="font-semibold text-rose-600">{p.lostPct}%</Td>
+                    <Td className="font-semibold text-emerald-700">{p.wonPct}%</Td>
+                    <Td className="tabular-nums">
+                      {gap > 0 ? `🔴 +${gap}` : gap < 0 ? `🟢 ${gap}` : "—"} pts
+                    </Td>
+                  </Tr>
+                );
+              })}
+            </Tbody>
+          </Table>
+        </ChartCard>
+      ) : null}
     </div>
   );
 }
