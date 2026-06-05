@@ -1,11 +1,13 @@
 import { ExecutiveSummaryView } from "@/components/pages/ExecutiveSummaryView";
 import { DataQualityFooter } from "@/components/layout/DataQualityFooter";
-import { buildExecutiveSummaryDataRpc } from "@/lib/data/executive-summary-data";
-import type { SampleStats } from "@/lib/data/sample-stats";
-import { rpcSampleStats } from "@/lib/data/rpc";
+import { applyFilters } from "@/lib/data/filters";
+import { buildExecutiveSummaryData } from "@/lib/data/executive-summary-data";
+import { computeSampleStats } from "@/lib/data/sample-stats";
 import { parseFiltersFromSearchParams } from "@/lib/data/search-params-filters";
-import { loadTotalTranscriptsCount } from "@/lib/supabase/queries";
-import type { InsightRow } from "@/lib/supabase/types";
+import { prepareRowsForClient } from "@/lib/data/redact-quotes";
+import { loadInsights, loadTotalTranscriptsCount } from "@/lib/supabase/queries";
+import { getServerUserRoles } from "@/lib/supabase/server";
+import type { AppRole } from "@/lib/auth/roles";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -14,35 +16,27 @@ type PageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
-// RPC-native: arma todo desde la MV (sin loadInsights). Validado vs JS.
+// NOTA: revertido a JS (loadInsights). La versión RPC (buildExecutiveSummaryDataRpc)
+// disparaba ~20 RPCs en paralelo, varias con self-joins de co-ocurrencia sobre
+// la MV (189K) → saturaba la DB y timeouteaban TODAS las RPCs en cascada.
+// Pendiente: optimizar esas RPCs (menos paralelismo + co-ocurrencia indexada)
+// antes de re-habilitar el camino RPC en la landing.
 export default async function Page({ searchParams }: PageProps) {
   const params = await searchParams;
   const filters = parseFiltersFromSearchParams(params);
 
-  const [totalTranscripts, s] = await Promise.all([
+  const [rows, totalTranscripts, userRoles] = await Promise.all([
+    loadInsights(process.env.NEXT_PUBLIC_PROMPT_VERSION ?? "v3.0"),
     loadTotalTranscriptsCount(),
-    rpcSampleStats(filters),
+    getServerUserRoles(),
   ]);
-  const data = await buildExecutiveSummaryDataRpc(filters, totalTranscripts);
-
-  const uniqueCalls = s?.unique_calls ?? 0;
-  const stats: SampleStats = {
-    uniqueCalls,
-    uniqueDeals: s?.unique_deals ?? 0,
-    insightsCount: s?.insights_count ?? 0,
-    totalCalls: totalTranscripts,
-    coveragePct:
-      totalTranscripts > 0 ? Math.round((uniqueCalls / totalTranscripts) * 1000) / 10 : 0,
-    periodStart: s?.period_start ?? null,
-    periodEnd: s?.period_end ?? null,
-    avgConfidence: s?.avg_confidence ?? null,
-    highConfidencePct: s?.high_confidence_pct ?? null,
-    generatedAt: new Date().toISOString(),
-  };
-
+  const data = buildExecutiveSummaryData(rows, totalTranscripts, filters);
+  const filteredRows = applyFilters(rows, filters);
+  const filteredRowsSafe = prepareRowsForClient(filteredRows, userRoles as AppRole[]);
+  const stats = computeSampleStats(filteredRows, totalTranscripts);
   return (
     <>
-      <ExecutiveSummaryView data={data} filteredRows={[] as InsightRow[]} />
+      <ExecutiveSummaryView data={data} filteredRows={filteredRowsSafe} />
       <DataQualityFooter stats={stats} pageLabel="Executive Summary" />
     </>
   );
