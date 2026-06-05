@@ -70,7 +70,7 @@ export function OverviewView({ data, coveragePct }: Props) {
         <div className="space-y-1.5 text-[13px]">
           <RecapLine label="▲ Subieron" tone="up" items={recap.risers.map((r) => `${r.name} +${r.delta}`)} empty="sin cambios" />
           <RecapLine label="▼ Bajaron" tone="down" items={recap.fallers.map((r) => `${r.name} ${r.delta}`)} empty="sin cambios" />
-          <RecapLine label="🆕 Competidores" tone="new" items={recap.newCompetitors} empty="ninguno nuevo" />
+          <RecapLine label="⚔ Competidores top" tone="new" items={recap.topCompetitors} empty="sin menciones" />
         </div>
       </section>
 
