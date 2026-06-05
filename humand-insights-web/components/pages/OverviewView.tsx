@@ -194,7 +194,8 @@ export function OverviewView({ data, coveragePct }: Props) {
         <ChartCard title="Pains en deals perdidos vs. ganados">
           <p className="mb-3 text-[12px] text-[var(--color-text-secondary)]">
             % de demos donde apareció cada pain, dentro de los deals perdidos vs. los ganados.
-            Si pesa más en perdidos (🔴), es señal de que ese dolor influye en perder.
+            La mayoría pesa más en ganados (articular el dolor = más engagement = más conversión).
+            Mirá el <b>gap</b>: 🔴 = relativamente más en perdidos · 🟢 = más en ganados.
           </p>
           <Table>
             <Thead>
