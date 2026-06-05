@@ -8,13 +8,13 @@ import {
   type NameValuePct,
 } from "@/lib/data/rpc";
 
-/** Pain con su presencia en deals ganados vs perdidos (% de cada cohorte). */
+/** Win-rate de un pain: de los deals cerrados donde apareció, % que ganamos. */
 export type WonLostPain = {
   name: string;
-  wonPct: number;
-  lostPct: number;
-  wonDemos: number;
-  lostDemos: number;
+  winRate: number; // won / (won + lost) * 100
+  closed: number; // deals cerrados (won + lost) donde apareció el pain
+  won: number;
+  lost: number;
 };
 
 /** Cambio en % de demos (share) de esta semana vs. el promedio del baseline. */
@@ -62,6 +62,8 @@ export type OverviewData = {
   topIndustries: NameValue[];
   topSegments: NameValue[];
   wonLostPains: WonLostPain[];
+  /** win-rate general (deals cerrados ganados / total cerrados) como baseline. */
+  winRateBaseline: number;
 };
 
 function isoDaysAgo(days: number): string {
@@ -159,24 +161,31 @@ export async function buildOverviewData(filters: Filters): Promise<OverviewData>
       excludeOwnBrand: true,
       n: 200,
     }),
-    rpcWonLostPains(filters, 8),
+    rpcWonLostPains(filters, 15),
   ]);
 
-  // Pains presentes en deals perdidos vs ganados (% de cada cohorte).
-  // Ordenados por mayor presencia en perdidos (señal de que pesan en perder).
+  // Win-rate por pain: de los deals cerrados (won+lost) donde apareció el pain,
+  // qué % ganamos. Se compara contra el win-rate general (baseline).
+  const wlWonTotal = wonLostRaw[0]?.won_total ?? 0;
+  const wlLostTotal = wonLostRaw[0]?.lost_total ?? 0;
+  const winRateBaseline =
+    wlWonTotal + wlLostTotal > 0
+      ? Math.round((wlWonTotal / (wlWonTotal + wlLostTotal)) * 1000) / 10
+      : 0;
   const wonLostPains: WonLostPain[] = wonLostRaw
-    .map((r) => ({
-      name: r.pain,
-      wonPct: r.won_total > 0 ? Math.round((r.won_demos / r.won_total) * 1000) / 10 : 0,
-      lostPct: r.lost_total > 0 ? Math.round((r.lost_demos / r.lost_total) * 1000) / 10 : 0,
-      wonDemos: r.won_demos,
-      lostDemos: r.lost_demos,
-    }))
-    // Ordenado por gap (lost − won) desc: arriba los pains relativamente más
-    // asociados a PERDER. (En esta data casi todos pesan más en ganados —
-    // articular el dolor = más engagement = más conversión.)
-    .sort((a, b) => b.lostPct - b.wonPct - (a.lostPct - a.wonPct))
-    .slice(0, 6);
+    .map((r) => {
+      const closed = r.won_demos + r.lost_demos;
+      return {
+        name: r.pain,
+        won: r.won_demos,
+        lost: r.lost_demos,
+        closed,
+        winRate: closed > 0 ? Math.round((r.won_demos / closed) * 1000) / 10 : 0,
+      };
+    })
+    .filter((p) => p.closed >= 10) // evita ruido de pains con pocos deals cerrados
+    .sort((a, b) => b.winRate - a.winRate)
+    .slice(0, 8);
 
   // top pains all-time con pct sobre demos del set
   const callsBasis = stats?.unique_calls ?? 0;
@@ -253,6 +262,7 @@ export async function buildOverviewData(filters: Filters): Promise<OverviewData>
     topIndustries,
     topSegments,
     wonLostPains,
+    winRateBaseline,
   };
 }
 
