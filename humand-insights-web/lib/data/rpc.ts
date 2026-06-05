@@ -342,6 +342,61 @@ export const rpcCompetitorsByCountry = (f: Filters) =>
     rows.map((r) => ({ ...r, mentions: Number(r.mentions) })),
   );
 
+// ─── competitive-intelligence ─────────────────────────────────────────
+
+export type CompetitiveKpisRpc = {
+  relevant_competitors: number;
+  deals_with_signal: number;
+  total_deals: number;
+  comp_revenue: number;
+};
+export type MigrationRowRpc = {
+  id: string;
+  company: string;
+  competitor: string;
+  relationship: string;
+  industry: string;
+  country: string;
+  segment: string;
+  revenue: number;
+  stage: string;
+  owner: string;
+  deal: string;
+};
+
+export async function rpcCompetitiveKpis(filters: Filters): Promise<CompetitiveKpisRpc> {
+  const empty: CompetitiveKpisRpc = {
+    relevant_competitors: 0,
+    deals_with_signal: 0,
+    total_deals: 0,
+    comp_revenue: 0,
+  };
+  try {
+    const supabase = getServiceClient();
+    const { data, error } = await supabase.rpc("rpc_competitive_kpis", { f: filtersToJsonb(filters) });
+    if (error) {
+      console.warn("[rpc.competitiveKpis] error:", error.message);
+      return empty;
+    }
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row) return empty;
+    return {
+      relevant_competitors: Number(row.relevant_competitors ?? 0),
+      deals_with_signal: Number(row.deals_with_signal ?? 0),
+      total_deals: Number(row.total_deals ?? 0),
+      comp_revenue: Number(row.comp_revenue ?? 0),
+    };
+  } catch (exc) {
+    console.warn("[rpc.competitiveKpis] threw:", exc);
+    return empty;
+  }
+}
+
+export const rpcMigrationRows = (f: Filters) =>
+  rpcRows<MigrationRowRpc>("rpc_migration_rows", f).then((rows) =>
+    rows.map((r) => ({ ...r, revenue: Number(r.revenue) })),
+  );
+
 // ─── Feature flag: usar RPC en lugar de buildXData JS ─────────────────
 
 /** Si `USE_RPC_AGGREGATIONS=true`, las pages migradas usan las RPCs.
