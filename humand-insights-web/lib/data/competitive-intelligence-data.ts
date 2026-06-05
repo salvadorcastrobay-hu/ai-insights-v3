@@ -7,6 +7,13 @@ import {
   stackBy,
 } from "@/lib/data/dashboard-aggregations";
 import { formatCurrency, uniqueDealsRevenue } from "@/lib/data/computations";
+import {
+  rpcCompetitiveKpis,
+  rpcGroupDistinct,
+  rpcHeatmap,
+  rpcMigrationRows,
+  rpcStack,
+} from "@/lib/data/rpc";
 import type { InsightRow } from "@/lib/supabase/types";
 
 export type NameValue = { name: string; value: number };
@@ -141,6 +148,98 @@ export function buildCompetitiveIntelligenceData(
     segmentStack: stackBy(comp, "competitor_name", "segment", 10, 6),
     industryStack: stackBy(comp, "competitor_name", "industry", 10, 5),
     stageStack: stackBy(comp, "competitor_name", "deal_stage", 10, 6),
+    migrationRows,
+  };
+}
+
+/**
+ * Versión RPC-native: arma CompetitiveIntelligenceData desde la MV (sin
+ * loadInsights). Mismo shape que buildCompetitiveIntelligenceData.
+ */
+export async function buildCompetitiveIntelligenceDataRpc(
+  filters: Filters,
+): Promise<CompetitiveIntelligenceData> {
+  const [
+    competitorCounts,
+    relationStack,
+    countryHeat,
+    segmentStack,
+    industryStack,
+    stageStack,
+    kpis,
+    migRows,
+  ] = await Promise.all([
+    rpcGroupDistinct(filters, "competitor_name", {
+      scope: "competitive_signal",
+      excludeOwnBrand: true,
+      n: 15,
+    }),
+    rpcStack(filters, "competitor_name", "competitor_relationship_display", {
+      scope: "competitive_signal",
+      excludeOwnBrand: true,
+      n: 10,
+      topStackN: 6,
+    }),
+    rpcHeatmap(filters, "competitor_name", "country", {
+      scope: "competitive_signal",
+      excludeOwnBrand: true,
+      nRows: 10,
+      nCols: 12,
+    }),
+    rpcStack(filters, "competitor_name", "segment", {
+      scope: "competitive_signal",
+      excludeOwnBrand: true,
+      n: 10,
+      topStackN: 6,
+    }),
+    rpcStack(filters, "competitor_name", "industry", {
+      scope: "competitive_signal",
+      excludeOwnBrand: true,
+      n: 10,
+      topStackN: 5,
+    }),
+    rpcStack(filters, "competitor_name", "deal_stage", {
+      scope: "competitive_signal",
+      excludeOwnBrand: true,
+      n: 10,
+      topStackN: 6,
+    }),
+    rpcCompetitiveKpis(filters),
+    rpcMigrationRows(filters),
+  ]);
+
+  const migrationRows: MigrationRow[] = migRows.map((r) => ({
+    id: r.id,
+    company: r.company,
+    competitor: r.competitor,
+    relationship: r.relationship,
+    industry: r.industry,
+    country: r.country,
+    segment: r.segment,
+    revenue: r.revenue,
+    revenueDisplay: r.revenue ? formatCurrency(r.revenue) : "—",
+    stage: r.stage,
+    owner: r.owner,
+    deal: r.deal,
+  }));
+
+  return {
+    isEmpty: competitorCounts.length === 0,
+    kpis: {
+      relevantCompetitors: kpis.relevant_competitors,
+      dealsWithSignal: kpis.deals_with_signal,
+      dealsPct:
+        kpis.total_deals > 0
+          ? ((kpis.deals_with_signal / kpis.total_deals) * 100).toFixed(1)
+          : "0.0",
+      compRevenue: kpis.comp_revenue,
+    },
+    competitorCounts,
+    relationStack,
+    countryHeat,
+    segmentStack,
+    industryStack,
+    stageStack,
     migrationRows,
   };
 }
