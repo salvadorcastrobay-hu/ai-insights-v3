@@ -33,7 +33,7 @@ function DeltaBadge({ deltaPct }: { deltaPct: number | null }) {
 }
 
 export function OverviewView({ data, coveragePct }: Props) {
-  const { kpis, recap, topPains, topFaqs, topIndustries, topSegments } = data;
+  const { kpis, recap, topPains, topFaqs, topIndustries, topSegments, wonLostPains, winRateBaseline } = data;
   const maxPain = topPains.reduce((m, p) => Math.max(m, p.pct), 0) || 1;
 
   return (
@@ -178,6 +178,45 @@ export function OverviewView({ data, coveragePct }: Props) {
           <TopList rows={topFaqs} />
         </ChartCard>
       </section>
+
+      {/* Win-rate por pain */}
+      {wonLostPains.length > 0 ? (
+        <ChartCard title="Win-rate por pain">
+          <p className="mb-3 text-[12px] text-[var(--color-text-secondary)]">
+            De los deals <b>cerrados</b> donde apareció cada pain, qué % ganamos.
+            Comparado con el win-rate general (<b>{winRateBaseline}%</b>):
+            por encima 🟢 = ese dolor acompaña deals que cerramos · por debajo 🔴 = ojo.
+          </p>
+          <Table>
+            <Thead>
+              <Tr>
+                <Th>Pain</Th>
+                <Th>Deals cerrados</Th>
+                <Th>Win-rate</Th>
+                <Th>vs. general</Th>
+              </Tr>
+            </Thead>
+            <Tbody>
+              {wonLostPains.map((p) => {
+                const diff = Math.round((p.winRate - winRateBaseline) * 10) / 10;
+                const above = diff >= 0;
+                return (
+                  <Tr key={p.name}>
+                    <Td>{p.name}</Td>
+                    <Td className="tabular-nums text-[var(--color-text-secondary)]">{fmt(p.closed)}</Td>
+                    <Td className={`font-semibold tabular-nums ${above ? "text-emerald-700" : "text-rose-600"}`}>
+                      {p.winRate}%
+                    </Td>
+                    <Td className="tabular-nums">
+                      {above ? "🟢 +" : "🔴 "}{diff} pts
+                    </Td>
+                  </Tr>
+                );
+              })}
+            </Tbody>
+          </Table>
+        </ChartCard>
+      ) : null}
 
       {/* Industrias + segmentos */}
       <section className="grid gap-4 lg:grid-cols-2">
