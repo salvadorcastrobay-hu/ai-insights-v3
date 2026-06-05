@@ -240,6 +240,108 @@ export async function rpcSampleStats(filters: Filters): Promise<SampleStatsRpc |
   }
 }
 
+// ─── RPC de pivot + bespoke (regional-gtm) ────────────────────────────
+
+export type StackResult = { data: Array<Record<string, string | number>>; stackKeys: string[] };
+export type HeatmapResult = { rowLabels: string[]; colLabels: string[]; values: number[][] };
+
+type StackOpts = ScopeOpts & { topStackN?: number };
+
+export async function rpcStack(
+  filters: Filters,
+  yDim: string,
+  stackDim: string,
+  opts: StackOpts = {},
+): Promise<StackResult> {
+  const empty: StackResult = { data: [], stackKeys: [] };
+  try {
+    const supabase = getServiceClient();
+    const { data, error } = await supabase.rpc("rpc_stack", {
+      f: filtersToJsonb(filters),
+      y_dim: yDim,
+      stack_dim: stackDim,
+      scope: opts.scope ?? null,
+      exclude_own_brand: opts.excludeOwnBrand ?? false,
+      top_n: opts.n ?? 10,
+      top_stack_n: opts.topStackN ?? 8,
+    });
+    if (error) {
+      console.warn("[rpc.stack] error:", error.message);
+      return empty;
+    }
+    return (data as StackResult) ?? empty;
+  } catch (exc) {
+    console.warn("[rpc.stack] threw:", exc);
+    return empty;
+  }
+}
+
+export async function rpcHeatmap(
+  filters: Filters,
+  rowDim: string,
+  colDim: string,
+  opts: ScopeOpts & { nRows?: number; nCols?: number } = {},
+): Promise<HeatmapResult> {
+  const empty: HeatmapResult = { rowLabels: [], colLabels: [], values: [] };
+  try {
+    const supabase = getServiceClient();
+    const { data, error } = await supabase.rpc("rpc_heatmap", {
+      f: filtersToJsonb(filters),
+      row_dim: rowDim,
+      col_dim: colDim,
+      scope: opts.scope ?? null,
+      exclude_own_brand: opts.excludeOwnBrand ?? false,
+      n_rows: opts.nRows ?? 15,
+      n_cols: opts.nCols ?? 10,
+    });
+    if (error) {
+      console.warn("[rpc.heatmap] error:", error.message);
+      return empty;
+    }
+    return (data as HeatmapResult) ?? empty;
+  } catch (exc) {
+    console.warn("[rpc.heatmap] threw:", exc);
+    return empty;
+  }
+}
+
+export type PipelineGridRow = { segment: string; region: string; revenue: number; deals: number };
+export type PainRegionRow = { region: string; pain: string; demos: number; pct: number };
+export type CompetitorCountryRowRpc = {
+  country: string;
+  competitor: string;
+  mentions: number;
+  top_relationship: string;
+};
+
+async function rpcRows<T>(fn: string, filters: Filters): Promise<T[]> {
+  try {
+    const supabase = getServiceClient();
+    const { data, error } = await supabase.rpc(fn, { f: filtersToJsonb(filters) });
+    if (error) {
+      console.warn(`[rpc.${fn}] error:`, error.message);
+      return [];
+    }
+    return (data ?? []) as T[];
+  } catch (exc) {
+    console.warn(`[rpc.${fn}] threw:`, exc);
+    return [];
+  }
+}
+
+export const rpcPipelineGrid = (f: Filters) =>
+  rpcRows<PipelineGridRow>("rpc_pipeline_grid", f).then((rows) =>
+    rows.map((r) => ({ ...r, revenue: Number(r.revenue), deals: Number(r.deals) })),
+  );
+export const rpcPainRegionPct = (f: Filters) =>
+  rpcRows<PainRegionRow>("rpc_pain_region_pct", f).then((rows) =>
+    rows.map((r) => ({ ...r, demos: Number(r.demos), pct: Number(r.pct) })),
+  );
+export const rpcCompetitorsByCountry = (f: Filters) =>
+  rpcRows<CompetitorCountryRowRpc>("rpc_competitors_by_country", f).then((rows) =>
+    rows.map((r) => ({ ...r, mentions: Number(r.mentions) })),
+  );
+
 // ─── Feature flag: usar RPC en lugar de buildXData JS ─────────────────
 
 /** Si `USE_RPC_AGGREGATIONS=true`, las pages migradas usan las RPCs.

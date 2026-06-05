@@ -5,6 +5,13 @@ import {
   stackBy,
 } from "@/lib/data/dashboard-aggregations";
 import { formatCurrency } from "@/lib/data/computations";
+import {
+  rpcCompetitorsByCountry,
+  rpcHeatmap,
+  rpcPainRegionPct,
+  rpcPipelineGrid,
+  rpcStack,
+} from "@/lib/data/rpc";
 import type { InsightRow } from "@/lib/supabase/types";
 
 export type NameValue = { name: string; value: number };
@@ -292,3 +299,118 @@ export function buildRegionalGtmData(
   };
 }
 
+
+const OFFICIAL_REGION_ORDER = ["HISPAM", "Brazil", "EMEA", "ANGLO AMERICA", "APAC", "MENA"];
+
+/**
+ * Versión RPC-native de buildRegionalGtmData: arma la misma RegionalGtmData
+ * desde Postgres (MV normalizada) sin cargar las ~150K filas a Node.
+ */
+export async function buildRegionalGtmDataRpc(filters: Filters): Promise<RegionalGtmData> {
+  const [countryInsight, moduleRegionHeat, gridRows, painRows, compRows] = await Promise.all([
+    rpcStack(filters, "country", "insight_type_display", { n: 15, topStackN: 8 }),
+    rpcHeatmap(filters, "module_display", "region", { nRows: 15, nCols: 8 }),
+    rpcPipelineGrid(filters),
+    rpcPainRegionPct(filters),
+    rpcCompetitorsByCountry(filters),
+  ]);
+
+  // ── Pipeline grid + KPIs ──
+  const regionTotals = new Map<string, { revenue: number; deals: number }>();
+  const segTotals = new Map<string, number>();
+  const cellMap = new Map<string, { revenue: number; deals: number }>();
+  const segSet = new Set<string>();
+  const regionSet = new Set<string>();
+  for (const r of gridRows) {
+    segSet.add(r.segment);
+    regionSet.add(r.region);
+    cellMap.set(`${r.segment}::${r.region}`, { revenue: r.revenue, deals: r.deals });
+    const rt = regionTotals.get(r.region) ?? { revenue: 0, deals: 0 };
+    rt.revenue += r.revenue;
+    rt.deals += r.deals;
+    regionTotals.set(r.region, rt);
+    segTotals.set(r.segment, (segTotals.get(r.segment) ?? 0) + r.revenue);
+  }
+  const totalPipeline = [...regionTotals.values()].reduce((a, b) => a + b.revenue, 0);
+  let topRegion = "—";
+  let topRegionPct = 0;
+  let highestAvgRegion = "—";
+  let highestAvgValue = 0;
+  let highestAvgDeals = 0;
+  for (const [region, r] of regionTotals) {
+    const pct = totalPipeline > 0 ? (r.revenue / totalPipeline) * 100 : 0;
+    if (pct > topRegionPct) {
+      topRegionPct = pct;
+      topRegion = region;
+    }
+    const avg = r.deals > 0 ? r.revenue / r.deals : 0;
+    if (avg > highestAvgValue) {
+      highestAvgValue = avg;
+      highestAvgRegion = region;
+      highestAvgDeals = r.deals;
+    }
+  }
+  const regionList = [...regionSet].sort(
+    (a, b) => (regionTotals.get(b)?.revenue ?? 0) - (regionTotals.get(a)?.revenue ?? 0),
+  );
+  const segmentList = [...segSet].sort((a, b) => (segTotals.get(b) ?? 0) - (segTotals.get(a) ?? 0));
+  const cells: PipelineCell[][] = segmentList.map((segment) =>
+    regionList.map((region) => {
+      const b = cellMap.get(`${segment}::${region}`) ?? { revenue: 0, deals: 0 };
+      const avgTicket = b.deals > 0 ? b.revenue / b.deals : 0;
+      const display =
+        b.deals === 0
+          ? "—"
+          : `${formatCurrency(b.revenue)} · ${b.deals} deals · ${avgTicket > 0 ? formatCurrency(avgTicket) : "—"}`;
+      return { segment, region, revenue: b.revenue, deals: b.deals, avgTicket, display };
+    }),
+  );
+
+  // ── Pain × Region heatmap (%) ──
+  const presentRegions = new Set(painRows.map((p) => p.region));
+  const painRegions = [
+    ...OFFICIAL_REGION_ORDER.filter((r) => presentRegions.has(r)),
+    ...[...presentRegions].filter((r) => !OFFICIAL_REGION_ORDER.includes(r)),
+  ];
+  const painSumPct = new Map<string, number>();
+  for (const p of painRows) painSumPct.set(p.pain, (painSumPct.get(p.pain) ?? 0) + p.pct);
+  const painList = [...new Set(painRows.map((p) => p.pain))].sort(
+    (a, b) => (painSumPct.get(b) ?? 0) - (painSumPct.get(a) ?? 0),
+  );
+  const lookup = new Map<string, { pct: number; demos: number }>();
+  for (const p of painRows) lookup.set(`${p.pain}::${p.region}`, { pct: p.pct, demos: p.demos });
+  const values = painList.map((pain) =>
+    painRegions.map((region) => lookup.get(`${pain}::${region}`)?.pct ?? 0),
+  );
+  const absolute = painList.map((pain) =>
+    painRegions.map((region) => lookup.get(`${pain}::${region}`)?.demos ?? 0),
+  );
+
+  // ── Competitors by country ──
+  const competitorsByCountry: CompetitorCountryRow[] = compRows
+    .map((r) => ({
+      country: r.country,
+      competitor: r.competitor,
+      mentions: r.mentions,
+      topRelationship: r.top_relationship,
+    }))
+    .sort((a, b) => a.country.localeCompare(b.country) || b.mentions - a.mentions);
+  const competitorCountries = [...new Set(competitorsByCountry.map((r) => r.country))].sort();
+
+  return {
+    countryInsight,
+    painRegionHeatPct: { rowLabels: painList, colLabels: painRegions, values, absolute },
+    moduleRegionHeat,
+    pipelineKpis: {
+      topRegion,
+      topRegionPct: formatRegionPct(topRegionPct),
+      totalPipeline: formatCurrency(totalPipeline),
+      highestAvgRegion,
+      highestAvgValue: highestAvgValue > 0 ? formatCurrency(highestAvgValue) : "—",
+      highestAvgDeals,
+    },
+    pipelineGrid: { rowLabels: segmentList, colLabels: regionList, cells },
+    competitorsByCountry,
+    competitorCountries,
+  };
+}
