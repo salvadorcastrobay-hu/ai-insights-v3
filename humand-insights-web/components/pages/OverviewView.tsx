@@ -46,32 +46,66 @@ export function OverviewView({ data, coveragePct }: Props) {
           <Sparkles size={16} className="text-[var(--color-brand-500)]" />
           Qué pasó esta semana
           <span className="rounded-full border border-[var(--color-brand-100)] bg-[var(--color-bg-card)] px-2 py-0.5 text-[11px] font-normal text-[var(--color-text-secondary)]">
-            últimos {recap.windowDays} días · vs. {recap.windowDays} días previos
+            últimos {recap.windowDays} días · vs. promedio de las últimas {recap.baselineWeeks} semanas
           </span>
         </div>
 
+        {/* Actividad contextualizada */}
         <div className="mb-4 flex flex-wrap gap-8">
           <div>
             <div className="flex items-baseline gap-2">
-              <span className="text-[30px] font-semibold leading-none">{fmt(recap.demos.current)}</span>
-              <DeltaBadge deltaPct={recap.demos.deltaPct} />
+              <span className="text-[30px] font-semibold leading-none">{fmt(recap.activity.demosThisWeek)}</span>
+              <DeltaBadge deltaPct={recap.activity.deltaPct} />
             </div>
-            <div className="text-[12px] text-[var(--color-text-secondary)]">Demos</div>
+            <div className="text-[12px] text-[var(--color-text-secondary)]">
+              Demos · prom {fmt(recap.activity.avgWeeklyDemos)}/sem
+            </div>
           </div>
           <div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-[30px] font-semibold leading-none">{fmt(recap.deals.current)}</span>
-              <DeltaBadge deltaPct={recap.deals.deltaPct} />
+            <div className="text-[30px] font-semibold leading-none">{fmt(recap.activity.dealsThisWeek)}</div>
+            <div className="text-[12px] text-[var(--color-text-secondary)]">
+              Deals · prom {fmt(recap.activity.avgWeeklyDeals)}/sem
             </div>
-            <div className="text-[12px] text-[var(--color-text-secondary)]">Deals nuevos</div>
           </div>
         </div>
 
+        {/* Qué cambió en importancia (share) */}
         <div className="space-y-1.5 text-[13px]">
-          <RecapLine label="▲ Subieron" tone="up" items={recap.risers.map((r) => `${r.name} +${r.delta}`)} empty="sin cambios" />
-          <RecapLine label="▼ Bajaron" tone="down" items={recap.fallers.map((r) => `${r.name} ${r.delta}`)} empty="sin cambios" />
-          <RecapLine label="⚔ Competidores top" tone="new" items={recap.topCompetitors} empty="sin menciones" />
+          <ShareLine
+            label="▲ Ganó relevancia"
+            tone="up"
+            items={recap.gained.map((m) => `${m.name} ${m.baselinePct}%→${m.thisWeekPct}% (+${m.deltaPts}pts)`)}
+            empty="nada se destacó"
+          />
+          <ShareLine
+            label="▼ Perdió relevancia"
+            tone="down"
+            items={recap.lost.map((m) => `${m.name} ${m.baselinePct}%→${m.thisWeekPct}% (${m.deltaPts}pts)`)}
+            empty="nada cayó"
+          />
+          <ShareLine
+            label="⚔ Competidores en alza"
+            tone="new"
+            items={recap.competitorRisers.map((m) => `${m.name} (+${m.deltaPts}pts)`)}
+            empty="sin cambios"
+          />
         </div>
+
+        {/* Snapshot de la semana */}
+        {recap.snapshotPains.length > 0 ? (
+          <div className="mt-3 border-t border-[var(--color-brand-100)] pt-3">
+            <div className="mb-1.5 text-[12px] font-semibold text-[var(--color-text-secondary)]">
+              🔝 Lo más hablado esta semana
+            </div>
+            <div className="flex flex-wrap gap-x-2 gap-y-1.5 text-[13px]">
+              {recap.snapshotPains.map((p) => (
+                <span key={p.name} className="rounded-full bg-[var(--color-bg-card)] border border-[var(--color-brand-100)] px-2 py-0.5">
+                  {p.name} <span className="font-semibold">{p.pct}%</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </section>
 
       {/* KPIs */}
@@ -136,7 +170,7 @@ export function OverviewView({ data, coveragePct }: Props) {
   );
 }
 
-function RecapLine({
+function ShareLine({
   label,
   items,
   tone,

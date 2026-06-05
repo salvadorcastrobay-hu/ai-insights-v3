@@ -7,14 +7,22 @@ import {
   type NameValuePct,
 } from "@/lib/data/rpc";
 
-export type WeekDelta = {
-  current: number;
-  previous: number;
-  /** % cambio vs semana previa, redondeado. null si previous=0. */
-  deltaPct: number | null;
+/** Cambio en % de demos (share) de esta semana vs. el promedio del baseline. */
+export type ShareMover = {
+  name: string;
+  thisWeekPct: number;
+  baselinePct: number;
+  deltaPts: number; // thisWeekPct - baselinePct (puntos porcentuales)
 };
 
-export type RecapMover = { name: string; delta: number };
+export type Activity = {
+  demosThisWeek: number;
+  avgWeeklyDemos: number;
+  /** % vs. promedio semanal. null si no hay baseline. */
+  deltaPct: number | null;
+  dealsThisWeek: number;
+  avgWeeklyDeals: number;
+};
 
 export type OverviewData = {
   kpis: {
@@ -29,11 +37,13 @@ export type OverviewData = {
   };
   recap: {
     windowDays: number;
-    demos: WeekDelta;
-    deals: WeekDelta;
-    risers: RecapMover[]; // pains que más subieron
-    fallers: RecapMover[]; // pains que más bajaron
-    topCompetitors: string[]; // más mencionados esta semana (reales, no one-offs)
+    baselineWeeks: number;
+    activity: Activity;
+    gained: ShareMover[]; // pains que ganaron relevancia (share ↑)
+    lost: ShareMover[]; // pains que perdieron relevancia (share ↓)
+    snapshotPains: NameValuePct[]; // top pains de ESTA semana, en %
+    topQuestions: NameValue[]; // top preguntas de esta semana
+    competitorRisers: ShareMover[]; // competidores cuyo share de menciones creció
   };
   topPains: NameValuePct[];
   topFaqs: NameValue[];
@@ -48,46 +58,56 @@ function isoDaysAgo(days: number): string {
 }
 
 function withWindow(filters: Filters, start: string, end: string): Filters {
-  // Recap usa su propia ventana de fechas pero hereda el resto de filtros
-  // (región, segmento, etc.).
   return { ...filters, date_start: start, date_end: end };
 }
 
-function buildMoversAndNew(
+/**
+ * Share movers: compara el % de demos de cada label esta semana vs. su %
+ * promedio en el baseline. Normalizado → no lo afecta que el volumen total
+ * suba o baje. minThisWeek filtra ruido de cola larga (+1/+2 sin sentido).
+ */
+function shareMovers(
   current: NameValue[],
-  previous: NameValue[],
-): { risers: RecapMover[]; fallers: RecapMover[] } {
-  const prevMap = new Map(previous.map((p) => [p.name, p.value]));
-  const moves: RecapMover[] = current.map((c) => ({
-    name: c.name,
-    delta: c.value - (prevMap.get(c.name) ?? 0),
-  }));
-  const risers = moves
-    .filter((m) => m.delta > 0)
-    .sort((a, b) => b.delta - a.delta)
+  baseline: NameValue[],
+  curTotal: number,
+  baseTotal: number,
+  minThisWeek: number,
+): { gained: ShareMover[]; lost: ShareMover[] } {
+  const baseMap = new Map(baseline.map((b) => [b.name, b.value]));
+  const movers: ShareMover[] = current
+    .filter((c) => c.value >= minThisWeek)
+    .map((c) => {
+      const thisWeekPct = curTotal > 0 ? (c.value / curTotal) * 100 : 0;
+      const baselinePct = baseTotal > 0 ? ((baseMap.get(c.name) ?? 0) / baseTotal) * 100 : 0;
+      return {
+        name: c.name,
+        thisWeekPct: Math.round(thisWeekPct * 10) / 10,
+        baselinePct: Math.round(baselinePct * 10) / 10,
+        deltaPts: Math.round((thisWeekPct - baselinePct) * 10) / 10,
+      };
+    });
+  const gained = movers
+    .filter((m) => m.deltaPts > 0)
+    .sort((a, b) => b.deltaPts - a.deltaPts)
     .slice(0, 3);
-  const fallers = moves
-    .filter((m) => m.delta < 0)
-    .sort((a, b) => a.delta - b.delta)
+  const lost = movers
+    .filter((m) => m.deltaPts < 0)
+    .sort((a, b) => a.deltaPts - b.deltaPts)
     .slice(0, 3);
-  return { risers, fallers };
+  return { gained, lost };
 }
 
-/**
- * Arma el Overview 100% desde RPCs (sin loadInsights → sin cargar 150K filas
- * a Node). Respeta los filtros globales. El recap semanal usa ventanas de
- * fecha propias (últimos 7 días rodantes vs. los 7 previos) heredando el
- * resto de los filtros.
- */
 export async function buildOverviewData(filters: Filters): Promise<OverviewData> {
   const WINDOW = 7;
+  const BASELINE_WEEKS = 8;
   const today = isoDaysAgo(0);
   const curStart = isoDaysAgo(WINDOW - 1); // últimos 7 días (incluye hoy)
-  const prevEnd = isoDaysAgo(WINDOW);
-  const prevStart = isoDaysAgo(WINDOW * 2 - 1);
+  // Baseline = las 8 semanas inmediatamente previas a esta semana.
+  const baseEnd = isoDaysAgo(WINDOW);
+  const baseStart = isoDaysAgo(WINDOW + WINDOW * BASELINE_WEEKS - 1);
 
   const curWin = withWindow(filters, curStart, today);
-  const prevWin = withWindow(filters, prevStart, prevEnd);
+  const baseWin = withWindow(filters, baseStart, baseEnd);
 
   const [
     stats,
@@ -96,10 +116,12 @@ export async function buildOverviewData(filters: Filters): Promise<OverviewData>
     topIndustries,
     topSegments,
     curStats,
-    prevStats,
+    baseStats,
     curPains,
-    prevPains,
+    basePains,
+    curQuestions,
     curComp,
+    baseComp,
   ] = await Promise.all([
     rpcSampleStats(filters),
     rpcGroupWithPct(filters, "insight_subtype_display", 0, { scope: "pain", n: 5 }),
@@ -107,18 +129,23 @@ export async function buildOverviewData(filters: Filters): Promise<OverviewData>
     rpcGroupDistinct(filters, "industry", { n: 5 }),
     rpcGroupDistinct(filters, "segment", { n: 5 }),
     rpcSampleStats(curWin),
-    rpcSampleStats(prevWin),
-    rpcGroupDistinct(curWin, "insight_subtype_display", { scope: "pain", n: 50 }),
-    rpcGroupDistinct(prevWin, "insight_subtype_display", { scope: "pain", n: 50 }),
+    rpcSampleStats(baseWin),
+    rpcGroupDistinct(curWin, "insight_subtype_display", { scope: "pain", n: 60 }),
+    rpcGroupDistinct(baseWin, "insight_subtype_display", { scope: "pain", n: 200 }),
+    rpcGroupDistinct(curWin, "insight_subtype_display", { scope: "faq", n: 5 }),
     rpcGroupDistinct(curWin, "competitor_name", {
       scope: "competitive_signal",
       excludeOwnBrand: true,
-      n: 20,
+      n: 60,
+    }),
+    rpcGroupDistinct(baseWin, "competitor_name", {
+      scope: "competitive_signal",
+      excludeOwnBrand: true,
+      n: 200,
     }),
   ]);
 
-  // top pains con pct sobre las demos únicas del set (no totalTranscripts) —
-  // matchea la semántica de painsWithPct cuando el % es "de las demos vistas".
+  // top pains all-time con pct sobre demos del set
   const callsBasis = stats?.unique_calls ?? 0;
   const topPainsPct: NameValuePct[] = topPains.map((p) => ({
     name: p.name,
@@ -126,32 +153,41 @@ export async function buildOverviewData(filters: Filters): Promise<OverviewData>
     pct: callsBasis > 0 ? Math.round((p.value / callsBasis) * 1000) / 10 : 0,
   }));
 
-  const { risers, fallers } = buildMoversAndNew(curPains, prevPains);
+  const curTotal = curStats?.unique_calls ?? 0;
+  const baseTotal = baseStats?.unique_calls ?? 0;
 
-  // "Competidores top de la semana" en vez de "nuevos": los más mencionados
-  // son los reales (SAP, Buk...); los raros/one-off suelen ser ruido de
-  // extracción (Fathom = nuestra tool, Prode = módulo propio, clientes, etc.).
-  // Denylist explícita para lo que sabemos que NO es competidor.
-  const NON_COMPETITORS = new Set(["fathom", "prode", "humand"]);
-  const topCompetitors = curComp
-    .filter((c) => c.value > 0 && !NON_COMPETITORS.has(c.name.toLowerCase().trim()))
+  const { gained, lost } = shareMovers(curPains, basePains, curTotal, baseTotal, 3);
+
+  // snapshot: top pains de esta semana en % de demos de la semana
+  const snapshotPains: NameValuePct[] = curPains
     .slice(0, 5)
-    .map((c) => c.name);
+    .map((p) => ({
+      name: p.name,
+      value: p.value,
+      pct: curTotal > 0 ? Math.round((p.value / curTotal) * 1000) / 10 : 0,
+    }));
 
-  function delta(cur: number, prev: number): WeekDelta {
-    return {
-      current: cur,
-      previous: prev,
-      deltaPct: prev > 0 ? Math.round(((cur - prev) / prev) * 100) : null,
-    };
-  }
+  // competidores en alza: share de menciones esta semana vs baseline.
+  const NON_COMPETITORS = new Set(["fathom", "prode", "humand"]);
+  const compClean = (rows: NameValue[]) =>
+    rows.filter((c) => !NON_COMPETITORS.has(c.name.toLowerCase().trim()));
+  const { gained: competitorRisers } = shareMovers(
+    compClean(curComp),
+    compClean(baseComp),
+    curTotal,
+    baseTotal,
+    2,
+  );
+
+  const avgWeeklyDemos = baseTotal / BASELINE_WEEKS;
+  const avgWeeklyDeals = (baseStats?.unique_deals ?? 0) / BASELINE_WEEKS;
 
   return {
     kpis: {
       uniqueCalls: stats?.unique_calls ?? 0,
       uniqueDeals: stats?.unique_deals ?? 0,
       insightsCount: stats?.insights_count ?? 0,
-      coveragePct: 0, // cobertura requiere totalTranscripts; lo setea la page
+      coveragePct: 0,
       avgConfidence: stats?.avg_confidence ?? null,
       highConfidencePct: stats?.high_confidence_pct ?? null,
       periodStart: stats?.period_start ?? null,
@@ -159,11 +195,22 @@ export async function buildOverviewData(filters: Filters): Promise<OverviewData>
     },
     recap: {
       windowDays: WINDOW,
-      demos: delta(curStats?.unique_calls ?? 0, prevStats?.unique_calls ?? 0),
-      deals: delta(curStats?.unique_deals ?? 0, prevStats?.unique_deals ?? 0),
-      risers,
-      fallers,
-      topCompetitors,
+      baselineWeeks: BASELINE_WEEKS,
+      activity: {
+        demosThisWeek: curTotal,
+        avgWeeklyDemos: Math.round(avgWeeklyDemos),
+        deltaPct:
+          avgWeeklyDemos > 0
+            ? Math.round(((curTotal - avgWeeklyDemos) / avgWeeklyDemos) * 100)
+            : null,
+        dealsThisWeek: curStats?.unique_deals ?? 0,
+        avgWeeklyDeals: Math.round(avgWeeklyDeals),
+      },
+      gained,
+      lost,
+      snapshotPains,
+      topQuestions: curQuestions,
+      competitorRisers,
     },
     topPains: topPainsPct,
     topFaqs,
