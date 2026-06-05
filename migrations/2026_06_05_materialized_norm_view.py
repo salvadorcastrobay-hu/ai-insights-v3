@@ -29,6 +29,49 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 
+# Re-creamos las funciones de normalización con llamadas a _normkey
+# SCHEMA-CALIFICADAS (public._normkey) + SET search_path. Motivo: _is_own_brand
+# es LANGUAGE sql → Postgres la inlinea al crear la MV y resuelve _normkey
+# SIN el search_path de sesión → fallaba con "function _normkey does not exist".
+# Calificar elimina la dependencia del search_path en cualquier contexto
+# (creación de MV, refresh desde cron, etc.). Idempotente (CREATE OR REPLACE).
+SQL_FIX_FUNCS = """
+CREATE OR REPLACE FUNCTION _is_own_brand(v text)
+RETURNS boolean
+LANGUAGE sql IMMUTABLE
+SET search_path = public
+AS $$
+    SELECT public._normkey(v) IN ('humand','human','human d');
+$$;
+
+CREATE OR REPLACE FUNCTION _norm_competitor(v text)
+RETURNS text
+LANGUAGE plpgsql IMMUTABLE
+SET search_path = public
+AS $$
+DECLARE k text := public._normkey(v);
+BEGIN
+    RETURN CASE k
+        WHEN 'humand' THEN 'Humand'
+        WHEN 'human' THEN 'Humand'
+        WHEN 'human d' THEN 'Humand'
+        WHEN 'book' THEN 'Buk'
+        WHEN 'buk hr' THEN 'Buk'
+        WHEN 'bukhr' THEN 'Buk'
+        WHEN 'senior' THEN 'Senior'
+        WHEN 'solides' THEN 'Sólides'
+        WHEN 'solids' THEN 'Sólides'
+        WHEN 'fids' THEN 'Feedz'
+        WHEN 'feedz' THEN 'Feedz'
+        WHEN 'totus' THEN 'Totvs'
+        WHEN 'tots' THEN 'Totvs'
+        WHEN 'totvs' THEN 'Totvs'
+        ELSE v
+    END;
+END;
+$$;
+"""
+
 # La MV materializa v_insights_dashboard con region/competitor normalizados.
 # Incluye `id` (PK del insight) para poder refrescar CONCURRENTLY.
 SQL_CREATE_MV = """
@@ -45,7 +88,7 @@ SELECT
     v.insight_type::text           AS insight_type,
     v.insight_type_display::text   AS insight_type_display,
     v.insight_subtype_display::text AS insight_subtype_display,
-    _norm_region(v.region, v.country) AS region,
+    public._norm_region(v.region, v.country) AS region,
     v.country::text                AS country,
     v.segment::text                AS segment,
     v.industry::text               AS industry,
@@ -56,9 +99,9 @@ SELECT
     v.pain_theme::text             AS pain_theme,
     v.feature_display::text        AS feature_display,
     v.deal_stage::text             AS deal_stage,
-    _norm_competitor(v.competitor_name) AS competitor_name,
+    public._norm_competitor(v.competitor_name) AS competitor_name,
     v.competitor_relationship_display::text AS competitor_relationship_display,
-    _is_own_brand(v.competitor_name) AS is_own_brand
+    public._is_own_brand(v.competitor_name) AS is_own_brand
 FROM v_insights_dashboard v;
 """
 
@@ -159,6 +202,7 @@ STEPS = [
     # por fila) corre una única vez acá y puede pasar el límite default.
     ("set search_path + statement_timeout for this session",
      "SET search_path TO public; SET statement_timeout = '600s';"),
+    ("recreate _is_own_brand / _norm_competitor (schema-qualified)", SQL_FIX_FUNCS),
     ("create materialized view mv_insights_norm", SQL_CREATE_MV),
     ("indexes", SQL_INDEXES),
     ("_filter_insights_norm → MV", SQL_FILTER_NORM_MV),
