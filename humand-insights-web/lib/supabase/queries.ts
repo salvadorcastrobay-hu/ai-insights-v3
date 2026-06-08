@@ -7,6 +7,8 @@ import {
   isOwnBrand,
   normalizeAcquisitionChannel,
   normalizeCompetitor,
+  normalizeCountry,
+  normalizeIndustry,
   normalizeRegion,
 } from "@/lib/data/normalizers";
 import type {
@@ -107,6 +109,8 @@ export function enrichWithDealSource(
 
   return {
     ...row,
+    country: normalizeCountry(row.country),
+    industry: normalizeIndustry(row.industry),
     region: normalizeRegion(row.region, row.country),
     competitor_name: normalizeCompetitor(row.competitor_name),
     is_own_brand_competitor: isOwnBrand(row.competitor_name),

@@ -172,6 +172,128 @@ const COMPETITOR_ALIASES: Record<string, string> = {
 
 export const OWN_BRAND_ALIASES = new Set(["humand", "human", "human d"]);
 
+// ─── País ──────────────────────────────────────────────────────────────────
+// Consolida duplicados del mismo país (acentos / ES-EN). Keys con normalizeKey
+// (lowercase + sin acentos). Valores no mapeados pasan tal cual.
+// CRÍTICO: mantener en sync con _norm_country (SQL).
+const COUNTRY_ALIASES: Record<string, string> = {
+  brasil: "Brasil",
+  brazil: "Brasil",
+  mexico: "México",
+  peru: "Perú",
+  panama: "Panamá",
+  espana: "España",
+  spain: "España",
+  "republica dominicana": "República Dominicana",
+  venezuela: "Venezuela",
+  "venezuela, bolivarian republic of": "Venezuela",
+  usa: "Estados Unidos",
+  "united states": "Estados Unidos",
+  "united states of america": "Estados Unidos",
+  canada: "Canadá",
+};
+
+// ─── Industria ───────────────────────────────────────────────────────────────
+// Toque liviano: los enums UPPER_SNAKE de HubSpot pasan a su nombre legible y
+// se mergean SOLO cuando son literalmente la misma industria. Lo no mapeado
+// con underscores se "prettifica"; el resto pasa tal cual.
+// CRÍTICO: mantener en sync con _norm_industry (SQL).
+const INDUSTRY_ALIASES: Record<string, string> = {
+  // Merges (misma industria, distinta escritura)
+  "financial services": "Financial services",
+  financial_services: "Financial services",
+  banking: "Banking",
+  "software companies & it services": "Software Companies & IT services",
+  computer_software: "Software Companies & IT services",
+  information_technology_and_services: "Software Companies & IT services",
+  "information technology and services": "Software Companies & IT services",
+  "it services and it consulting": "Software Companies & IT services",
+  computer_networking: "Software Companies & IT services",
+  pharmaceuticals: "Pharmaceuticals",
+  "pharmaceutical manufacturing": "Pharmaceuticals",
+  healthcare: "Healthcare",
+  "hospitals and health care": "Healthcare",
+  hospital_health_care: "Healthcare",
+  telecomunications: "Telecommunications",
+  telecommunications: "Telecommunications",
+  wireless: "Telecommunications",
+  automotive: "Automotive",
+  retail: "Retail",
+  construction: "Construction",
+  insurance: "Insurance",
+  restaurants: "Restaurants",
+  "real state": "Real Estate",
+  real_estate: "Real Estate",
+  mining: "Mining",
+  mining_metals: "Mining",
+  "chemicals/quimicas": "Chemicals/Químicas",
+  chemicals: "Chemicals/Químicas",
+  agriculture: "Agriculture",
+  farming: "Agriculture",
+  "gambling & casinos": "Gambling & Casinos",
+  gambling_casinos: "Gambling & Casinos",
+  "nonprofit organizations": "Nonprofit Organizations",
+  non_profit_organization_management: "Nonprofit Organizations",
+  "transportation & logistics": "Transportation & Logistics",
+  transportation_trucking_railroad: "Transportation & Logistics",
+  "transportation/trucking/railroad": "Transportation & Logistics",
+  "transportation, logistics, supply chain and storage": "Transportation & Logistics",
+  logistics_and_supply_chain: "Transportation & Logistics",
+  "consumer goods": "Consumer Goods",
+  consumer_goods: "Consumer Goods",
+  "legal & accounting services": "Legal & Accounting services",
+  legal_services: "Legal & Accounting services",
+  accounting: "Legal & Accounting services",
+  "hr/staffing services": "HR/Staffing Services",
+  human_resources: "HR/Staffing Services",
+  manufacturing: "Manufacturing",
+  mechanical_or_industrial_engineering: "Manufacturing",
+  "consulting services": "Consulting Services",
+  "business consulting and services": "Consulting Services",
+  "oil & energy": "Oil & Energy",
+  oil_energy: "Oil & Energy",
+  "security services": "Security Services",
+  security_and_investigations: "Security Services",
+  "hospitality & tourism": "Hospitality & Tourism",
+  hospitality: "Hospitality & Tourism",
+  "media & entertainment": "Media & Entertainment",
+  entertainment: "Media & Entertainment",
+  "management consulting": "Management Consulting",
+  management_consulting: "Management Consulting",
+  food_beverages: "Food & Beverages",
+  food_production: "Food & Beverages",
+  "food and beverage manufacturing": "Food & Beverages",
+  renewables_environment: "Renewables & Environment",
+  "renewable energy semiconductor manufacturing": "Renewables & Environment",
+  // Solo renombrar (enum → legible, quedan separadas)
+  consumer_services: "Consumer Services",
+  individual_family_services: "Individual & Family Services",
+  investment_management: "Investment Management",
+  professional_training_coaching: "Professional Training & Coaching",
+  research: "Research",
+  civil_engineering: "Civil Engineering",
+  building_materials: "Building Materials",
+  apparel_fashion: "Apparel & Fashion",
+  sporting_goods: "Sporting Goods",
+  marketing_and_advertising: "Marketing & Advertising",
+  graphic_design: "Graphic Design",
+  publishing: "Publishing",
+  printing: "Printing",
+  public_relations_and_communications: "Public Relations & Communications",
+  higher_education: "Higher Education",
+  education_management: "Education Management",
+  primary_secondary_education: "Primary/Secondary Education",
+  fishery: "Fishery",
+  paper_forest_products: "Paper & Forest Products",
+  industrial_automation: "Industrial Automation",
+  public_safety: "Public Safety",
+  international_affairs: "International Affairs",
+  airlines_aviation: "Airlines & Aviation",
+  events_services: "Events Services",
+  leisure_travel_tourism: "Leisure, Travel & Tourism",
+  health_wellness_and_fitness: "Health, Wellness & Fitness",
+};
+
 const ACQ_CHANNEL_INBOUND = new Set([
   "marketing",
   "inbound",
@@ -247,6 +369,30 @@ export function normalizeCompetitor(value: string | null | undefined): string | 
   if (!value) return null;
   const normalized = normalizeKey(value);
   return COMPETITOR_ALIASES[normalized] ?? value;
+}
+
+export function normalizeCountry(value: string | null | undefined): string | null {
+  if (!value || !value.trim()) return null;
+  const aliased = COUNTRY_ALIASES[normalizeKey(value)];
+  return aliased ?? value.trim();
+}
+
+/** Title-case de un enum UPPER_SNAKE/whitespace ("FOO_BAR" → "Foo Bar"). */
+function prettifyEnum(value: string): string {
+  return value
+    .replace(/_/g, " ")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+export function normalizeIndustry(value: string | null | undefined): string | null {
+  if (!value || !value.trim()) return null;
+  const aliased = INDUSTRY_ALIASES[normalizeKey(value)];
+  if (aliased) return aliased;
+  // Enums sin mapear (snake_case) → prettify; el resto pasa tal cual.
+  return value.includes("_") ? prettifyEnum(value) : value.trim();
 }
 
 export function isOwnBrand(value: string | null | undefined): boolean {
