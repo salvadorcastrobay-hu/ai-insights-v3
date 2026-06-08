@@ -114,6 +114,24 @@ function shareMovers(
   return { gained, lost };
 }
 
+/**
+ * Corre tareas con un máximo de `limit` en paralelo, preservando el orden de
+ * resultados. El instance de Supabase es chico y no banca ~15 RPCs a la vez
+ * (se saturaba y timeouteaban todas). De a ~4 cada una vuela (~75ms).
+ */
+async function runPooled<T>(tasks: Array<() => Promise<T>>, limit: number): Promise<T[]> {
+  const results = new Array<T>(tasks.length);
+  let next = 0;
+  async function worker() {
+    while (next < tasks.length) {
+      const i = next++;
+      results[i] = await tasks[i]();
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, tasks.length) }, worker));
+  return results;
+}
+
 export async function buildOverviewData(filters: Filters): Promise<OverviewData> {
   const WINDOW = 7;
   const BASELINE_WEEKS = 8;
@@ -142,31 +160,49 @@ export async function buildOverviewData(filters: Filters): Promise<OverviewData>
     curComp,
     baseComp,
     wonLostRaw,
-  ] = await Promise.all([
-    rpcSampleStats(filters),
-    rpcGroupWithPct(filters, "insight_subtype_display", 0, { scope: "pain", n: 5 }),
-    rpcGroupDistinct(filters, "insight_subtype_display", { scope: "faq", n: 5 }),
-    rpcGroupDistinct(filters, "industry", { n: 5 }),
-    rpcGroupDistinct(filters, "segment", { n: 5 }),
-    rpcSampleStats(curWin),
-    rpcSampleStats(baseWin),
-    rpcSampleStats({ ...curWin, channels: ["Inbound"] }),
-    rpcValidatedDeals(curWin),
-    rpcGroupDistinct(curWin, "insight_subtype_display", { scope: "pain", n: 60 }),
-    rpcGroupDistinct(baseWin, "insight_subtype_display", { scope: "pain", n: 200 }),
-    rpcGroupDistinct(curWin, "insight_subtype_display", { scope: "faq", n: 5 }),
-    rpcGroupDistinct(curWin, "competitor_name", {
-      scope: "competitive_signal",
-      excludeOwnBrand: true,
-      n: 60,
-    }),
-    rpcGroupDistinct(baseWin, "competitor_name", {
-      scope: "competitive_signal",
-      excludeOwnBrand: true,
-      n: 200,
-    }),
-    rpcWonLostPains(filters, 15),
-  ]);
+  ] = await runPooled([
+    () => rpcSampleStats(filters),
+    () => rpcGroupWithPct(filters, "insight_subtype_display", 0, { scope: "pain", n: 5 }),
+    () => rpcGroupDistinct(filters, "insight_subtype_display", { scope: "faq", n: 5 }),
+    () => rpcGroupDistinct(filters, "industry", { n: 5 }),
+    () => rpcGroupDistinct(filters, "segment", { n: 5 }),
+    () => rpcSampleStats(curWin),
+    () => rpcSampleStats(baseWin),
+    () => rpcSampleStats({ ...curWin, channels: ["Inbound"] }),
+    () => rpcValidatedDeals(curWin),
+    () => rpcGroupDistinct(curWin, "insight_subtype_display", { scope: "pain", n: 60 }),
+    () => rpcGroupDistinct(baseWin, "insight_subtype_display", { scope: "pain", n: 80 }),
+    () => rpcGroupDistinct(curWin, "insight_subtype_display", { scope: "faq", n: 5 }),
+    () =>
+      rpcGroupDistinct(curWin, "competitor_name", {
+        scope: "competitive_signal",
+        excludeOwnBrand: true,
+        n: 60,
+      }),
+    () =>
+      rpcGroupDistinct(baseWin, "competitor_name", {
+        scope: "competitive_signal",
+        excludeOwnBrand: true,
+        n: 80,
+      }),
+    () => rpcWonLostPains(filters, 15),
+  ] as const as Array<() => Promise<unknown>>, 4) as [
+    Awaited<ReturnType<typeof rpcSampleStats>>,
+    Awaited<ReturnType<typeof rpcGroupWithPct>>,
+    Awaited<ReturnType<typeof rpcGroupDistinct>>,
+    Awaited<ReturnType<typeof rpcGroupDistinct>>,
+    Awaited<ReturnType<typeof rpcGroupDistinct>>,
+    Awaited<ReturnType<typeof rpcSampleStats>>,
+    Awaited<ReturnType<typeof rpcSampleStats>>,
+    Awaited<ReturnType<typeof rpcSampleStats>>,
+    Awaited<ReturnType<typeof rpcValidatedDeals>>,
+    Awaited<ReturnType<typeof rpcGroupDistinct>>,
+    Awaited<ReturnType<typeof rpcGroupDistinct>>,
+    Awaited<ReturnType<typeof rpcGroupDistinct>>,
+    Awaited<ReturnType<typeof rpcGroupDistinct>>,
+    Awaited<ReturnType<typeof rpcGroupDistinct>>,
+    Awaited<ReturnType<typeof rpcWonLostPains>>,
+  ];
 
   // Win-rate por pain: de los deals cerrados (won+lost) donde apareció el pain,
   // qué % ganamos. Se compara contra el win-rate general (baseline).
