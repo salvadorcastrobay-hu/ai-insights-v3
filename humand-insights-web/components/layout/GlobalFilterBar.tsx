@@ -1,7 +1,7 @@
 "use client";
 
-import { ChevronDown, ChevronRight, Download, Eraser, Loader2, SlidersHorizontal, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Check, ChevronDown, ChevronRight, Download, Eraser, Loader2, SlidersHorizontal, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 
 import { MultiSelectCombobox } from "@/components/layout/MultiSelectCombobox";
 import { useGlobalFilters } from "@/lib/data/filter-state";
@@ -330,6 +330,22 @@ export function GlobalFilterBar({
   const active = countActive(mergedFilters);
   const [expanded, setExpanded] = useState(false);
 
+  // Draft local: las selecciones se acumulan acá sin disparar refetch. Recién
+  // se aplican (escriben a la URL → re-render del server) al tocar "Aplicar".
+  // Evita que el dashboard se bloquee en cada click de un filtro.
+  const appliedKey = JSON.stringify(mergedFilters);
+  const [draft, setDraft] = useState<Filters>(mergedFilters);
+  // Re-sincronizar el draft cuando cambian los filtros aplicados (apply,
+  // limpiar, navegación). No refira en loop: solo depende de appliedKey.
+  useEffect(() => {
+    setDraft({ ...EMPTY_FILTERS, ...(JSON.parse(appliedKey) as Filters) });
+  }, [appliedKey]);
+
+  const updateDraft = (next: Partial<Filters>) => setDraft((d) => ({ ...d, ...next }));
+  const dirty = JSON.stringify(draft) !== appliedKey;
+  const applyDraft = () => setFilters(draft);
+  const clearAll = () => setFilters(EMPTY_FILTERS);
+
   return (
     <section
       aria-busy={isPending}
@@ -380,7 +396,7 @@ export function GlobalFilterBar({
           {active > 0 ? (
             <button
               type="button"
-              onClick={() => setFilters(EMPTY_FILTERS)}
+              onClick={clearAll}
               title="Limpiar todos los filtros"
               aria-label="Limpiar filtros"
               className="flex h-7 w-7 items-center justify-center rounded-[var(--radius-s)] text-[var(--color-text-secondary)] transition hover:bg-[var(--color-neutral-100)] hover:text-[var(--color-text-default)]"
@@ -401,16 +417,42 @@ export function GlobalFilterBar({
 
       {expanded ? (
         <div className="border-t border-[var(--color-neutral-100)] p-3">
+          {/* El panel edita el DRAFT; nada se aplica hasta tocar "Aplicar". */}
           <FilterControls
-            filters={mergedFilters}
-            setFilters={setFilters}
+            filters={draft}
+            setFilters={updateDraft}
             options={computedOptions}
           />
-          {active > 0 ? (
+          {countActive(draft) > 0 ? (
             <div className="mt-2.5 border-t border-[var(--color-neutral-100)] pt-2.5">
-              <ActiveChips filters={mergedFilters} setFilters={setFilters} />
+              <ActiveChips filters={draft} setFilters={updateDraft} />
             </div>
           ) : null}
+          <div className="mt-3 flex items-center justify-end gap-2 border-t border-[var(--color-neutral-100)] pt-3">
+            {dirty ? (
+              <button
+                type="button"
+                onClick={() => setDraft({ ...EMPTY_FILTERS, ...mergedFilters })}
+                className="rounded-[var(--radius-s)] px-3 py-1.5 text-[12px] font-medium text-[var(--color-text-secondary)] transition hover:bg-[var(--color-neutral-100)]"
+              >
+                Descartar cambios
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={applyDraft}
+              disabled={!dirty || isPending}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-[var(--radius-s)] px-3.5 py-1.5 text-[12px] font-semibold transition",
+                dirty && !isPending
+                  ? "bg-[var(--color-brand-500)] text-white hover:opacity-90"
+                  : "cursor-not-allowed bg-[var(--color-neutral-100)] text-[var(--color-text-secondary)]",
+              )}
+            >
+              {isPending ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} strokeWidth={2.5} />}
+              {dirty ? "Aplicar filtros" : "Aplicado"}
+            </button>
+          </div>
         </div>
       ) : null}
     </section>
