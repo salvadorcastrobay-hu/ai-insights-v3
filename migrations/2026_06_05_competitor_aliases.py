@@ -43,6 +43,8 @@ BEGIN
         WHEN 'sesame' THEN 'Sesame'
         WHEN 'cesame' THEN 'Sesame'
         WHEN 'sesame hr' THEN 'Sesame'
+        WHEN 'odu' THEN 'Odoo'
+        WHEN 'odoo' THEN 'Odoo'
         ELSE v
     END;
 END;

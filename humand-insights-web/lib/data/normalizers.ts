@@ -166,6 +166,8 @@ const COMPETITOR_ALIASES: Record<string, string> = {
   sesame: "Sesame",
   cesame: "Sesame",
   "sesame hr": "Sesame",
+  odu: "Odoo",
+  odoo: "Odoo",
 };
 
 export const OWN_BRAND_ALIASES = new Set(["humand", "human", "human d"]);
