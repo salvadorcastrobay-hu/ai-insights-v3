@@ -105,6 +105,7 @@ const emptyFilters: Filters = {
   date_start: null,
   date_end: null,
   min_confidence: null,
+  validated: null,
 };
 
 test("applyFilters combines categorical and date filters", () => {
