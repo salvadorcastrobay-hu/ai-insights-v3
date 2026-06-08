@@ -22,15 +22,15 @@ type FilterFieldConfig = {
   options: string[];
 };
 
+// Filtros visibles en la barra. types / categories / owners se ocultaron
+// (pedido de Laura); siguen en el tipo Filters por compatibilidad con otras
+// vistas, pero no se renderean ni exportan acá.
 const ARRAY_FILTER_KEYS: FilterMultiKey[] = [
-  "types",
   "regions",
   "segments",
   "countries",
   "industries",
-  "owners",
   "modules",
-  "categories",
   "channels",
   "sources",
 ];
@@ -170,11 +170,33 @@ export function FilterControls({
   options: FilterOptions;
   compact?: boolean;
 }) {
+  // Cascada: si hay región(es) seleccionada(s), País solo muestra los países
+  // de esas regiones. Si la región no tiene países conocidos, no acotamos.
+  const countryOptions = useMemo(() => {
+    if (!filters.regions.length) return options.countries;
+    const filtered = options.countries.filter((c) =>
+      filters.regions.includes(options.countryRegions[c] ?? ""),
+    );
+    return filtered.length ? filtered : options.countries;
+  }, [filters.regions, options.countries, options.countryRegions]);
+
   const fields: FilterFieldConfig[] = ARRAY_FILTER_KEYS.map((key) => ({
     key,
     label: FILTER_LABELS[key],
-    options: options[key] ?? [],
+    options: key === "countries" ? countryOptions : options[key] ?? [],
   }));
+
+  // Al cambiar región, limpiar los países que ya no pertenecen a la selección.
+  function handleChange(key: FilterMultiKey, next: string[]) {
+    if (key === "regions") {
+      const stillValid = filters.countries.filter(
+        (c) => !next.length || next.includes(options.countryRegions[c] ?? ""),
+      );
+      setFilters({ regions: next, countries: stillValid });
+      return;
+    }
+    setFilters({ [key]: next });
+  }
 
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
@@ -185,7 +207,7 @@ export function FilterControls({
             label={field.label}
             options={field.options}
             value={filters[field.key] as string[]}
-            onChange={(next) => setFilters({ [field.key]: next })}
+            onChange={(next) => handleChange(field.key, next)}
           />
         ) : null,
       )}

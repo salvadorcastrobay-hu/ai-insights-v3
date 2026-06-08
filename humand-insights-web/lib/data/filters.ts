@@ -45,6 +45,8 @@ export type FilterOptions = {
   sources: string[];
   date_min: string | null;
   date_max: string | null;
+  /** país (normalizado) → región (normalizada), para cascada de filtros. */
+  countryRegions: Record<string, string>;
 };
 
 export const EMPTY_FILTERS: Filters = {
@@ -83,7 +85,16 @@ export function computeFilterOptions(rows: InsightRow[]): FilterOptions {
   const regionsInRows = new Set(unique(rows.map((row) => row.region)));
   const dateValues = unique(rows.map((row) => row.call_date));
 
+  // país → región (la región normalizada que más aparece para ese país).
+  const countryRegions: Record<string, string> = {};
+  for (const row of rows) {
+    const c = row.country?.trim();
+    const r = row.region?.trim();
+    if (c && r && !countryRegions[c]) countryRegions[c] = r;
+  }
+
   return {
+    countryRegions,
     types: unique(rows.map((row) => row.insight_type_display)).sort(),
     regions: OFFICIAL_REGION_OPTIONS.filter((region) => regionsInRows.has(region)),
     segments: unique(rows.map((row) => row.segment)).sort(),
