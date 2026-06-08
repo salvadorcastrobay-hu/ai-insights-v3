@@ -43,5 +43,7 @@ export function parseFiltersFromSearchParams(
       if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1) return null;
       return parsed;
     })(),
+    validated: null, // scoped al Overview (lo setea su page, no acá)
+    clients: getString("clients") === "true" ? true : null,
   };
 }

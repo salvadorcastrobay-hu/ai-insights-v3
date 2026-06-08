@@ -1,5 +1,6 @@
 import type { InsightRow } from "@/lib/supabase/types";
 import { OFFICIAL_REGION_OPTIONS } from "./constants";
+import { getDealOutcome } from "./normalizers";
 
 export type Filters = {
   types: string[];
@@ -27,6 +28,8 @@ export type Filters = {
    * ignora porque no trae first_meeting_status.
    */
   validated: boolean | null;
+  /** Solo clientes = deals en Closed Won (el meeting se convirtió en cliente). */
+  clients: boolean | null;
 };
 
 export type FilterOptions = {
@@ -59,6 +62,7 @@ export const EMPTY_FILTERS: Filters = {
   date_end: null,
   min_confidence: null,
   validated: null,
+  clients: null,
 };
 
 function unique(values: Array<string | null | undefined>): string[] {
@@ -121,5 +125,7 @@ export function matchesFilters(row: InsightRow, filters: Filters): boolean {
   ) {
     return false;
   }
+  // Solo clientes = deals que cerraron ganados (se volvieron cliente).
+  if (filters.clients && getDealOutcome(row.deal_stage) !== "won") return false;
   return true;
 }

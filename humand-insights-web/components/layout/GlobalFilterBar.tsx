@@ -14,7 +14,7 @@ import {
 import type { InsightRow } from "@/lib/supabase/types";
 import { cn } from "@/lib/utils";
 
-type FilterMultiKey = Exclude<keyof Filters, "date_start" | "date_end" | "min_confidence" | "validated">;
+type FilterMultiKey = Exclude<keyof Filters, "date_start" | "date_end" | "min_confidence" | "validated" | "clients">;
 
 type FilterFieldConfig = {
   key: FilterMultiKey;
@@ -207,7 +207,46 @@ export function FilterControls({
         value={filters.min_confidence}
         onChange={(next) => setFilters({ min_confidence: next })}
       />
+      <BoolToggle
+        active={!!filters.clients}
+        label="Solo clientes"
+        title="Solo deals que se convirtieron en cliente (Closed Won)."
+        onChange={(on) => setFilters({ clients: on ? true : null })}
+      />
     </div>
+  );
+}
+
+/** Toggle booleano genérico para filtros tipo checkbox. */
+function BoolToggle({
+  active,
+  label,
+  title,
+  onChange,
+}: {
+  active: boolean;
+  label: string;
+  title: string;
+  onChange: (on: boolean) => void;
+}) {
+  return (
+    <label
+      className={cn(
+        "flex cursor-pointer items-center gap-2 rounded-[var(--radius-s)] border px-2 py-2 text-[12px] transition",
+        active
+          ? "border-emerald-400 bg-emerald-50 text-emerald-700"
+          : "border-[var(--color-neutral-200)] bg-[var(--color-bg-card)] text-[var(--color-text-secondary)] hover:border-[var(--color-neutral-300)]",
+      )}
+      title={title}
+    >
+      <input
+        type="checkbox"
+        className="h-3.5 w-3.5"
+        checked={active}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+      <span className="font-medium">{label}</span>
+    </label>
   );
 }
 
