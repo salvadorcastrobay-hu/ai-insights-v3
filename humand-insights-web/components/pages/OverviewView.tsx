@@ -67,7 +67,6 @@ function DeltaBadge({ deltaPct }: { deltaPct: number | null }) {
 
 export function OverviewView({ data, coveragePct, validated }: Props) {
   const { kpis, recap, topPains, topFaqs, topIndustries, topSegments, wonLostPains, winRateBaseline } = data;
-  const maxPain = topPains.reduce((m, p) => Math.max(m, p.pct), 0) || 1;
 
   return (
     <div className="space-y-5">
@@ -205,7 +204,7 @@ export function OverviewView({ data, coveragePct, validated }: Props) {
                     <div className="h-[7px] overflow-hidden rounded-full bg-[var(--color-neutral-100)]">
                       <div
                         className="h-full rounded-full bg-[var(--color-brand-500)]"
-                        style={{ width: `${(p.pct / maxPain) * 100}%` }}
+                        style={{ width: `${Math.min(p.pct, 100)}%` }}
                       />
                     </div>
                   </div>
