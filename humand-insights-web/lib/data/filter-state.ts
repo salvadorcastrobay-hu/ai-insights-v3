@@ -1,5 +1,5 @@
 import { useTransition } from "react";
-import { parseAsArrayOf, parseAsFloat, parseAsString, useQueryStates } from "nuqs";
+import { parseAsArrayOf, parseAsBoolean, parseAsFloat, parseAsString, useQueryStates } from "nuqs";
 
 import { useFilterTransition } from "@/components/layout/FilterTransition";
 
@@ -19,6 +19,8 @@ export const FILTER_PARSERS = {
   // null = sin filtro de confianza. 0.7 = solo filas con confidence >= 0.7
   // (las filas sin confidence se mantienen).
   min_confidence: parseAsFloat,
+  // Solo clientes (deals Closed Won). Filtro global (anda en RPC + JS).
+  clients: parseAsBoolean,
 };
 
 /**
