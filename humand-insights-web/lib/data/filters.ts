@@ -21,6 +21,12 @@ export type Filters = {
    * Default toggle UI: 0.7.
    */
   min_confidence: number | null;
+  /**
+   * Solo demos validadas (first_meeting_status='Validated'). Scoped al Overview
+   * por ahora — solo las RPCs (MV) lo respetan; el path JS (loadInsights) lo
+   * ignora porque no trae first_meeting_status.
+   */
+  validated: boolean | null;
 };
 
 export type FilterOptions = {
@@ -52,6 +58,7 @@ export const EMPTY_FILTERS: Filters = {
   date_start: null,
   date_end: null,
   min_confidence: null,
+  validated: null,
 };
 
 function unique(values: Array<string | null | undefined>): string[] {

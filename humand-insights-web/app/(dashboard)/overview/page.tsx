@@ -33,7 +33,10 @@ export default async function Page({ searchParams }: PageProps) {
   }
 
   const params = await searchParams;
-  const filters = parseFiltersFromSearchParams(params);
+  // `validated` es scoped al Overview (no pasa por parseFiltersFromSearchParams
+  // → las otras páginas lo ignoran). Toggle "Solo demos validadas".
+  const validated = params.validated === "true" || params.validated === "1";
+  const filters = { ...parseFiltersFromSearchParams(params), validated };
 
   const [data, totalTranscripts] = await Promise.all([
     buildOverviewData(filters),
@@ -60,7 +63,7 @@ export default async function Page({ searchParams }: PageProps) {
 
   return (
     <>
-      <OverviewView data={data} coveragePct={coveragePct} />
+      <OverviewView data={data} coveragePct={coveragePct} validated={validated} />
       <DataQualityFooter stats={stats} pageLabel="Overview" />
     </>
   );

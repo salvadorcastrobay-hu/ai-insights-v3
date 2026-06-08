@@ -14,7 +14,7 @@ import {
 import type { InsightRow } from "@/lib/supabase/types";
 import { cn } from "@/lib/utils";
 
-type FilterMultiKey = Exclude<keyof Filters, "date_start" | "date_end" | "min_confidence">;
+type FilterMultiKey = Exclude<keyof Filters, "date_start" | "date_end" | "min_confidence" | "validated">;
 
 type FilterFieldConfig = {
   key: FilterMultiKey;

@@ -1,17 +1,49 @@
 "use client";
 
-import { ArrowDownRight, ArrowUpRight, Sparkles } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, BadgeCheck, Sparkles } from "lucide-react";
+import { parseAsBoolean, useQueryState } from "nuqs";
 
 import { ChartCard } from "@/components/charts/ChartCard";
+import { useFilterTransition } from "@/components/layout/FilterTransition";
 import { MetricCard } from "@/components/layout/MetricCard";
 import { PageTitle } from "@/components/pages/common";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 import type { OverviewData } from "@/lib/data/overview-data";
 
 type Props = {
   data: OverviewData;
   coveragePct: number;
+  validated: boolean;
 };
+
+function ValidatedToggle({ validated }: { validated: boolean }) {
+  const ctx = useFilterTransition();
+  const [, setValidated] = useQueryState(
+    "validated",
+    parseAsBoolean.withOptions({ shallow: false, startTransition: ctx?.startTransition }),
+  );
+  return (
+    <label
+      className={cn(
+        "flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1.5 text-[12px] transition",
+        validated
+          ? "border-emerald-400 bg-emerald-50 text-emerald-700"
+          : "border-[var(--color-neutral-200)] bg-[var(--color-bg-card)] text-[var(--color-text-secondary)] hover:border-[var(--color-neutral-300)]",
+      )}
+      title="Mostrar solo demos validadas (first_meeting_status = Validated)"
+    >
+      <input
+        type="checkbox"
+        className="h-3.5 w-3.5"
+        checked={validated}
+        onChange={(e) => setValidated(e.target.checked ? true : null)}
+      />
+      <BadgeCheck size={14} />
+      <span className="font-medium">Solo demos validadas</span>
+    </label>
+  );
+}
 
 function fmt(n: number): string {
   return n.toLocaleString("es-AR");
@@ -32,13 +64,16 @@ function DeltaBadge({ deltaPct }: { deltaPct: number | null }) {
   );
 }
 
-export function OverviewView({ data, coveragePct }: Props) {
+export function OverviewView({ data, coveragePct, validated }: Props) {
   const { kpis, recap, topPains, topFaqs, topIndustries, topSegments, wonLostPains, winRateBaseline } = data;
   const maxPain = topPains.reduce((m, p) => Math.max(m, p.pct), 0) || 1;
 
   return (
     <div className="space-y-5">
-      <PageTitle title="Overview" subtitle="Vista rápida de lo más relevante. Usá los filtros para acotar; el sidebar para profundizar." />
+      <div className="flex items-start justify-between gap-3">
+        <PageTitle title="Overview" subtitle="Vista rápida de lo más relevante. Usá los filtros para acotar; el sidebar para profundizar." />
+        <ValidatedToggle validated={validated} />
+      </div>
 
       {/* Weekly recap */}
       <section className="rounded-[var(--radius-l)] border border-[var(--color-brand-200)] bg-gradient-to-b from-[var(--color-brand-50)] to-[var(--color-bg-card)] p-5">
