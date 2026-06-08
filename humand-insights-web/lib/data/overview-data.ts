@@ -3,6 +3,7 @@ import {
   rpcGroupDistinct,
   rpcGroupWithPct,
   rpcSampleStats,
+  rpcValidatedDeals,
   rpcWonLostPains,
   type NameValue,
   type NameValuePct,
@@ -33,6 +34,7 @@ export type Activity = {
   dealsThisWeek: number;
   avgWeeklyDeals: number;
   inboundDealsThisWeek: number;
+  validatedDealsThisWeek: number;
 };
 
 export type OverviewData = {
@@ -133,6 +135,7 @@ export async function buildOverviewData(filters: Filters): Promise<OverviewData>
     curStats,
     baseStats,
     curInboundStats,
+    curValidated,
     curPains,
     basePains,
     curQuestions,
@@ -148,6 +151,7 @@ export async function buildOverviewData(filters: Filters): Promise<OverviewData>
     rpcSampleStats(curWin),
     rpcSampleStats(baseWin),
     rpcSampleStats({ ...curWin, channels: ["Inbound"] }),
+    rpcValidatedDeals(curWin),
     rpcGroupDistinct(curWin, "insight_subtype_display", { scope: "pain", n: 60 }),
     rpcGroupDistinct(baseWin, "insight_subtype_display", { scope: "pain", n: 200 }),
     rpcGroupDistinct(curWin, "insight_subtype_display", { scope: "faq", n: 5 }),
@@ -249,6 +253,7 @@ export async function buildOverviewData(filters: Filters): Promise<OverviewData>
         dealsThisWeek: curStats?.unique_deals ?? 0,
         avgWeeklyDeals: Math.round(avgWeeklyDeals),
         inboundDealsThisWeek: curInboundStats?.unique_deals ?? 0,
+        validatedDealsThisWeek: curValidated ?? 0,
       },
       gained,
       lost,

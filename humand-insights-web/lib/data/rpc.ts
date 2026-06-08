@@ -500,6 +500,23 @@ export const rpcWonLostPains = (f: Filters, n = 8) =>
     })),
   );
 
+// ─── deals validados (first_meeting_status='Validated') ───────────────
+
+export async function rpcValidatedDeals(filters: Filters): Promise<number> {
+  try {
+    const supabase = getServiceClient();
+    const { data, error } = await supabase.rpc("rpc_validated_deals", { f: filtersToJsonb(filters) });
+    if (error) {
+      console.warn("[rpc.validatedDeals] error:", error.message);
+      return 0;
+    }
+    return Number(data ?? 0);
+  } catch (exc) {
+    console.warn("[rpc.validatedDeals] threw:", exc);
+    return 0;
+  }
+}
+
 // ─── Feature flag: usar RPC en lugar de buildXData JS ─────────────────
 
 /** Si `USE_RPC_AGGREGATIONS=true`, las pages migradas usan las RPCs.
