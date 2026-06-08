@@ -64,10 +64,17 @@ export function OverviewView({ data, coveragePct }: Props) {
           <div>
             <div className="text-[30px] font-semibold leading-none">{fmt(recap.activity.dealsThisWeek)}</div>
             <div className="text-[12px] text-[var(--color-text-secondary)]">
-              Deals · <span className="font-semibold text-[var(--color-brand-500)]">{fmt(recap.activity.inboundDealsThisWeek)} inbound</span>
+              Deals ·{" "}
+              <span className="font-semibold text-emerald-700">
+                {fmt(recap.activity.validatedDealsThisWeek)} validados
+              </span>
               {recap.activity.dealsThisWeek > 0
-                ? ` (${Math.round((recap.activity.inboundDealsThisWeek / recap.activity.dealsThisWeek) * 100)}%)`
+                ? ` (${Math.round((recap.activity.validatedDealsThisWeek / recap.activity.dealsThisWeek) * 100)}%)`
                 : ""}
+              {" · "}
+              <span className="font-semibold text-[var(--color-brand-500)]">
+                {fmt(recap.activity.inboundDealsThisWeek)} inbound
+              </span>
             </div>
           </div>
         </div>
