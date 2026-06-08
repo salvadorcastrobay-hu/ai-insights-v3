@@ -1,37 +1,18 @@
-import { notFound } from "next/navigation";
-
 import { OverviewView } from "@/components/pages/OverviewView";
 import { DataQualityFooter } from "@/components/layout/DataQualityFooter";
 import { buildOverviewData } from "@/lib/data/overview-data";
 import type { SampleStats } from "@/lib/data/sample-stats";
 import { parseFiltersFromSearchParams } from "@/lib/data/search-params-filters";
 import { loadTotalTranscriptsCount } from "@/lib/supabase/queries";
-import { getServerUserEmail } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
-
-// WIP: gateado a estos owners (prefijo de email) hasta que esté listo para
-// el equipo. Mantener en sync con el item del Sidebar (ownerPrefixes).
-const OVERVIEW_ALLOWED_PREFIXES = ["salvador.castrobay"];
-
-function emailAllowed(email: string | null): boolean {
-  if (!email) return false;
-  const prefix = email.split("@")[0]?.toLowerCase() ?? "";
-  return OVERVIEW_ALLOWED_PREFIXES.includes(prefix);
-}
 
 type PageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
 export default async function Page({ searchParams }: PageProps) {
-  const email = await getServerUserEmail();
-  if (!emailAllowed(email)) {
-    // Para cualquiera que no esté en el allowlist, la ruta no existe.
-    notFound();
-  }
-
   const params = await searchParams;
   // `validated` es scoped al Overview (no pasa por parseFiltersFromSearchParams
   // → las otras páginas lo ignoran). Toggle "Solo demos validadas".

@@ -35,7 +35,7 @@ type Item = {
 };
 
 const ITEMS: Item[] = [
-  { href: "/overview", label: "Overview", section: "Dashboards", icon: Home, ownerPrefixes: ["salvador.castrobay"] },
+  { href: "/overview", label: "Overview", section: "Dashboards", icon: Home },
   { href: "/executive-summary", label: "Executive Summary", section: "Dashboards", icon: LayoutDashboard },
   { href: "/product-intelligence", label: "Product Intelligence", section: "Dashboards", icon: Package },
   { href: "/competitive-intelligence", label: "Competitive Intel", section: "Dashboards", icon: Target },

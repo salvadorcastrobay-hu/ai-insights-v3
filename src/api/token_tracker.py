@@ -60,9 +60,12 @@ WEEKLY_TOKEN_LIMIT  = int(os.getenv("WEEKLY_TOKEN_LIMIT",  "700000"))
 MONTHLY_TOKEN_LIMIT = int(os.getenv("MONTHLY_TOKEN_LIMIT", "2000000"))
 
 # Comma-separated emails (local-part, sin @humand.co) con enforcement activo.
-# Vacío = no enforza a nadie (solo loguea).
-_enabled_users_raw = os.getenv("TOKEN_LIMITS_USERS", "salvador.castrobay")
+# "*" = enforza a TODOS los usuarios. Vacío = no enforza a nadie (solo loguea).
+# Default: "*" (el cap aplica a todo el equipo).
+_enabled_users_raw = os.getenv("TOKEN_LIMITS_USERS", "*")
 ENABLED_USERS = {u.strip().lower() for u in _enabled_users_raw.split(",") if u.strip()}
+# Wildcard: si "*" está en la lista, el enforcement aplica a cualquier owner.
+ENFORCE_ALL = "*" in ENABLED_USERS
 
 # ─── Request-scoped context ─────────────────────────────────────────────
 _current_owner: contextvars.ContextVar[str | None] = contextvars.ContextVar(
@@ -87,6 +90,8 @@ def clear_request_context() -> None:
 def is_enforcement_enabled(owner: str | None) -> bool:
     if not owner:
         return False
+    if ENFORCE_ALL:
+        return True
     return owner.lower() in ENABLED_USERS
 
 
