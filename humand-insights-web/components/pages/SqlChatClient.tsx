@@ -329,7 +329,7 @@ export function SqlChatClient({ filterBar }: { filterBar?: ReactNode } = {}) {
           </div>
         ) : undefined
       }
-      inputTrailing={<UsageRing visibleForOwners={["salvador.castrobay", "laura.flores"]} />}
+      inputTrailing={<UsageRing />}
       starterPrompts={[
         "Top 10 pains en Enterprise en los últimos 90 días",
         "¿Cuáles son los competidores más mencionados en Mid Market?",
