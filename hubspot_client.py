@@ -33,6 +33,7 @@ DEAL_PROPERTIES = [
     "deal_source__bdr_",
     "sqo_source_channel",
     "partner_name",
+    "first_meeting_status",  # "Validated" cuando la primera demo fue validada
 ]
 
 COMPANY_PROPERTIES = [
