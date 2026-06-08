@@ -154,6 +154,7 @@ const COMPETITOR_ALIASES: Record<string, string> = {
   book: "Buk",
   "buk hr": "Buk",
   bukhr: "Buk",
+  buc: "Buk",
   senior: "Senior",
   solides: "Sólides",
   solids: "Sólides",
@@ -162,6 +163,9 @@ const COMPETITOR_ALIASES: Record<string, string> = {
   totus: "Totvs",
   tots: "Totvs",
   totvs: "Totvs",
+  sesame: "Sesame",
+  cesame: "Sesame",
+  "sesame hr": "Sesame",
 };
 
 export const OWN_BRAND_ALIASES = new Set(["humand", "human", "human d"]);
