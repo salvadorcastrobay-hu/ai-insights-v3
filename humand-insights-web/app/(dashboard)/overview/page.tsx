@@ -35,7 +35,9 @@ export default async function Page({ searchParams }: PageProps) {
   const params = await searchParams;
   // `validated` es scoped al Overview (no pasa por parseFiltersFromSearchParams
   // → las otras páginas lo ignoran). Toggle "Solo demos validadas".
-  const validated = params.validated === "true" || params.validated === "1";
+  // Default: ENCENDIDO (Pedro/Laura piensan en demos validadas). Se apaga con
+  // ?validated=false.
+  const validated = params.validated !== "false" && params.validated !== "0";
   const filters = { ...parseFiltersFromSearchParams(params), validated };
 
   const [data, totalTranscripts] = await Promise.all([
