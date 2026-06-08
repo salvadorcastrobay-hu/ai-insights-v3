@@ -49,7 +49,8 @@ function filtersToJsonb(filters: Filters): Record<string, unknown> {
     date_start: filters.date_start ?? null,
     date_end: filters.date_end ?? null,
     min_confidence: filters.min_confidence ?? null,
-    validated: filters.validated ? "true" : null,
+    // Validadas: default ON en todas las pages. Solo se apaga con validated===false.
+    validated: filters.validated === false ? null : "true",
     clients: filters.clients ? "true" : null,
   };
 }

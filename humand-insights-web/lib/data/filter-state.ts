@@ -21,6 +21,9 @@ export const FILTER_PARSERS = {
   min_confidence: parseAsFloat,
   // Solo clientes (deals Closed Won). Filtro global (anda en RPC + JS).
   clients: parseAsBoolean,
+  // Solo demos validadas. Default ON: null/true = ON, false = OFF.
+  // Solo filtra en pages RPC (MV); el path JS lo ignora (no trae first_meeting_status).
+  validated: parseAsBoolean,
 };
 
 /**

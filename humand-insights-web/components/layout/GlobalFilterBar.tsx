@@ -235,6 +235,13 @@ export function FilterControls({
         title="Solo deals que se convirtieron en cliente (Closed Won)."
         onChange={(on) => setFilters({ clients: on ? true : null })}
       />
+      {/* Validadas: default ON (null/true = ON). Apagar setea validated=false. */}
+      <BoolToggle
+        active={filters.validated !== false}
+        label="Solo demos validadas"
+        title="Solo demos validadas (first_meeting_status = Validated). Activo por default."
+        onChange={(on) => setFilters({ validated: on ? null : false })}
+      />
     </div>
   );
 }

@@ -43,7 +43,8 @@ export function parseFiltersFromSearchParams(
       if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1) return null;
       return parsed;
     })(),
-    validated: null, // scoped al Overview (lo setea su page, no acá)
+    // Validadas: default ON en todas las pages. Solo OFF con ?validated=false.
+    validated: getString("validated") === "false" ? false : null,
     clients: getString("clients") === "true" ? true : null,
   };
 }
