@@ -99,13 +99,19 @@ export function OverviewView({ data, coveragePct, validated }: Props) {
           <div>
             <div className="text-[30px] font-semibold leading-none">{fmt(recap.activity.dealsThisWeek)}</div>
             <div className="text-[12px] text-[var(--color-text-secondary)]">
-              Deals ·{" "}
-              <span className="font-semibold text-emerald-700">
-                {fmt(recap.activity.validatedDealsThisWeek)} validados
-              </span>
-              {recap.activity.dealsThisWeek > 0
-                ? ` (${Math.round((recap.activity.validatedDealsThisWeek / recap.activity.dealsThisWeek) * 100)}%)`
-                : ""}
+              Deals
+              {/* Con el filtro de validadas activo, "validados (100%)" es redundante. */}
+              {!validated ? (
+                <>
+                  {" · "}
+                  <span className="font-semibold text-emerald-700">
+                    {fmt(recap.activity.validatedDealsThisWeek)} validados
+                  </span>
+                  {recap.activity.dealsThisWeek > 0
+                    ? ` (${Math.round((recap.activity.validatedDealsThisWeek / recap.activity.dealsThisWeek) * 100)}%)`
+                    : ""}
+                </>
+              ) : null}
               {" · "}
               <span className="font-semibold text-[var(--color-brand-500)]">
                 {fmt(recap.activity.inboundDealsThisWeek)} inbound
@@ -123,13 +129,13 @@ export function OverviewView({ data, coveragePct, validated }: Props) {
         </div>
         <div className="space-y-1.5 text-[13px]">
           <ShareLine
-            label="📈 Más mencionados"
+            label="📈 En alza"
             tone="up"
             items={recap.gained.map((m) => `${m.name}: ${m.baselinePct}% → ${m.thisWeekPct}% (+${m.deltaPts} pts)`)}
             empty="nada se destacó"
           />
           <ShareLine
-            label="📉 Menos mencionados"
+            label="📉 En baja"
             tone="down"
             items={recap.lost.map((m) => `${m.name}: ${m.baselinePct}% → ${m.thisWeekPct}% (${m.deltaPts} pts)`)}
             empty="nada cayó"
