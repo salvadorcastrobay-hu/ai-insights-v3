@@ -37,7 +37,8 @@ function ValidatedToggle({ validated }: { validated: boolean }) {
         type="checkbox"
         className="h-3.5 w-3.5"
         checked={validated}
-        onChange={(e) => setValidated(e.target.checked ? true : null)}
+        // Default ON: checked → limpiamos el param (default); unchecked → ?validated=false
+        onChange={(e) => setValidated(e.target.checked ? null : false)}
       />
       <BadgeCheck size={14} />
       <span className="font-medium">Solo demos validadas</span>
