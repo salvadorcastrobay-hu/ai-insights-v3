@@ -63,6 +63,12 @@ function buildCsvExportHref(filters: Filters): string {
   if (filters.date_end) {
     params.set("date_end", filters.date_end);
   }
+  if (filters.min_confidence != null && filters.min_confidence > 0) {
+    params.set("min_confidence", String(filters.min_confidence));
+  }
+  if (filters.clients) {
+    params.set("clients", "true");
+  }
 
   const query = params.toString();
   return query ? `/api/export/csv?${query}` : "/api/export/csv";
