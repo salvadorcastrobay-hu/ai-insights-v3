@@ -15,6 +15,7 @@ import {
   Megaphone,
   Package,
   Puzzle,
+  Radar,
   Target,
   Users,
 } from "lucide-react";
@@ -49,6 +50,7 @@ const ITEMS: Item[] = [
   { href: "/sql-chat", label: "Chat con IA", section: "Herramientas", icon: Bot },
   { href: "/glossary", label: "Glosario", section: "Herramientas", icon: BookOpen },
   { href: "/campaign-advisor", label: "Campaign Advisor", section: "Marketing", icon: Megaphone, roles: ["admin", "campaign_advisor"] },
+  { href: "/competitor-ads", label: "Ads de Competidores", section: "Marketing", icon: Radar },
 ];
 
 type Props = {
