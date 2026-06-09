@@ -13,7 +13,7 @@ import { useSupabaseBrowserClient } from "@/lib/auth/auth-provider";
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectTo = useMemo(() => searchParams.get("next") ?? "/executive-summary", [searchParams]);
+  const redirectTo = useMemo(() => searchParams.get("next") ?? "/overview", [searchParams]);
   const supabase = useSupabaseBrowserClient();
 
   const [email, setEmail] = useState("");

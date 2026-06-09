@@ -5,7 +5,7 @@ import { CAMPAIGN_ADVISOR_ROLES, getSessionRoles, hasAnyRole } from "@/lib/auth/
 import { applySupabaseCookies, createMiddlewareSupabaseClient } from "@/lib/supabase/server";
 
 const LOGIN_PATH = "/login";
-const DEFAULT_REDIRECT = "/executive-summary";
+const DEFAULT_REDIRECT = "/overview";
 // Routes that must be reachable without a session (cache warmup, health, etc).
 const PUBLIC_PATHS = ["/api/prefetch-insights"];
 

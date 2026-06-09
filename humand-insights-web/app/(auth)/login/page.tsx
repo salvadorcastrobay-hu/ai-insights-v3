@@ -58,7 +58,7 @@ export default function LoginPage() {
       setStatus({ kind: "success" });
       // Pequeño delay para que el usuario vea el checkmark antes del redirect.
       setTimeout(() => {
-        router.push("/executive-summary");
+        router.push("/overview");
         router.refresh();
       }, 350);
     } catch (err) {
