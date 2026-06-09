@@ -97,12 +97,15 @@ export function SalesEnablementView({ data, filteredRows }: Props) {
                 <p className="text-[12px] text-[var(--color-text-secondary)]">
                   Aparece en {item.totalDeals} deals ({item.pctOfAffected}% de los afectados)
                 </p>
-                <ul className="space-y-1 text-[12px] text-[var(--color-text-secondary)]">
+                <ul className="space-y-1 text-[12px] text-[var(--color-text-default)]">
                   {item.topSummaries.length === 0 ? (
-                    <li>(Sin datos de summary)</li>
+                    <li className="text-[var(--color-text-secondary)]">(Sin datos de summary)</li>
                   ) : (
                     item.topSummaries.map((s, i) => (
-                      <li key={i}>• {s.text} → {s.pct}%</li>
+                      <li key={i} className="leading-snug">
+                        <span className="mr-1 text-[var(--color-text-secondary)]">•</span>
+                        {s.text}
+                      </li>
                     ))
                   )}
                 </ul>
