@@ -33,7 +33,7 @@ function getServiceClient() {
 
 // ─── Helper: convertir Filters TS a JSONB compatible con _filter_insights ─
 
-function filtersToJsonb(filters: Filters): Record<string, unknown> {
+export function filtersToJsonb(filters: Filters): Record<string, unknown> {
   return {
     prompt_version: process.env.NEXT_PUBLIC_PROMPT_VERSION ?? "v3.0",
     types: filters.types ?? [],
