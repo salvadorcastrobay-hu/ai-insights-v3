@@ -52,6 +52,7 @@ from src.api.token_tracker import (
     check_quota,
     clear_request_context,
     get_usage_summary_for,
+    record_external_usage,
     set_request_context,
 )
 
@@ -151,6 +152,37 @@ def healthcheck() -> dict[str, str]:
 def usage_me(owner: str = Depends(verify_jwt)) -> dict[str, Any]:
     """Token usage del user autenticado en ventanas 24h / 7d / 30d."""
     return get_usage_summary_for(owner)
+
+
+@app.post("/usage/guard")
+def usage_guard(owner: str = Depends(verify_jwt)) -> dict[str, Any]:
+    """Pre-check de cuota para calls de OpenAI hechas fuera del proceso Python
+    (ej: /api/ask-chart de Next). Lanza 429 si el user superó algún cap;
+    no-op si no tiene enforcement. Devuelve {ok:true} si puede seguir."""
+    check_quota(owner)  # raises HTTPException(429) si superó el cap
+    return {"ok": True}
+
+
+class UsageLogBody(BaseModel):
+    endpoint: str = "ask-chart"
+    model: str = "unknown"
+    input_tokens: int = 0
+    output_tokens: int = 0
+
+
+@app.post("/usage/log")
+def usage_log(body: UsageLogBody, owner: str = Depends(verify_jwt)) -> dict[str, Any]:
+    """Registra usage de una call a OpenAI hecha fuera del cliente parcheado.
+    Lo llama /api/ask-chart después de streamear, para que el cap cuente
+    también ese chat."""
+    record_external_usage(
+        owner=owner,
+        endpoint=body.endpoint,
+        model=body.model,
+        input_tokens=body.input_tokens,
+        output_tokens=body.output_tokens,
+    )
+    return {"ok": True}
 
 
 _FILTER_LABELS: dict[str, str] = {

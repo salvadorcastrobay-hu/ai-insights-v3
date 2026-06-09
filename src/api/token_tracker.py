@@ -53,6 +53,31 @@ def _invalidate_usage_cache(user_email: str) -> None:
     """Después de loguear una call nueva, descarta el cache stale del user."""
     _usage_cache.pop(user_email, None)
 
+
+def record_external_usage(
+    owner: str,
+    endpoint: str,
+    model: str,
+    input_tokens: int,
+    output_tokens: int,
+) -> None:
+    """Loguea usage de una llamada a OpenAI hecha FUERA del cliente Python
+    parcheado (ej: la route /api/ask-chart de Next, que usa el AI SDK directo).
+    Mismo store + invalidación de cache que el auto-logging. Best-effort."""
+    if not owner:
+        return
+    try:
+        log_usage(
+            user_email=owner,
+            endpoint=endpoint,
+            model=str(model),
+            input_tokens=int(input_tokens or 0),
+            output_tokens=int(output_tokens or 0),
+        )
+        _invalidate_usage_cache(owner)
+    except Exception as exc:
+        logger.debug(f"record_external_usage skipped: {exc}")
+
 # ─── Config ─────────────────────────────────────────────────────────────
 # Caps INICIALES generosos. Calibrar después de 1 semana de uso real.
 DAILY_TOKEN_LIMIT   = int(os.getenv("DAILY_TOKEN_LIMIT",   "150000"))   # ~$0.15/día (mini)
