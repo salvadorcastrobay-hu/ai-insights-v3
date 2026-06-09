@@ -333,6 +333,33 @@ export async function POST(req: Request) {
   const session = await getAuthenticatedSession();
   if (!session) return new Response("Unauthorized", { status: 401 });
 
+  // Pre-check de cuota: este chat llama a OpenAI directo (no pasa por el
+  // servicio Python parcheado), así que el token limiter no lo cubriría solo.
+  // Chequeamos contra el mismo cap vía /usage/guard. Fail-open si Python no
+  // responde (no rompemos el chat por un check caído).
+  const pyBase = process.env.PYTHON_SERVICE_URL?.replace(/\/$/, "") ?? null;
+  if (pyBase) {
+    try {
+      const guard = await fetch(`${pyBase}/usage/guard`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "content-type": "application/json",
+        },
+        cache: "no-store",
+      });
+      if (guard.status === 429) {
+        const text = await guard.text();
+        return new Response(text, {
+          status: 429,
+          headers: { "content-type": "application/json" },
+        });
+      }
+    } catch (e) {
+      console.error("[ask-chart] usage guard failed (fail-open):", e);
+    }
+  }
+
   let body: Body;
   try {
     body = (await req.json()) as Body;
@@ -503,12 +530,36 @@ export async function POST(req: Request) {
   const system = hasEvidence ? systemProse : systemTaxonomy;
   const prompt = `CONTEXTO:\n${context}\n\nPREGUNTA DEL USUARIO: ${question}`;
 
+  const modelId = process.env.ASK_CHART_MODEL ?? "gpt-5.4-mini";
+
   const result = streamText({
-    model: openai(process.env.ASK_CHART_MODEL ?? "gpt-5.4-mini"),
+    model: openai(modelId),
     system,
     prompt,
     onError: ({ error }) => {
       console.error("[ask-chart] streamText error:", error);
+    },
+    // Registrar el uso en el mismo store que el token limiter, para que este
+    // chat cuente contra el cap del usuario y se refleje en el UsageRing.
+    onFinish: async ({ usage }) => {
+      if (!pyBase) return;
+      try {
+        await fetch(`${pyBase}/usage/log`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            endpoint: "ask-chart",
+            model: modelId,
+            input_tokens: usage.inputTokens ?? 0,
+            output_tokens: usage.outputTokens ?? 0,
+          }),
+        });
+      } catch (e) {
+        console.error("[ask-chart] usage log failed:", e);
+      }
     },
   });
 
