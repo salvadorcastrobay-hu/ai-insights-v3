@@ -15,16 +15,24 @@ type Props = {
   canRefresh: boolean;
 };
 
+// Formateo determinístico en UTC (sin locale/TZ) para evitar hydration
+// mismatch entre server (UTC) y browser (TZ local).
 function fmtDate(iso: string | null): string {
   if (!iso) return "—";
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString("es-AR");
+  if (Number.isNaN(d.getTime())) return "—";
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+  return `${dd}/${mm}/${d.getUTCFullYear()}`;
 }
 
 function fmtDateTime(iso: string | null): string {
   if (!iso) return "nunca";
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? "nunca" : d.toLocaleString("es-AR");
+  if (Number.isNaN(d.getTime())) return "nunca";
+  const hh = String(d.getUTCHours()).padStart(2, "0");
+  const min = String(d.getUTCMinutes()).padStart(2, "0");
+  return `${fmtDate(iso)} ${hh}:${min} UTC`;
 }
 
 type Group = {
