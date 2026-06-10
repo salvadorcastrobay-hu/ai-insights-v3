@@ -6,6 +6,14 @@ export type StoredAd = CompetitorAd & {
   last_seen_at: string;
 };
 
+// Último error de lectura, para diagnóstico en la propia página (admin).
+let lastReadError: string | null = null;
+export function consumeReadError(): string | null {
+  const e = lastReadError;
+  lastReadError = null;
+  return e;
+}
+
 /**
  * Lectura defensiva: corre `fn` con un timeout duro y devuelve `fallback` ante
  * CUALQUIER error o demora (tabla/columna faltante, pool agotado, query colgada).
@@ -15,11 +23,13 @@ async function safeRead<T>(label: string, fallback: T, fn: () => Promise<T>): Pr
   try {
     return await Promise.race([
       fn(),
-      new Promise<T>((_, reject) => setTimeout(() => reject(new Error("timeout")), 12_000)),
+      new Promise<T>((_, reject) => setTimeout(() => reject(new Error("timeout 12s")), 12_000)),
     ]);
   } catch (err) {
     const code = (err as { code?: string })?.code;
-    console.warn(`[competitor-ads.${label}] fallback (${code ?? (err as Error)?.message}):`, err);
+    const msg = code ?? (err as Error)?.message ?? String(err);
+    lastReadError = `${label}: ${msg}`;
+    console.warn(`[competitor-ads.${label}] fallback (${msg}):`, err);
     return fallback;
   }
 }

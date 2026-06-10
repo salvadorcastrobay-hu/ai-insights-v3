@@ -1,5 +1,5 @@
 import { CompetitorAdsView } from "@/components/pages/CompetitorAdsView";
-import { loadStoredAds, lastRefreshedAt, loadAdInsights } from "@/lib/competitor-ads/store";
+import { loadStoredAds, lastRefreshedAt, loadAdInsights, consumeReadError } from "@/lib/competitor-ads/store";
 import { isAdmin, type AppRole } from "@/lib/auth/roles";
 import { getServerUserRoles } from "@/lib/supabase/server";
 
@@ -15,13 +15,17 @@ export default async function Page() {
     lastRefreshedAt(),
     getServerUserRoles(),
   ]);
+  const admin = isAdmin(roles as AppRole[]);
+  // Si una lectura falló (timeout/pool/etc.), la exponemos en pantalla (admin).
+  const readError = admin ? consumeReadError() : null;
 
   return (
     <CompetitorAdsView
       ads={ads}
       insights={insights}
       refreshedAt={refreshedAt}
-      canRefresh={isAdmin(roles as AppRole[])}
+      canRefresh={admin}
+      readError={readError}
     />
   );
 }

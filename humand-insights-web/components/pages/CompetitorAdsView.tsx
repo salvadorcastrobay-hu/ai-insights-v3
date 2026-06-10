@@ -28,6 +28,7 @@ type Props = {
   insights: AdInsight[];
   refreshedAt: string | null;
   canRefresh: boolean;
+  readError?: string | null;
 };
 
 // Formateo determinístico en UTC (evita hydration mismatch).
@@ -68,7 +69,7 @@ function dedupeCampaigns(ads: StoredAd[]): Campaign[] {
   return [...map.values()];
 }
 
-export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh }: Props) {
+export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, readError }: Props) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -149,6 +150,12 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh }: Pr
           </span>
         </div>
       </div>
+
+      {readError ? (
+        <div className="rounded-[var(--radius-s)] border border-rose-300 bg-rose-50 px-3 py-2 text-[12px] text-rose-700">
+          ⚠️ Error leyendo de la DB: <code className="font-mono">{readError}</code>
+        </div>
+      ) : null}
 
       {msg ? (
         <div className="rounded-[var(--radius-s)] border border-[var(--color-brand-200)] bg-[var(--color-brand-50)] px-3 py-2 text-[12px] text-[var(--color-brand-500)]">
