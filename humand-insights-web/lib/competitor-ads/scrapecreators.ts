@@ -3,7 +3,7 @@ import type { CompetitorAd } from "./types";
 const BASE = "https://api.scrapecreators.com/v1/facebook/adLibrary/company/ads";
 
 // Forma cruda (parcial) de la respuesta de ScrapeCreators. Solo tipamos lo que
-// usamos; el resto queda en `raw` por si sumamos campos.
+// usamos; el objeto completo se guarda en `raw`.
 type RawImage = { original_image_url?: string; resized_image_url?: string };
 type RawVideo = {
   video_hd_url?: string;
@@ -26,6 +26,7 @@ type RawSnapshot = {
 
 type RawAd = {
   ad_archive_id?: string | null;
+  collation_id?: string | null;
   page_id?: string | null;
   page_name?: string | null;
   is_active?: boolean | null;
@@ -48,7 +49,7 @@ function mapAd(competitor: string, country: string, ad: RawAd): CompetitorAd | n
   const id = ad.ad_archive_id ?? null;
   if (!id) return null;
   const snap = ad.snapshot ?? {};
-  // `images` = thumbnails mostrables. Para avisos de video el creativo está en
+  // `images` = thumbnails mostrables. Para video el creativo está en
   // video_preview_image_url; para carruseles en cards. Juntamos todo.
   const images: string[] = [];
   const videos: string[] = [];
@@ -68,8 +69,10 @@ function mapAd(competitor: string, country: string, ad: RawAd): CompetitorAd | n
     if (vu) videos.push(vu);
   }
   return {
+    source: "meta_ads",
     competitor,
     ad_archive_id: id,
+    collation_id: ad.collation_id ?? null,
     page_id: ad.page_id ?? null,
     page_name: ad.page_name ?? null,
     is_active: ad.is_active ?? null,
@@ -85,6 +88,7 @@ function mapAd(competitor: string, country: string, ad: RawAd): CompetitorAd | n
     categories: ad.categories ?? [],
     media: { images, videos },
     country,
+    raw: ad,
   };
 }
 
@@ -93,12 +97,13 @@ export type FetchParams = {
   pageId?: string;
   country?: string; // default ALL
   status?: "ALL" | "ACTIVE" | "INACTIVE";
-  /** Máximo de páginas de cursor a traer (1 crédito c/u). Default 1. */
+  sortBy?: "total_impressions" | "relevancy_monthly_grouped";
+  /** Máximo de páginas de cursor a traer (1 crédito c/u). Default 3. */
   maxPages?: number;
 };
 
 /**
- * Trae los avisos de un competidor de la Ad Library vía ScrapeCreators.
+ * Trae los avisos de un competidor de la Meta Ad Library vía ScrapeCreators.
  * Requiere SCRAPECREATORS_API_KEY. Devuelve avisos normalizados (dedupeados
  * por ad_archive_id). Lanza si falta la key o si la API responde !ok.
  */
@@ -111,7 +116,8 @@ export async function fetchCompanyAds(
 
   const country = params.country ?? "ALL";
   const status = params.status ?? "ACTIVE";
-  const maxPages = Math.max(1, params.maxPages ?? 1);
+  const sortBy = params.sortBy ?? "relevancy_monthly_grouped";
+  const maxPages = Math.max(1, params.maxPages ?? 3);
 
   const out = new Map<string, CompetitorAd>();
   let cursor: string | null = null;
@@ -123,12 +129,10 @@ export async function fetchCompanyAds(
     else throw new Error("companyName o pageId requerido");
     url.searchParams.set("country", country);
     url.searchParams.set("status", status);
+    url.searchParams.set("sort_by", sortBy);
     if (cursor) url.searchParams.set("cursor", cursor);
 
-    const res = await fetch(url, {
-      headers: { "x-api-key": key },
-      cache: "no-store",
-    });
+    const res = await fetch(url, { headers: { "x-api-key": key }, cache: "no-store" });
     if (!res.ok) {
       const text = await res.text().catch(() => "");
       throw new Error(`ScrapeCreators ${res.status}: ${text.slice(0, 200)}`);
