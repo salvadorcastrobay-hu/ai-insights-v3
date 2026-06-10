@@ -14,16 +14,7 @@ export type MonitoredCompetitor = {
 };
 
 export const MONITORED_COMPETITORS: MonitoredCompetitor[] = [
+  // Arrancamos con uno solo para validar el flujo y no quemar créditos.
+  // Sumar más acá cuando confirmemos que el match por nombre trae lo correcto.
   { name: "Buk", query: "Buk", region: "latam" },
-  { name: "Factorial", query: "Factorial HR", region: "latam" },
-  { name: "Sesame HR", query: "Sesame HR", region: "latam" },
-  { name: "Rankmi", query: "Rankmi", region: "latam" },
-  { name: "Worky", query: "Worky", region: "latam" },
-  { name: "GoIntegro", query: "GOintegro", region: "latam" },
-  { name: "Crehana", query: "Crehana", region: "latam" },
-  { name: "Personio", query: "Personio", region: "emea" },
-  { name: "BambooHR", query: "BambooHR", region: "north_america" },
-  { name: "Rippling", query: "Rippling", region: "north_america" },
-  { name: "Lattice", query: "Lattice", region: "north_america" },
-  { name: "Culture Amp", query: "Culture Amp", region: "north_america" },
 ];
