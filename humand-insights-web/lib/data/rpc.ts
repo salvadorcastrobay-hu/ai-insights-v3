@@ -28,6 +28,14 @@ function getServiceClient() {
   }
   return createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
+    // Timeout duro: si una RPC se cuelga (PostgREST no tiene statement_timeout
+    // por default), abortamos a los 25s. Los wrappers cachean el error y
+    // devuelven fallback → la página renderiza en vez de quedar en skeleton
+    // infinito, y el console.warn deja en los logs qué RPC falló.
+    global: {
+      fetch: (input: RequestInfo | URL, init?: RequestInit) =>
+        fetch(input, { ...init, signal: init?.signal ?? AbortSignal.timeout(25_000) }),
+    },
   });
 }
 
