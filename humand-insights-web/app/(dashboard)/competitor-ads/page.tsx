@@ -1,5 +1,6 @@
 import { CompetitorAdsView } from "@/components/pages/CompetitorAdsView";
-import { loadStoredAds, lastRefreshedAt, loadAdInsights, consumeReadError } from "@/lib/competitor-ads/store";
+import { loadStoredAds, lastRefreshedAt, loadAdInsights } from "@/lib/competitor-ads/store";
+import { DEMO_ADS, DEMO_INSIGHTS } from "@/lib/competitor-ads/demo-data";
 import { isAdmin, type AppRole } from "@/lib/auth/roles";
 import { getServerUserRoles } from "@/lib/supabase/server";
 
@@ -7,17 +8,17 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export default async function Page() {
-  // Solo lee de la DB (carga instantánea). El fetch externo + análisis IA es
-  // on-demand, vía el botón "Actualizar" → /api/competitor-ads/refresh.
-  const [ads, insights, refreshedAt, roles] = await Promise.all([
+  const [stored, dbInsights, refreshedAt, roles] = await Promise.all([
     loadStoredAds(),
     loadAdInsights(),
     lastRefreshedAt(),
     getServerUserRoles(),
   ]);
   const admin = isAdmin(roles as AppRole[]);
-  // Si una lectura falló (timeout/pool/etc.), la exponemos en pantalla (admin).
-  const readError = admin ? consumeReadError() : null;
+
+  // La data de DB tiene precedencia; si viene vacía usamos el snapshot base.
+  const ads = stored.length ? stored : DEMO_ADS;
+  const insights = dbInsights.length ? dbInsights : DEMO_INSIGHTS;
 
   return (
     <CompetitorAdsView
@@ -25,7 +26,6 @@ export default async function Page() {
       insights={insights}
       refreshedAt={refreshedAt}
       canRefresh={admin}
-      readError={readError}
     />
   );
 }
