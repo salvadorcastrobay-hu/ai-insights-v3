@@ -16,5 +16,5 @@ export type MonitoredCompetitor = {
 export const MONITORED_COMPETITORS: MonitoredCompetitor[] = [
   // Arrancamos con uno solo para validar el flujo y no quemar créditos.
   // Sumar más acá cuando confirmemos que el match por nombre trae lo correcto.
-  { name: "Buk", query: "Buk", region: "latam" },
+  { name: "Buk", query: "Buk", pageId: "208911196408595", region: "latam" },
 ];
