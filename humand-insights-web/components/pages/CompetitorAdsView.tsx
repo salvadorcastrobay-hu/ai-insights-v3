@@ -153,7 +153,8 @@ export function CompetitorAdsView({ ads, refreshedAt, canRefresh }: Props) {
 }
 
 function AdCard({ ad }: { ad: StoredAd }) {
-  const thumb = ad.media.images[0] ?? null;
+  const thumb = ad.media?.images?.[0] ?? null;
+  const platforms = ad.publisher_platform ?? [];
   return (
     <div className="flex flex-col gap-2 rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] bg-[var(--color-bg-card)] p-3">
       <div className="flex items-center justify-between gap-2 text-[11px]">
@@ -187,7 +188,7 @@ function AdCard({ ad }: { ad: StoredAd }) {
       )}
 
       <div className="mt-auto flex flex-wrap items-center gap-1.5 text-[10px] text-[var(--color-text-secondary)]">
-        {ad.publisher_platform.map((p) => (
+        {platforms.map((p) => (
           <span key={p} className="rounded-full bg-[var(--color-neutral-100)] px-1.5 py-0.5">
             {p.toLowerCase()}
           </span>
