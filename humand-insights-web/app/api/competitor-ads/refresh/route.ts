@@ -62,7 +62,7 @@ export async function POST(): Promise<Response> {
           country: "ALL",
           status: "ACTIVE",
           sortBy: "relevancy_monthly_grouped",
-          maxPages: 3,
+          maxPages: 1,
         });
         r.fetched = ads.length;
         r.upserted = await upsertAds(ads);
