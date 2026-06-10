@@ -180,11 +180,10 @@ function AdCard({ ad }: { ad: StoredAd }) {
       {thumb ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={thumb}
+          src={`/api/competitor-ads/img?u=${encodeURIComponent(thumb)}`}
           alt=""
           className="h-28 w-full rounded-[var(--radius-s)] object-cover"
           loading="lazy"
-          referrerPolicy="no-referrer"
         />
       ) : null}
 
