@@ -76,17 +76,29 @@ function toIso(d: Date | null): string | null {
   return d ? new Date(d).toISOString() : null;
 }
 
+/** True si el error de postgres es "relation does not exist" (42P01). */
+function isMissingTable(err: unknown): boolean {
+  return typeof err === "object" && err !== null && (err as { code?: string }).code === "42P01";
+}
+
 /** Todos los avisos guardados, orden: competidor, más recientes primero. */
 export async function loadStoredAds(): Promise<StoredAd[]> {
   const sql = getPg();
-  const rows = await sql<Row[]>`
-    SELECT competitor, ad_archive_id, page_id, page_name, is_active,
-           ad_start_date, ad_end_date, publisher_platform, display_format,
-           body_text, title, cta_text, cta_type, link_url, categories, media,
-           country, first_seen_at, last_seen_at
-    FROM competitor_ads
-    ORDER BY competitor ASC, ad_start_date DESC NULLS LAST
-  `;
+  let rows: Row[];
+  try {
+    rows = await sql<Row[]>`
+      SELECT competitor, ad_archive_id, page_id, page_name, is_active,
+             ad_start_date, ad_end_date, publisher_platform, display_format,
+             body_text, title, cta_text, cta_type, link_url, categories, media,
+             country, first_seen_at, last_seen_at
+      FROM competitor_ads
+      ORDER BY competitor ASC, ad_start_date DESC NULLS LAST
+    `;
+  } catch (err) {
+    // Antes de correr la migración la tabla no existe → degradar a vacío.
+    if (isMissingTable(err)) return [];
+    throw err;
+  }
   return rows.map((r) => ({
     competitor: r.competitor,
     ad_archive_id: r.ad_archive_id,
@@ -113,6 +125,11 @@ export async function loadStoredAds(): Promise<StoredAd[]> {
 /** Última vez que se hizo refresh (max fetched_at). */
 export async function lastRefreshedAt(): Promise<string | null> {
   const sql = getPg();
-  const rows = await sql<{ max: Date | null }[]>`SELECT MAX(fetched_at) AS max FROM competitor_ads`;
-  return toIso(rows[0]?.max ?? null);
+  try {
+    const rows = await sql<{ max: Date | null }[]>`SELECT MAX(fetched_at) AS max FROM competitor_ads`;
+    return toIso(rows[0]?.max ?? null);
+  } catch (err) {
+    if (isMissingTable(err)) return null;
+    throw err;
+  }
 }
