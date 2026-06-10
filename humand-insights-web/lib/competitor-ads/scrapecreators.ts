@@ -4,6 +4,14 @@ const BASE = "https://api.scrapecreators.com/v1/facebook/adLibrary/company/ads";
 
 // Forma cruda (parcial) de la respuesta de ScrapeCreators. Solo tipamos lo que
 // usamos; el resto queda en `raw` por si sumamos campos.
+type RawImage = { original_image_url?: string; resized_image_url?: string };
+type RawVideo = {
+  video_hd_url?: string;
+  video_sd_url?: string;
+  video_preview_image_url?: string;
+};
+type RawCard = RawImage & RawVideo;
+
 type RawSnapshot = {
   body?: { text?: string | null } | null;
   title?: string | null;
@@ -11,8 +19,9 @@ type RawSnapshot = {
   cta_type?: string | null;
   link_url?: string | null;
   display_format?: string | null;
-  images?: Array<{ original_image_url?: string; resized_image_url?: string }> | null;
-  videos?: Array<{ video_hd_url?: string; video_sd_url?: string; video_preview_image_url?: string }> | null;
+  images?: RawImage[] | null;
+  videos?: RawVideo[] | null;
+  cards?: RawCard[] | null;
 };
 
 type RawAd = {
@@ -39,12 +48,25 @@ function mapAd(competitor: string, country: string, ad: RawAd): CompetitorAd | n
   const id = ad.ad_archive_id ?? null;
   if (!id) return null;
   const snap = ad.snapshot ?? {};
-  const images = (snap.images ?? [])
-    .map((i) => i.original_image_url ?? i.resized_image_url ?? "")
-    .filter(Boolean);
-  const videos = (snap.videos ?? [])
-    .map((v) => v.video_hd_url ?? v.video_sd_url ?? v.video_preview_image_url ?? "")
-    .filter(Boolean);
+  // `images` = thumbnails mostrables. Para avisos de video el creativo está en
+  // video_preview_image_url; para carruseles en cards. Juntamos todo.
+  const images: string[] = [];
+  const videos: string[] = [];
+  for (const im of snap.images ?? []) {
+    const u = im.original_image_url ?? im.resized_image_url;
+    if (u) images.push(u);
+  }
+  for (const v of snap.videos ?? []) {
+    if (v.video_preview_image_url) images.push(v.video_preview_image_url);
+    const vu = v.video_hd_url ?? v.video_sd_url;
+    if (vu) videos.push(vu);
+  }
+  for (const c of snap.cards ?? []) {
+    const u = c.resized_image_url ?? c.original_image_url ?? c.video_preview_image_url;
+    if (u) images.push(u);
+    const vu = c.video_hd_url ?? c.video_sd_url;
+    if (vu) videos.push(vu);
+  }
   return {
     competitor,
     ad_archive_id: id,
