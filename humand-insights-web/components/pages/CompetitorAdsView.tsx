@@ -184,6 +184,7 @@ function AdCard({ ad }: { ad: StoredAd }) {
           alt=""
           className="h-28 w-full rounded-[var(--radius-s)] object-cover"
           loading="lazy"
+          referrerPolicy="no-referrer"
         />
       ) : null}
 
