@@ -1,6 +1,7 @@
 import { MONITORED_COMPETITORS } from "@/lib/competitor-ads/config";
 import { fetchCompanyAds } from "@/lib/competitor-ads/scrapecreators";
-import { upsertAds } from "@/lib/competitor-ads/store";
+import { upsertAds, saveAdInsight } from "@/lib/competitor-ads/store";
+import { analyzeCompetitor, adsModel } from "@/lib/competitor-ads/analyze";
 import { isAdmin, type AppRole } from "@/lib/auth/roles";
 import { getAuthenticatedSession, getServerUserRoles } from "@/lib/supabase/server";
 
@@ -8,7 +9,14 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
-type Result = { competitor: string; fetched: number; upserted: number; error?: string };
+type Result = {
+  competitor: string;
+  source: string;
+  fetched: number;
+  upserted: number;
+  analyzed: boolean;
+  error?: string;
+};
 
 // Corre tasks con un cap de concurrencia (gentil con la API externa).
 async function pooled<T>(items: T[], limit: number, fn: (item: T) => Promise<void>): Promise<void> {
@@ -44,27 +52,38 @@ export async function POST(): Promise<Response> {
 
   const results: Result[] = [];
   await pooled(MONITORED_COMPETITORS, 3, async (c) => {
+    const r: Result = { competitor: c.name, source: c.source, fetched: 0, upserted: 0, analyzed: false };
     try {
-      const ads = await fetchCompanyAds(c.name, {
-        companyName: c.query,
-        pageId: c.pageId,
-        country: "ALL",
-        status: "ACTIVE",
-        maxPages: 1,
-      });
-      const upserted = await upsertAds(ads);
-      results.push({ competitor: c.name, fetched: ads.length, upserted });
+      // Por ahora solo meta_ads tiene conector.
+      if (c.source === "meta_ads") {
+        const ads = await fetchCompanyAds(c.name, {
+          companyName: c.query,
+          pageId: c.pageId,
+          country: "ALL",
+          status: "ACTIVE",
+          sortBy: "relevancy_monthly_grouped",
+          maxPages: 3,
+        });
+        r.fetched = ads.length;
+        r.upserted = await upsertAds(ads);
+      }
+      // Análisis IA (no rompe el refresh si falla).
+      try {
+        const synthesis = await analyzeCompetitor(c.name, c.source);
+        if (synthesis) {
+          await saveAdInsight(c.name, c.source, synthesis, adsModel());
+          r.analyzed = true;
+        }
+      } catch (e) {
+        console.error(`[competitor-ads] analyze ${c.name} falló:`, e);
+      }
     } catch (err) {
-      results.push({
-        competitor: c.name,
-        fetched: 0,
-        upserted: 0,
-        error: err instanceof Error ? err.message : String(err),
-      });
+      r.error = err instanceof Error ? err.message : String(err);
     }
+    results.push(r);
   });
 
-  const totalUpserted = results.reduce((a, r) => a + r.upserted, 0);
+  const totalUpserted = results.reduce((a, x) => a + x.upserted, 0);
   return new Response(JSON.stringify({ totalUpserted, results }), {
     status: 200,
     headers: { "content-type": "application/json" },
