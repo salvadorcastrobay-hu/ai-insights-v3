@@ -15,10 +15,16 @@ export function getPg(): Sql {
 
   const sql = postgres(url, {
     ssl: "require",
-    max: 3, // small pool — serverless invocations are short-lived
+    max: 5,
     idle_timeout: 20,
-    connect_timeout: 10,
-    prepare: false, // pgbouncer transaction-pool mode incompatible with prepared statements
+    connect_timeout: 8,
+    // Recicla conexiones cada 5 min: evita sockets zombies tras restarts de
+    // la DB / failovers del pooler (el pool cacheado quedaba colgado).
+    max_lifetime: 300,
+    prepare: false, // transaction-pool mode incompatible with prepared statements
+    // Evita la query inicial de tipos (puede colgarse con transaction pooling).
+    // Solo usamos tipos built-in (text/bool/numeric/timestamptz/jsonb).
+    fetch_types: false,
   });
 
   globalForPg.__humand_pg = sql;

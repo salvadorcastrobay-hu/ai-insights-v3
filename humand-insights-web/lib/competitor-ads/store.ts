@@ -23,7 +23,7 @@ async function safeRead<T>(label: string, fallback: T, fn: () => Promise<T>): Pr
   try {
     return await Promise.race([
       fn(),
-      new Promise<T>((_, reject) => setTimeout(() => reject(new Error("timeout 12s")), 12_000)),
+      new Promise<T>((_, reject) => setTimeout(() => reject(new Error("timeout")), 2_000)),
     ]);
   } catch (err) {
     const code = (err as { code?: string })?.code;
