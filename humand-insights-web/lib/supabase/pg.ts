@@ -22,9 +22,8 @@ export function getPg(): Sql {
     // la DB / failovers del pooler (el pool cacheado quedaba colgado).
     max_lifetime: 300,
     prepare: false, // transaction-pool mode incompatible with prepared statements
-    // Evita la query inicial de tipos (puede colgarse con transaction pooling).
-    // Solo usamos tipos built-in (text/bool/numeric/timestamptz/jsonb).
-    fetch_types: false,
+    // OJO: NO usar fetch_types:false — rompe la serialización de arrays
+    // (`= ANY(${arr})` manda "1,2,3" sin llaves → 22P02 malformed array).
   });
 
   globalForPg.__humand_pg = sql;
