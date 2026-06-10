@@ -6,9 +6,22 @@ export type StoredAd = CompetitorAd & {
   last_seen_at: string;
 };
 
-/** True si el error de postgres es "relation does not exist" (42P01). */
-function isMissingTable(err: unknown): boolean {
-  return typeof err === "object" && err !== null && (err as { code?: string }).code === "42P01";
+/**
+ * Lectura defensiva: corre `fn` con un timeout duro y devuelve `fallback` ante
+ * CUALQUIER error o demora (tabla/columna faltante, pool agotado, query colgada).
+ * La página de ads es informativa → nunca debe quedar en skeleton infinito.
+ */
+async function safeRead<T>(label: string, fallback: T, fn: () => Promise<T>): Promise<T> {
+  try {
+    return await Promise.race([
+      fn(),
+      new Promise<T>((_, reject) => setTimeout(() => reject(new Error("timeout")), 12_000)),
+    ]);
+  } catch (err) {
+    const code = (err as { code?: string })?.code;
+    console.warn(`[competitor-ads.${label}] fallback (${code ?? (err as Error)?.message}):`, err);
+    return fallback;
+  }
 }
 
 /** Upsert por (source, competitor, ad_archive_id). Actualiza last_seen_at. */
@@ -117,8 +130,8 @@ function mapRow(r: Row): StoredAd {
 
 /** Todos los avisos guardados, orden: competidor, más recientes primero. */
 export async function loadStoredAds(): Promise<StoredAd[]> {
-  const sql = getPg();
-  try {
+  return safeRead("loadStoredAds", [], async () => {
+    const sql = getPg();
     const rows = await sql<Row[]>`
       SELECT source, competitor, ad_archive_id, collation_id, page_id, page_name,
              is_active, ad_start_date, ad_end_date, publisher_platform, display_format,
@@ -128,10 +141,7 @@ export async function loadStoredAds(): Promise<StoredAd[]> {
       ORDER BY competitor ASC, ad_start_date DESC NULLS LAST
     `;
     return rows.map(mapRow);
-  } catch (err) {
-    if (isMissingTable(err)) return [];
-    throw err;
-  }
+  });
 }
 
 /** Avisos de un competidor (para el análisis IA). */
@@ -150,14 +160,11 @@ export async function loadAdsForCompetitor(competitor: string, source: AdSource)
 }
 
 export async function lastRefreshedAt(): Promise<string | null> {
-  const sql = getPg();
-  try {
+  return safeRead("lastRefreshedAt", null, async () => {
+    const sql = getPg();
     const rows = await sql<{ max: Date | null }[]>`SELECT MAX(fetched_at) AS max FROM competitor_ads`;
     return toIso(rows[0]?.max ?? null);
-  } catch (err) {
-    if (isMissingTable(err)) return null;
-    throw err;
-  }
+  });
 }
 
 // ─── Insights IA ────────────────────────────────────────────────────────────
@@ -170,8 +177,8 @@ export type AdInsight = {
 };
 
 export async function loadAdInsights(): Promise<AdInsight[]> {
-  const sql = getPg();
-  try {
+  return safeRead("loadAdInsights", [], async () => {
+    const sql = getPg();
     const rows = await sql<{ competitor: string; source: AdSource; payload: unknown; generated_at: Date }[]>`
       SELECT competitor, source, payload, generated_at FROM competitor_ad_insights
     `;
@@ -181,10 +188,7 @@ export async function loadAdInsights(): Promise<AdInsight[]> {
       payload: r.payload,
       generated_at: toIso(r.generated_at)!,
     }));
-  } catch (err) {
-    if (isMissingTable(err)) return [];
-    throw err;
-  }
+  });
 }
 
 export async function saveAdInsight(
