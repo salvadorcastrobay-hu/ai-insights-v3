@@ -1,4 +1,5 @@
 import { CompetitorAdsView } from "@/components/pages/CompetitorAdsView";
+import { loadStoredAds, lastRefreshedAt, loadAdInsights } from "@/lib/competitor-ads/store";
 import { DEMO_ADS, DEMO_INSIGHTS } from "@/lib/competitor-ads/demo-data";
 import { isAdmin, type AppRole } from "@/lib/auth/roles";
 import { getServerUserRoles } from "@/lib/supabase/server";
@@ -7,15 +8,23 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export default async function Page() {
-  // Por ahora la página sirve el snapshot base directamente (sin pegar a la DB,
-  // cuya conexión getPg está en revisión). Carga instantánea.
-  const roles = await getServerUserRoles();
+  // Lee de la DB con timeout corto (2s); si falla o viene vacía, cae al
+  // snapshot base. La data viva tiene precedencia cuando está disponible.
+  const [stored, dbInsights, refreshedAt, roles] = await Promise.all([
+    loadStoredAds(),
+    loadAdInsights(),
+    lastRefreshedAt(),
+    getServerUserRoles(),
+  ]);
+
+  const ads = stored.length ? stored : DEMO_ADS;
+  const insights = dbInsights.length ? dbInsights : DEMO_INSIGHTS;
 
   return (
     <CompetitorAdsView
-      ads={DEMO_ADS}
-      insights={DEMO_INSIGHTS}
-      refreshedAt={DEMO_INSIGHTS[0]?.generated_at ?? null}
+      ads={ads}
+      insights={insights}
+      refreshedAt={refreshedAt ?? insights[0]?.generated_at ?? null}
       canRefresh={isAdmin(roles as AppRole[])}
     />
   );
