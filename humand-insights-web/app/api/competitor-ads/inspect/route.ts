@@ -73,7 +73,7 @@ export async function GET(request: Request): Promise<Response> {
 
   const { data: rows, error } = await sb
     .from("competitor_ads")
-    .select("ad_archive_id, collation_id, display_format, media, raw")
+    .select("ad_archive_id, collation_id, display_format, media, raw, competitor, source")
     .eq("ad_archive_id", adId);
   if (error) return Response.json({ error: error.message });
   if (!rows?.length) return Response.json({ error: "ad no encontrado", adId });
@@ -84,6 +84,8 @@ export async function GET(request: Request): Promise<Response> {
     display_format: string | null;
     media: unknown;
     raw: unknown;
+    competitor: string;
+    source: string;
   };
 
   // Hermanos de la misma campaña (collation) y qué media tiene cada uno.
@@ -106,6 +108,34 @@ export async function GET(request: Request): Promise<Response> {
     });
   }
 
+  // Lo que quedó guardado del ANÁLISIS para este aviso (incluye creative_text:
+  // el texto OCR / la transcripción del audio). Si está, la visión/transcripción
+  // corrió OK en el último refresh.
+  let insightForAd: unknown = null;
+  const { data: ins } = await sb
+    .from("competitor_ad_insights")
+    .select("payload, generated_at, model")
+    .eq("competitor", row.competitor)
+    .eq("source", row.source)
+    .limit(1);
+  if (ins?.length) {
+    const payload = (typeof ins[0].payload === "string" ? safeParse(ins[0].payload as string) : ins[0].payload) as
+      | { per_ad?: Array<{ ad_archive_id: string; collation_id: string | null; creative_text?: string | null; goal?: string; content_type?: string }> }
+      | null;
+    const key = row.collation_id ?? row.ad_archive_id;
+    const entry = (payload?.per_ad ?? []).find(
+      (p) => (p.collation_id ?? p.ad_archive_id) === key,
+    );
+    insightForAd = {
+      generated_at: ins[0].generated_at,
+      model: ins[0].model,
+      found_in_per_ad: Boolean(entry),
+      goal: entry?.goal ?? null,
+      content_type: entry?.content_type ?? null,
+      creative_text: entry?.creative_text ?? null,
+    };
+  }
+
   return Response.json({
     ad_archive_id: row.ad_archive_id,
     collation_id: row.collation_id,
@@ -113,5 +143,6 @@ export async function GET(request: Request): Promise<Response> {
     stored_media: row.media,
     snapshot_summary: summarizeSnapshot(row.raw),
     variants: siblings,
+    insight_for_ad: insightForAd,
   });
 }
