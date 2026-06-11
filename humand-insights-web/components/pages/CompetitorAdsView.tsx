@@ -23,6 +23,7 @@ type PerAd = {
   goal: string;
   content_type: string;
   related_pains: string[];
+  creative_text?: string | null;
 };
 type Synthesis = {
   summary: string;
@@ -478,6 +479,15 @@ function AdCard({ c, cls }: { c: Campaign; cls: PerAd | null }) {
             </span>
           ))}
         </div>
+      ) : null}
+
+      {cls?.creative_text ? (
+        <p
+          className="text-[11px] leading-snug text-[var(--color-text-secondary)]"
+          title="Texto detectado dentro del creativo (visión)"
+        >
+          🖼️ <span className="italic">“{cls.creative_text}”</span>
+        </p>
       ) : null}
 
       {ad.body_text ? (
