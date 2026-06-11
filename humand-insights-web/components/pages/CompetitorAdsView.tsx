@@ -402,6 +402,7 @@ function QuestionsBlock({ s, campaigns }: { s: Synthesis; campaigns: Campaign[] 
 function AdCard({ c, cls }: { c: Campaign; cls: PerAd | null }) {
   const ad = c.lead;
   const thumb = ad.media?.images?.[0] ?? null;
+  const video = ad.media?.videos?.[0] ?? null;
   const platforms = ad.publisher_platform ?? [];
   return (
     <div className="flex flex-col gap-2 rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] bg-[var(--color-bg-card)] p-3">
@@ -419,10 +420,23 @@ function AdCard({ c, cls }: { c: Campaign; cls: PerAd | null }) {
         </span>
       </div>
 
-      {thumb ? (
-        // Creativo completo (sin crop), centrado sobre fondo neutro, como en
-        // Meta Ad Library. object-contain + tope de altura para que un retrato
-        // muy alto no domine la tarjeta.
+      {video ? (
+        // Aviso de video: reproductor real (el preview de Meta suele venir
+        // borroso). preload="metadata" → muestra el poster y carga al play.
+        <div className="overflow-hidden rounded-[var(--radius-s)] bg-[var(--color-neutral-100)]">
+          <video
+            controls
+            preload="metadata"
+            poster={thumb ? `/api/competitor-ads/img?u=${encodeURIComponent(thumb)}` : undefined}
+            className="mx-auto block max-h-[400px] w-full object-contain"
+          >
+            <source src={`/api/competitor-ads/video?u=${encodeURIComponent(video)}`} />
+          </video>
+        </div>
+      ) : thumb ? (
+        // Creativo estático completo (sin crop), centrado sobre fondo neutro,
+        // como en Meta Ad Library. object-contain + tope de altura para que un
+        // retrato muy alto no domine la tarjeta.
         <div className="overflow-hidden rounded-[var(--radius-s)] bg-[var(--color-neutral-100)]">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
