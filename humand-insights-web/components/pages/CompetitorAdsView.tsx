@@ -16,12 +16,45 @@ type Angle = {
   related_pains: string[];
   example_copies: string[];
 };
+type Tally = { key: string; count: number };
+type PerAd = {
+  ad_archive_id: string;
+  collation_id: string | null;
+  goal: string;
+  content_type: string;
+  related_pains: string[];
+};
 type Synthesis = {
   summary: string;
   angles: Angle[];
   offer_types: string[];
   ads_analyzed: number;
+  per_ad?: PerAd[];
+  by_goal?: Tally[];
+  by_content_type?: Tally[];
 };
+
+const GOAL_LABELS: Record<string, string> = {
+  lead_gen: "Lead-gen",
+  demo: "Demo",
+  descarga: "Descarga",
+  contenido: "Contenido",
+  trafico: "Tráfico",
+  otro: "Otro",
+};
+const CONTENT_LABELS: Record<string, string> = {
+  caso_exito: "Caso de éxito",
+  webinar: "Webinar",
+  evento: "Evento",
+  demo_producto: "Demo de producto",
+  guia_descargable: "Guía descargable",
+  calculadora: "Calculadora",
+  blog_articulo: "Blog/artículo",
+  lanzamiento_feature: "Lanzamiento",
+  generico: "Genérico",
+};
+const goalLabel = (k: string) => GOAL_LABELS[k] ?? k;
+const contentLabel = (k: string) => CONTENT_LABELS[k] ?? k;
 
 type Props = {
   ads: StoredAd[];
@@ -56,12 +89,15 @@ type Group = {
   total: number;
   campaigns: Campaign[];
   synthesis: Synthesis | null;
+  classByKey: Map<string, PerAd>;
 };
+
+const campaignKey = (a: StoredAd) => a.collation_id ?? a.ad_archive_id;
 
 function dedupeCampaigns(ads: StoredAd[]): Campaign[] {
   const map = new Map<string, Campaign>();
   for (const a of ads) {
-    const key = a.collation_id ?? a.ad_archive_id;
+    const key = campaignKey(a);
     const existing = map.get(key);
     if (existing) existing.variants += 1;
     else map.set(key, { lead: a, variants: 1 });
@@ -84,12 +120,18 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, read
     return [...byComp.entries()]
       .map(([competitor, list]) => {
         const ins = insights.find((i) => i.competitor === competitor);
+        const synthesis = (ins?.payload as Synthesis | undefined) ?? null;
+        const classByKey = new Map<string, PerAd>();
+        for (const p of synthesis?.per_ad ?? []) {
+          classByKey.set(p.collation_id ?? p.ad_archive_id, p);
+        }
         return {
           competitor,
           active: list.filter((a) => a.is_active).length,
           total: list.length,
           campaigns: dedupeCampaigns(list),
-          synthesis: (ins?.payload as Synthesis | undefined) ?? null,
+          synthesis,
+          classByKey,
         };
       })
       .sort((a, b) => b.active - a.active || b.total - a.total);
@@ -181,13 +223,18 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, read
             </p>
 
             {g.synthesis ? <SynthesisBlock s={g.synthesis} /> : null}
+            {g.synthesis ? <QuestionsBlock s={g.synthesis} campaigns={g.campaigns} /> : null}
 
             <p className="mb-2 mt-4 text-[12px] font-semibold text-[var(--color-text-default)]">
               Avisos (por campaña)
             </p>
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {g.campaigns.slice(0, 30).map((c) => (
-                <AdCard key={c.lead.collation_id ?? c.lead.ad_archive_id} c={c} />
+                <AdCard
+                  key={campaignKey(c.lead)}
+                  c={c}
+                  cls={g.classByKey.get(campaignKey(c.lead)) ?? null}
+                />
               ))}
             </div>
             {g.campaigns.length > 30 ? (
@@ -262,7 +309,79 @@ function SynthesisBlock({ s }: { s: Synthesis }) {
   );
 }
 
-function AdCard({ c }: { c: Campaign }) {
+// Bloque "qué responde esta data" — agregados que pidió el equipo:
+// distribución por objetivo (CTA), por tipo de contenido y los avisos más
+// longevos (proxy de "ad ganador": si lleva mucho corriendo, funciona).
+function QuestionsBlock({ s, campaigns }: { s: Synthesis; campaigns: Campaign[] }) {
+  const byGoal = s.by_goal ?? [];
+  const byContent = (s.by_content_type ?? []).filter((t) => t.key !== "generico" || (s.by_content_type ?? []).length === 1);
+
+  const veterans = [...campaigns]
+    .filter((c) => c.lead.is_active && c.lead.ad_start_date)
+    .sort((a, b) => (a.lead.ad_start_date ?? "").localeCompare(b.lead.ad_start_date ?? ""))
+    .slice(0, 3);
+
+  if (!byGoal.length && !byContent.length && !veterans.length) return null;
+
+  return (
+    <div className="mt-3 grid gap-3 rounded-[var(--radius-m)] border border-[var(--color-neutral-200)] bg-[var(--color-bg-card)] p-4 md:grid-cols-3">
+      <div>
+        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">
+          Por objetivo (CTA)
+        </p>
+        <div className="flex flex-wrap gap-1">
+          {byGoal.length ? (
+            byGoal.map((t) => (
+              <span key={t.key} className="rounded-full bg-[var(--color-brand-50)] px-2 py-0.5 text-[11px] text-[var(--color-brand-500)]">
+                {goalLabel(t.key)} <span className="font-semibold">{t.count}</span>
+              </span>
+            ))
+          ) : (
+            <span className="text-[11px] text-[var(--color-text-secondary)]">—</span>
+          )}
+        </div>
+      </div>
+
+      <div>
+        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">
+          Tipos de contenido
+        </p>
+        <div className="flex flex-wrap gap-1">
+          {byContent.length ? (
+            byContent.map((t) => (
+              <span key={t.key} className="rounded-full bg-[var(--color-neutral-100)] px-2 py-0.5 text-[11px]">
+                {contentLabel(t.key)} <span className="font-semibold">{t.count}</span>
+              </span>
+            ))
+          ) : (
+            <span className="text-[11px] text-[var(--color-text-secondary)]">—</span>
+          )}
+        </div>
+      </div>
+
+      <div>
+        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">
+          Más longevos (probables ganadores)
+        </p>
+        <div className="space-y-0.5">
+          {veterans.length ? (
+            veterans.map((c) => (
+              <p key={campaignKey(c.lead)} className="truncate text-[11px] text-[var(--color-text-default)]">
+                <span className="text-[var(--color-text-secondary)]">desde {fmtDate(c.lead.ad_start_date)}</span>
+                {" · "}
+                {c.lead.title || c.lead.body_text?.slice(0, 40) || "(sin título)"}
+              </p>
+            ))
+          ) : (
+            <span className="text-[11px] text-[var(--color-text-secondary)]">—</span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AdCard({ c, cls }: { c: Campaign; cls: PerAd | null }) {
   const ad = c.lead;
   const thumb = ad.media?.images?.[0] ?? null;
   const platforms = ad.publisher_platform ?? [];
@@ -290,6 +409,28 @@ function AdCard({ c }: { c: Campaign }) {
           className="h-28 w-full rounded-[var(--radius-s)] object-cover"
           loading="lazy"
         />
+      ) : null}
+
+      {cls ? (
+        <div className="flex flex-wrap gap-1">
+          <span className="rounded-full bg-[var(--color-brand-50)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--color-brand-500)]">
+            {goalLabel(cls.goal)}
+          </span>
+          {cls.content_type !== "generico" ? (
+            <span className="rounded-full bg-[var(--color-neutral-100)] px-1.5 py-0.5 text-[10px] font-medium">
+              {contentLabel(cls.content_type)}
+            </span>
+          ) : null}
+          {cls.related_pains.map((p) => (
+            <span
+              key={p}
+              className="rounded-full bg-rose-50 px-1.5 py-0.5 text-[10px] font-medium text-rose-600"
+              title="Pain de nuestra taxonomía al que apunta"
+            >
+              🎯 {p}
+            </span>
+          ))}
+        </div>
       ) : null}
 
       {ad.body_text ? (

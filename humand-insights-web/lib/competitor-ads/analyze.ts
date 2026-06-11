@@ -16,15 +16,68 @@ const AngleSchema = z.object({
   example_copies: z.array(z.string()).describe("1-2 citas textuales de copies que ejemplifican el ángulo"),
 });
 
+// Objetivo inferido del CTA + copy (clasificación confiable; reemplaza al funnel,
+// que el equipo considera demasiado subjetivo para ads de competidores).
+const GOALS = ["lead_gen", "demo", "descarga", "contenido", "trafico", "otro"] as const;
+// Qué tipo de pieza es (Laura pidió contar casos de éxito / webinars / eventos).
+const CONTENT_TYPES = [
+  "caso_exito",
+  "webinar",
+  "evento",
+  "demo_producto",
+  "guia_descargable",
+  "calculadora",
+  "blog_articulo",
+  "lanzamiento_feature",
+  "generico",
+] as const;
+
+const ClassificationSchema = z.object({
+  ad_index: z.number().int().describe("El número # del aviso en la lista (empieza en 1)"),
+  goal: z
+    .enum(GOALS)
+    .describe(
+      "Objetivo según CTA + copy: lead_gen (contacto/registro/cotizar), demo (agendar/ver demo), " +
+        "descarga (bajar material), contenido (learn/read/watch more → blog/awareness), trafico (ir al sitio), otro",
+    ),
+  content_type: z.enum(CONTENT_TYPES).describe("Qué tipo de pieza es"),
+  related_pains: z
+    .array(z.string())
+    .describe("Pains de NUESTRA taxonomía a los que apunta este aviso (de la lista provista). Vacío si ninguno."),
+});
+
 const SynthesisSchema = z.object({
   summary: z.string().describe("2-3 frases: qué está comunicando este competidor en general"),
   angles: z.array(AngleSchema).describe("4-6 ángulos de mensaje ordenados por peso desc"),
   offer_types: z
     .array(z.string())
     .describe("Tipos de oferta detectados: ej. 'Lead magnet (guías)', 'Webinar/evento', 'Demo/producto', 'Calculadora de precios'"),
+  classifications: z
+    .array(ClassificationSchema)
+    .describe("UNA entrada por CADA aviso de la lista (por su #), clasificándolo individualmente"),
 });
 
-export type AdSynthesis = z.infer<typeof SynthesisSchema> & { ads_analyzed: number };
+type Tally = { key: string; count: number };
+type PerAd = {
+  ad_archive_id: string;
+  collation_id: string | null;
+  goal: (typeof GOALS)[number];
+  content_type: (typeof CONTENT_TYPES)[number];
+  related_pains: string[];
+};
+
+export type AdSynthesis = Omit<z.infer<typeof SynthesisSchema>, "classifications"> & {
+  ads_analyzed: number;
+  per_ad: PerAd[];
+  by_goal: Tally[];
+  by_content_type: Tally[];
+};
+
+function tally(items: string[]): Tally[] {
+  const m = new Map<string, number>();
+  for (const it of items) m.set(it, (m.get(it) ?? 0) + 1);
+  return [...m.entries()].map(([key, count]) => ({ key, count })).sort((a, b) => b.count - a.count);
+}
 
 function linkDomain(url: string | null): string {
   if (!url) return "";
@@ -99,10 +152,13 @@ export async function analyzeCompetitor(
 
   const system = [
     "Sos un analista de inteligencia competitiva B2B (software de RRHH).",
-    "Te paso los avisos publicitarios ACTIVOS de un competidor (uno por campaña).",
-    "Tu trabajo: sintetizar qué está comunicando — agrupá los copies en 4-6 ÁNGULOS de mensaje,",
-    "no listes anuncio por anuncio. Para cada ángulo estimá su peso (cuántas campañas lo usan)",
-    "y mapeá a qué dolores apunta USANDO EXCLUSIVAMENTE la lista de pains provista (si ninguno aplica, dejá vacío).",
+    "Te paso los avisos publicitarios ACTIVOS de un competidor (uno por campaña, numerados con #).",
+    "Tenés DOS tareas:",
+    "(1) SÍNTESIS: agrupá los copies en 4-6 ÁNGULOS de mensaje (no listes anuncio por anuncio).",
+    "Para cada ángulo estimá su peso (cuántas campañas lo usan) y mapeá a qué dolores apunta",
+    "USANDO EXCLUSIVAMENTE la lista de pains provista (si ninguno aplica, dejá vacío).",
+    "(2) CLASIFICACIÓN: clasificá CADA aviso individualmente por su # — su objetivo (goal, inferido del CTA + copy),",
+    "su tipo de contenido (content_type) y los pains a los que apunta. Devolvé una entrada por cada #.",
     "Las citas de ejemplo deben ser textuales de los copies. No inventes nada que no esté en los avisos.",
     "Respondé en español rioplatense.",
   ].join(" ");
@@ -124,5 +180,27 @@ export async function analyzeCompetitor(
     prompt,
   });
 
-  return { ...object, ads_analyzed: campaigns.length };
+  // Mapeo defensivo #→clasificación (el modelo podría saltarse alguno).
+  const byIndex = new Map<number, z.infer<typeof ClassificationSchema>>();
+  for (const c of object.classifications ?? []) byIndex.set(c.ad_index, c);
+
+  const per_ad: PerAd[] = campaigns.map((camp, i) => {
+    const cls = byIndex.get(i + 1);
+    return {
+      ad_archive_id: camp.ad_archive_id,
+      collation_id: camp.collation_id,
+      goal: cls?.goal ?? "otro",
+      content_type: cls?.content_type ?? "generico",
+      related_pains: cls?.related_pains ?? [],
+    };
+  });
+
+  const { classifications: _drop, ...synthesis } = object;
+  return {
+    ...synthesis,
+    ads_analyzed: campaigns.length,
+    per_ad,
+    by_goal: tally(per_ad.map((p) => p.goal)),
+    by_content_type: tally(per_ad.map((p) => p.content_type)),
+  };
 }
