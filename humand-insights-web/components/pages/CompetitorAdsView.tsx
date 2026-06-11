@@ -1,6 +1,6 @@
 "use client";
 
-import { ExternalLink, Loader2, RefreshCw, Sparkles } from "lucide-react";
+import { ChevronDown, ExternalLink, Loader2, RefreshCw, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
@@ -230,27 +230,40 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, read
             {g.synthesis ? <SynthesisBlock s={g.synthesis} /> : null}
             {g.synthesis ? <QuestionsBlock s={g.synthesis} campaigns={g.campaigns} /> : null}
 
-            <p className="mb-2 mt-4 text-[12px] font-semibold text-[var(--color-text-default)]">
-              Avisos (por campaña)
-            </p>
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {g.campaigns.slice(0, 30).map((c) => (
-                <AdCard
-                  key={campaignKey(c.lead)}
-                  c={c}
-                  cls={g.classByKey.get(campaignKey(c.lead)) ?? null}
-                />
-              ))}
-            </div>
-            {g.campaigns.length > 30 ? (
-              <p className="mt-2 text-[11px] text-[var(--color-text-secondary)]">
-                Mostrando 30 de {g.campaigns.length} campañas.
-              </p>
-            ) : null}
+            <CampaignGrid campaigns={g.campaigns} classByKey={g.classByKey} />
           </ChartCard>
         ))
       )}
     </div>
+  );
+}
+
+// Grid de avisos con desplegable: muestra un preview y "Ver todos los anuncios".
+function CampaignGrid({ campaigns, classByKey }: { campaigns: Campaign[]; classByKey: Map<string, PerAd> }) {
+  const [expanded, setExpanded] = useState(false);
+  const PREVIEW = 6;
+  const visible = expanded ? campaigns : campaigns.slice(0, PREVIEW);
+  return (
+    <>
+      <p className="mb-2 mt-4 text-[12px] font-semibold text-[var(--color-text-default)]">
+        Avisos (por campaña)
+      </p>
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {visible.map((c) => (
+          <AdCard key={campaignKey(c.lead)} c={c} cls={classByKey.get(campaignKey(c.lead)) ?? null} />
+        ))}
+      </div>
+      {campaigns.length > PREVIEW ? (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="mt-3 inline-flex items-center gap-1.5 rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] px-3 py-1.5 text-[12px] font-medium text-[var(--color-text-default)] transition hover:bg-[var(--color-neutral-100)]"
+        >
+          <ChevronDown size={14} className={cn("transition-transform", expanded && "rotate-180")} />
+          {expanded ? "Ver menos" : `Ver todos los anuncios (${campaigns.length})`}
+        </button>
+      ) : null}
+    </>
   );
 }
 
