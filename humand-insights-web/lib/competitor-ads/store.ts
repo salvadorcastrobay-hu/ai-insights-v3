@@ -110,7 +110,28 @@ function toIso(d: Date | null): string | null {
   return d ? new Date(d).toISOString() : null;
 }
 
+/**
+ * Coacciona un valor jsonb a objeto/array. postgres.js sobre el pooler de
+ * Supavisor (prepare:false) a veces devuelve las columnas jsonb como STRING
+ * sin parsear; sin esto, `media.images`/`payload.by_goal`/etc. quedan
+ * undefined y la vista renderiza vacía (sin fotos, sin síntesis).
+ */
+function asJson<T>(v: unknown, fallback: T): T {
+  if (v == null) return fallback;
+  if (typeof v === "string") {
+    try {
+      return JSON.parse(v) as T;
+    } catch {
+      return fallback;
+    }
+  }
+  return v as T;
+}
+
 function mapRow(r: Row): StoredAd {
+  const media = asJson<{ images?: string[]; videos?: string[] }>(r.media, {});
+  const categories = asJson<string[]>(r.categories, []);
+  const platforms = asJson<string[]>(r.publisher_platform, []);
   return {
     source: r.source,
     competitor: r.competitor,
@@ -121,17 +142,17 @@ function mapRow(r: Row): StoredAd {
     is_active: r.is_active,
     ad_start_date: toIso(r.ad_start_date),
     ad_end_date: toIso(r.ad_end_date),
-    publisher_platform: Array.isArray(r.publisher_platform) ? r.publisher_platform : [],
+    publisher_platform: Array.isArray(platforms) ? platforms : [],
     display_format: r.display_format,
     body_text: r.body_text,
     title: r.title,
     cta_text: r.cta_text,
     cta_type: r.cta_type,
     link_url: r.link_url,
-    categories: Array.isArray(r.categories) ? r.categories : [],
+    categories: Array.isArray(categories) ? categories : [],
     media: {
-      images: Array.isArray(r.media?.images) ? r.media.images : [],
-      videos: Array.isArray(r.media?.videos) ? r.media.videos : [],
+      images: Array.isArray(media?.images) ? media.images : [],
+      videos: Array.isArray(media?.videos) ? media.videos : [],
     },
     country: r.country,
     raw: null,
@@ -197,7 +218,7 @@ export async function loadAdInsights(): Promise<AdInsight[]> {
     return rows.map((r) => ({
       competitor: r.competitor,
       source: r.source,
-      payload: r.payload,
+      payload: asJson<unknown>(r.payload, null),
       generated_at: toIso(r.generated_at)!,
     }));
   });
