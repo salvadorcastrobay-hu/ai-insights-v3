@@ -1,10 +1,39 @@
-import { getPg } from "@/lib/supabase/pg";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+
 import type { AdSource, CompetitorAd } from "./types";
 
 export type StoredAd = CompetitorAd & {
   first_seen_at: string;
   last_seen_at: string;
 };
+
+// Cliente Supabase (PostgREST/HTTP, service_role). Reemplaza a getPg/postgres.js
+// para competitor-ads: el pool de sockets directo sobre el pooler de Supavisor
+// se volvía zombie en Railway (lecturas colgadas → timeouts). PostgREST es HTTP
+// sin sockets persistentes (igual que el resto del dashboard) y además devuelve
+// el jsonb ya parseado como objeto.
+let _sb: SupabaseClient | null = null;
+function getSupabase(): SupabaseClient {
+  if (_sb) return _sb;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) {
+    throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in env.");
+  }
+  _sb = createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: {
+      fetch: (input: RequestInfo | URL, init?: RequestInit) =>
+        fetch(input, { ...init, signal: init?.signal ?? AbortSignal.timeout(20_000) }),
+    },
+  });
+  return _sb;
+}
+
+const AD_COLS =
+  "source, competitor, ad_archive_id, collation_id, page_id, page_name, is_active, " +
+  "ad_start_date, ad_end_date, publisher_platform, display_format, body_text, title, " +
+  "cta_text, cta_type, link_url, categories, media, country, first_seen_at, last_seen_at";
 
 // Último error de lectura, para diagnóstico en la propia página (admin).
 let lastReadError: string | null = null;
@@ -16,16 +45,14 @@ export function consumeReadError(): string | null {
 
 /**
  * Lectura defensiva: corre `fn` con un timeout duro y devuelve `fallback` ante
- * CUALQUIER error o demora (tabla/columna faltante, pool agotado, query colgada).
- * La página de ads es informativa → nunca debe quedar en skeleton infinito.
+ * CUALQUIER error o demora. La página de ads es informativa → nunca debe quedar
+ * en skeleton infinito.
  */
 async function safeRead<T>(label: string, fallback: T, fn: () => Promise<T>): Promise<T> {
   try {
     return await Promise.race([
-      // 8s: en arranque en frío la 1ra conexión del pooler tarda ~1.5s y las
-      // lecturas salen en paralelo; 2s las cortaba y caían al fallback vacío.
       fn(),
-      new Promise<T>((_, reject) => setTimeout(() => reject(new Error("timeout")), 8_000)),
+      new Promise<T>((_, reject) => setTimeout(() => reject(new Error("timeout")), 12_000)),
     ]);
   } catch (err) {
     const code = (err as { code?: string })?.code;
@@ -39,47 +66,39 @@ async function safeRead<T>(label: string, fallback: T, fn: () => Promise<T>): Pr
 /** Upsert por (source, competitor, ad_archive_id). Actualiza last_seen_at. */
 export async function upsertAds(ads: CompetitorAd[]): Promise<number> {
   if (!ads.length) return 0;
-  const sql = getPg();
-  let n = 0;
-  for (const a of ads) {
-    await sql`
-      INSERT INTO competitor_ads (
-        source, competitor, ad_archive_id, collation_id, page_id, page_name,
-        is_active, ad_start_date, ad_end_date, publisher_platform, display_format,
-        body_text, title, cta_text, cta_type, link_url, categories, media,
-        country, raw, last_seen_at, fetched_at
-      ) VALUES (
-        ${a.source}, ${a.competitor}, ${a.ad_archive_id}, ${a.collation_id},
-        ${a.page_id}, ${a.page_name}, ${a.is_active}, ${a.ad_start_date}, ${a.ad_end_date},
-        ${JSON.stringify(a.publisher_platform)}::jsonb, ${a.display_format},
-        ${a.body_text}, ${a.title}, ${a.cta_text}, ${a.cta_type}, ${a.link_url},
-        ${JSON.stringify(a.categories)}::jsonb, ${JSON.stringify(a.media)}::jsonb,
-        ${a.country}, ${JSON.stringify(a.raw ?? null)}::jsonb, now(), now()
-      )
-      ON CONFLICT (source, competitor, ad_archive_id) DO UPDATE SET
-        collation_id = EXCLUDED.collation_id,
-        page_id = EXCLUDED.page_id,
-        page_name = EXCLUDED.page_name,
-        is_active = EXCLUDED.is_active,
-        ad_start_date = EXCLUDED.ad_start_date,
-        ad_end_date = EXCLUDED.ad_end_date,
-        publisher_platform = EXCLUDED.publisher_platform,
-        display_format = EXCLUDED.display_format,
-        body_text = EXCLUDED.body_text,
-        title = EXCLUDED.title,
-        cta_text = EXCLUDED.cta_text,
-        cta_type = EXCLUDED.cta_type,
-        link_url = EXCLUDED.link_url,
-        categories = EXCLUDED.categories,
-        media = EXCLUDED.media,
-        country = EXCLUDED.country,
-        raw = EXCLUDED.raw,
-        last_seen_at = now(),
-        fetched_at = now()
-    `;
-    n++;
-  }
-  return n;
+  const sb = getSupabase();
+  const now = new Date().toISOString();
+  // first_seen_at se omite a propósito: en INSERT toma el default de la tabla,
+  // en UPDATE conserva su valor (PostgREST solo setea las columnas provistas).
+  const rows = ads.map((a) => ({
+    source: a.source,
+    competitor: a.competitor,
+    ad_archive_id: a.ad_archive_id,
+    collation_id: a.collation_id,
+    page_id: a.page_id,
+    page_name: a.page_name,
+    is_active: a.is_active,
+    ad_start_date: a.ad_start_date,
+    ad_end_date: a.ad_end_date,
+    publisher_platform: a.publisher_platform,
+    display_format: a.display_format,
+    body_text: a.body_text,
+    title: a.title,
+    cta_text: a.cta_text,
+    cta_type: a.cta_type,
+    link_url: a.link_url,
+    categories: a.categories,
+    media: a.media,
+    country: a.country,
+    raw: a.raw ?? null,
+    last_seen_at: now,
+    fetched_at: now,
+  }));
+  const { error } = await sb
+    .from("competitor_ads")
+    .upsert(rows, { onConflict: "source,competitor,ad_archive_id" });
+  if (error) throw new Error(error.message);
+  return rows.length;
 }
 
 type Row = {
@@ -90,31 +109,29 @@ type Row = {
   page_id: string | null;
   page_name: string | null;
   is_active: boolean | null;
-  ad_start_date: Date | null;
-  ad_end_date: Date | null;
-  publisher_platform: string[] | null;
+  ad_start_date: string | null;
+  ad_end_date: string | null;
+  publisher_platform: unknown;
   display_format: string | null;
   body_text: string | null;
   title: string | null;
   cta_text: string | null;
   cta_type: string | null;
   link_url: string | null;
-  categories: string[] | null;
-  media: { images: string[]; videos: string[] } | null;
+  categories: unknown;
+  media: unknown;
   country: string | null;
-  first_seen_at: Date;
-  last_seen_at: Date;
+  first_seen_at: string;
+  last_seen_at: string;
 };
 
-function toIso(d: Date | null): string | null {
+function toIso(d: string | Date | null): string | null {
   return d ? new Date(d).toISOString() : null;
 }
 
 /**
- * Coacciona un valor jsonb a objeto/array. postgres.js sobre el pooler de
- * Supavisor (prepare:false) a veces devuelve las columnas jsonb como STRING
- * sin parsear; sin esto, `media.images`/`payload.by_goal`/etc. quedan
- * undefined y la vista renderiza vacía (sin fotos, sin síntesis).
+ * Coacciona un valor jsonb a objeto/array. PostgREST ya lo devuelve parseado,
+ * pero por las dudas (o si en algún lado vuelve como string) parseamos.
  */
 function asJson<T>(v: unknown, fallback: T): T {
   if (v == null) return fallback;
@@ -164,39 +181,41 @@ function mapRow(r: Row): StoredAd {
 /** Todos los avisos guardados, orden: competidor, más recientes primero. */
 export async function loadStoredAds(): Promise<StoredAd[]> {
   return safeRead("loadStoredAds", [], async () => {
-    const sql = getPg();
-    const rows = await sql<Row[]>`
-      SELECT source, competitor, ad_archive_id, collation_id, page_id, page_name,
-             is_active, ad_start_date, ad_end_date, publisher_platform, display_format,
-             body_text, title, cta_text, cta_type, link_url, categories, media,
-             country, first_seen_at, last_seen_at
-      FROM competitor_ads
-      ORDER BY competitor ASC, ad_start_date DESC NULLS LAST
-    `;
-    return rows.map(mapRow);
+    const sb = getSupabase();
+    const { data, error } = await sb
+      .from("competitor_ads")
+      .select(AD_COLS)
+      .order("competitor", { ascending: true })
+      .order("ad_start_date", { ascending: false, nullsFirst: false });
+    if (error) throw new Error(error.message);
+    return (data ?? []).map((r) => mapRow(r as unknown as Row));
   });
 }
 
 /** Avisos de un competidor (para el análisis IA). */
 export async function loadAdsForCompetitor(competitor: string, source: AdSource): Promise<StoredAd[]> {
-  const sql = getPg();
-  const rows = await sql<Row[]>`
-    SELECT source, competitor, ad_archive_id, collation_id, page_id, page_name,
-           is_active, ad_start_date, ad_end_date, publisher_platform, display_format,
-           body_text, title, cta_text, cta_type, link_url, categories, media,
-           country, first_seen_at, last_seen_at
-    FROM competitor_ads
-    WHERE competitor = ${competitor} AND source = ${source}
-    ORDER BY ad_start_date DESC NULLS LAST
-  `;
-  return rows.map(mapRow);
+  const sb = getSupabase();
+  const { data, error } = await sb
+    .from("competitor_ads")
+    .select(AD_COLS)
+    .eq("competitor", competitor)
+    .eq("source", source)
+    .order("ad_start_date", { ascending: false, nullsFirst: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((r) => mapRow(r as unknown as Row));
 }
 
 export async function lastRefreshedAt(): Promise<string | null> {
   return safeRead("lastRefreshedAt", null, async () => {
-    const sql = getPg();
-    const rows = await sql<{ max: Date | null }[]>`SELECT MAX(fetched_at) AS max FROM competitor_ads`;
-    return toIso(rows[0]?.max ?? null);
+    const sb = getSupabase();
+    const { data, error } = await sb
+      .from("competitor_ads")
+      .select("fetched_at")
+      .order("fetched_at", { ascending: false })
+      .limit(1);
+    if (error) throw new Error(error.message);
+    const v = (data?.[0] as { fetched_at?: string } | undefined)?.fetched_at ?? null;
+    return toIso(v);
   });
 }
 
@@ -211,16 +230,20 @@ export type AdInsight = {
 
 export async function loadAdInsights(): Promise<AdInsight[]> {
   return safeRead("loadAdInsights", [], async () => {
-    const sql = getPg();
-    const rows = await sql<{ competitor: string; source: AdSource; payload: unknown; generated_at: Date }[]>`
-      SELECT competitor, source, payload, generated_at FROM competitor_ad_insights
-    `;
-    return rows.map((r) => ({
-      competitor: r.competitor,
-      source: r.source,
-      payload: asJson<unknown>(r.payload, null),
-      generated_at: toIso(r.generated_at)!,
-    }));
+    const sb = getSupabase();
+    const { data, error } = await sb
+      .from("competitor_ad_insights")
+      .select("competitor, source, payload, generated_at");
+    if (error) throw new Error(error.message);
+    return (data ?? []).map((r) => {
+      const row = r as { competitor: string; source: AdSource; payload: unknown; generated_at: string };
+      return {
+        competitor: row.competitor,
+        source: row.source,
+        payload: asJson<unknown>(row.payload, null),
+        generated_at: toIso(row.generated_at)!,
+      };
+    });
   });
 }
 
@@ -230,11 +253,12 @@ export async function saveAdInsight(
   payload: unknown,
   model: string,
 ): Promise<void> {
-  const sql = getPg();
-  await sql`
-    INSERT INTO competitor_ad_insights (competitor, source, payload, model, generated_at)
-    VALUES (${competitor}, ${source}, ${JSON.stringify(payload)}::jsonb, ${model}, now())
-    ON CONFLICT (competitor, source) DO UPDATE SET
-      payload = EXCLUDED.payload, model = EXCLUDED.model, generated_at = now()
-  `;
+  const sb = getSupabase();
+  const { error } = await sb
+    .from("competitor_ad_insights")
+    .upsert(
+      { competitor, source, payload, model, generated_at: new Date().toISOString() },
+      { onConflict: "competitor,source" },
+    );
+  if (error) throw new Error(error.message);
 }
