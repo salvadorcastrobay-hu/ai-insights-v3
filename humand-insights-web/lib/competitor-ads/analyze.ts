@@ -133,7 +133,9 @@ export async function analyzeCompetitor(
   const all = await loadAdsForCompetitor(competitor, source);
   if (!all.length) return null;
 
-  const campaigns = dedupeCampaigns(all).slice(0, 40);
+  // Analizamos todas las campañas (guarda alta por las dudas con competidores
+  // muy grandes; para los actuales = todas).
+  const campaigns = dedupeCampaigns(all).slice(0, 80);
   const painVocab = await loadPainVocab();
 
   const adsBlock = campaigns
