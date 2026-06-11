@@ -22,8 +22,10 @@ export function consumeReadError(): string | null {
 async function safeRead<T>(label: string, fallback: T, fn: () => Promise<T>): Promise<T> {
   try {
     return await Promise.race([
+      // 8s: en arranque en frío la 1ra conexión del pooler tarda ~1.5s y las
+      // lecturas salen en paralelo; 2s las cortaba y caían al fallback vacío.
       fn(),
-      new Promise<T>((_, reject) => setTimeout(() => reject(new Error("timeout")), 2_000)),
+      new Promise<T>((_, reject) => setTimeout(() => reject(new Error("timeout")), 8_000)),
     ]);
   } catch (err) {
     const code = (err as { code?: string })?.code;
