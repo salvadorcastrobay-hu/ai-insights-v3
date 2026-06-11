@@ -1,6 +1,7 @@
 import type { CompetitorAd } from "./types";
 
 const BASE = "https://api.scrapecreators.com/v1/facebook/adLibrary/company/ads";
+const DETAIL = "https://api.scrapecreators.com/v1/facebook/adLibrary/ad";
 
 // Forma cruda (parcial) de la respuesta de ScrapeCreators. Solo tipamos lo que
 // usamos; el objeto completo se guarda en `raw`.
@@ -45,12 +46,9 @@ function unixToIso(ts: number | null | undefined): string | null {
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 
-function mapAd(competitor: string, country: string, ad: RawAd): CompetitorAd | null {
-  const id = ad.ad_archive_id ?? null;
-  if (!id) return null;
-  const snap = ad.snapshot ?? {};
-  // `images` = thumbnails mostrables. Para video el creativo está en
-  // video_preview_image_url; para carruseles en cards. Juntamos todo.
+// `images` = thumbnails mostrables. Para video el creativo está en
+// video_preview_image_url; para carruseles en cards. Juntamos todo.
+function extractMedia(snap: RawSnapshot): { images: string[]; videos: string[] } {
   const images: string[] = [];
   const videos: string[] = [];
   for (const im of snap.images ?? []) {
@@ -68,6 +66,14 @@ function mapAd(competitor: string, country: string, ad: RawAd): CompetitorAd | n
     const vu = c.video_hd_url ?? c.video_sd_url;
     if (vu) videos.push(vu);
   }
+  return { images, videos };
+}
+
+function mapAd(competitor: string, country: string, ad: RawAd): CompetitorAd | null {
+  const id = ad.ad_archive_id ?? null;
+  if (!id) return null;
+  const snap = ad.snapshot ?? {};
+  const { images, videos } = extractMedia(snap);
   return {
     source: "meta_ads",
     competitor,
@@ -100,7 +106,44 @@ export type FetchParams = {
   sortBy?: "total_impressions" | "relevancy_monthly_grouped";
   /** Máximo de páginas de cursor a traer (1 crédito c/u). Default 3. */
   maxPages?: number;
+  /**
+   * Para los avisos cuyo snapshot del listado vino SIN creativo (típico en
+   * DCO / multi-version), pedir el detalle por aviso y completar la media.
+   * Cuesta 1 crédito extra por aviso afectado. Default false.
+   */
+  enrichMissingMedia?: boolean;
 };
+
+/** Trae el creativo de un aviso puntual (endpoint de detalle). 1 crédito. */
+export async function fetchAdMedia(adArchiveId: string): Promise<{ images: string[]; videos: string[] } | null> {
+  const key = process.env.SCRAPECREATORS_API_KEY;
+  if (!key) throw new Error("Falta SCRAPECREATORS_API_KEY");
+  const url = new URL(DETAIL);
+  url.searchParams.set("id", adArchiveId);
+  const res = await fetch(url, { headers: { "x-api-key": key }, cache: "no-store" });
+  if (!res.ok) return null;
+  const json = (await res.json()) as { snapshot?: RawSnapshot } | RawSnapshot;
+  const snap = ("snapshot" in json && json.snapshot ? json.snapshot : json) as RawSnapshot;
+  return extractMedia(snap);
+}
+
+/** Completa la media de los avisos vacíos vía detalle, con cap de concurrencia. */
+async function enrichMissingMedia(ads: CompetitorAd[], limit: number): Promise<void> {
+  const targets = ads.filter((a) => a.media.images.length === 0 && a.media.videos.length === 0);
+  let i = 0;
+  const worker = async () => {
+    while (i < targets.length) {
+      const a = targets[i++];
+      try {
+        const m = await fetchAdMedia(a.ad_archive_id);
+        if (m && (m.images.length || m.videos.length)) a.media = m;
+      } catch {
+        /* si el detalle falla, el aviso queda sin media (igual que antes) */
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, targets.length) }, worker));
+}
 
 /**
  * Trae los avisos de un competidor de la Meta Ad Library vía ScrapeCreators.
@@ -146,5 +189,9 @@ export async function fetchCompanyAds(
     if (!cursor) break;
   }
 
-  return [...out.values()];
+  const ads = [...out.values()];
+  if (params.enrichMissingMedia) {
+    await enrichMissingMedia(ads, 4);
+  }
+  return ads;
 }
