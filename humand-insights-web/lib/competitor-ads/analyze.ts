@@ -1,4 +1,4 @@
-import { generateObject } from "ai";
+import { generateObject, generateText } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { z } from "zod";
 
@@ -64,6 +64,7 @@ type PerAd = {
   goal: (typeof GOALS)[number];
   content_type: (typeof CONTENT_TYPES)[number];
   related_pains: string[];
+  creative_text: string | null;
 };
 
 export type AdSynthesis = Omit<z.infer<typeof SynthesisSchema>, "classifications"> & {
@@ -122,6 +123,69 @@ export function adsModel(): string {
   return process.env.COMPETITOR_ADS_MODEL ?? process.env.ASK_CHART_MODEL ?? "gpt-4o-mini";
 }
 
+// ─── Visión: leer el texto incrustado en el creativo ─────────────────────────
+// En muchos avisos (sobre todo video/DCO) el mensaje está EN la imagen, no en
+// el copy. Bajamos los bytes server-side (fbcdn bloquea hotlink, OpenAI no
+// podría traerla por URL) y se la pasamos al modelo con visión.
+
+async function fetchImageBytes(url: string): Promise<Uint8Array | null> {
+  try {
+    const res = await fetch(url, {
+      headers: { "user-agent": "Mozilla/5.0", accept: "image/*,*/*" },
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    return new Uint8Array(await res.arrayBuffer());
+  } catch {
+    return null;
+  }
+}
+
+async function extractCreativeText(imageUrl: string): Promise<string | null> {
+  const bytes = await fetchImageBytes(imageUrl);
+  if (!bytes) return null;
+  try {
+    const { text } = await generateText({
+      model: openai(adsModel()),
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text:
+                "Este es el creativo de un anuncio. Transcribí TEXTUALMENTE el texto incrustado " +
+                "en la imagen (headline, claims, oferta, CTA visible). Si no hay texto legible, " +
+                "respondé exactamente '—'. Máximo 240 caracteres, sin comentarios tuyos.",
+            },
+            { type: "image", image: bytes },
+          ],
+        },
+      ],
+    });
+    const t = text.trim();
+    return t && t !== "—" ? t.slice(0, 240) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Texto del creativo por campaña (key = collation_id ?? ad_archive_id). */
+async function extractCreativeTexts(campaigns: StoredAd[], limit: number): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  const targets = campaigns.filter((c) => c.media?.images?.[0]);
+  let i = 0;
+  const worker = async () => {
+    while (i < targets.length) {
+      const c = targets[i++];
+      const txt = await extractCreativeText(c.media.images[0]);
+      if (txt) out.set(c.collation_id ?? c.ad_archive_id, txt);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, targets.length) }, worker));
+  return out;
+}
+
 /**
  * Analiza los avisos guardados de un competidor y devuelve la síntesis
  * (ángulos + pains mapeados + ofertas). No persiste — el caller decide.
@@ -136,14 +200,19 @@ export async function analyzeCompetitor(
   // Analizamos todas las campañas (guarda alta por las dudas con competidores
   // muy grandes; para los actuales = todas).
   const campaigns = dedupeCampaigns(all).slice(0, 80);
-  const painVocab = await loadPainVocab();
+  const [painVocab, creatives] = await Promise.all([
+    loadPainVocab(),
+    extractCreativeTexts(campaigns, 4),
+  ]);
 
   const adsBlock = campaigns
     .map((c, i) => {
+      const cr = creatives.get(c.collation_id ?? c.ad_archive_id);
       const parts = [
         `#${i + 1}`,
         c.title ? `título: ${c.title}` : "",
         c.body_text ? `copy: ${c.body_text.replace(/\s+/g, " ").slice(0, 400)}` : "",
+        cr ? `texto en creativo: ${cr}` : "",
         c.cta_text ? `cta: ${c.cta_text}` : "",
         c.display_format ? `formato: ${c.display_format}` : "",
         linkDomain(c.link_url) ? `destino: ${linkDomain(c.link_url)}` : "",
@@ -161,6 +230,8 @@ export async function analyzeCompetitor(
     "USANDO EXCLUSIVAMENTE la lista de pains provista (si ninguno aplica, dejá vacío).",
     "(2) CLASIFICACIÓN: clasificá CADA aviso individualmente por su # — su objetivo (goal, inferido del CTA + copy),",
     "su tipo de contenido (content_type) y los pains a los que apunta. Devolvé una entrada por cada #.",
+    "El campo 'texto en creativo' es lo que aparece DENTRO de la imagen/video del aviso (suele tener el mensaje real):",
+    "usalo junto al copy para los ángulos y la clasificación.",
     "Las citas de ejemplo deben ser textuales de los copies. No inventes nada que no esté en los avisos.",
     "Respondé en español rioplatense.",
   ].join(" ");
@@ -194,6 +265,7 @@ export async function analyzeCompetitor(
       goal: cls?.goal ?? "otro",
       content_type: cls?.content_type ?? "generico",
       related_pains: cls?.related_pains ?? [],
+      creative_text: creatives.get(camp.collation_id ?? camp.ad_archive_id) ?? null,
     };
   });
 
