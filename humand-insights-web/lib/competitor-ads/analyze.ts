@@ -1,4 +1,4 @@
-import { generateObject, generateText } from "ai";
+import { generateObject, generateText, experimental_transcribe as transcribe } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { z } from "zod";
 
@@ -170,15 +170,60 @@ async function extractCreativeText(imageUrl: string): Promise<string | null> {
   }
 }
 
-/** Texto del creativo por campaña (key = collation_id ?? ad_archive_id). */
+function transcribeModel(): string {
+  return process.env.COMPETITOR_ADS_TRANSCRIBE_MODEL ?? "gpt-4o-mini-transcribe";
+}
+
+// Límite de la API de transcripción de OpenAI: 25MB. Si el video pesa más,
+// saltamos (cae a OCR del poster).
+const MAX_VIDEO_BYTES = 24 * 1024 * 1024;
+
+async function fetchVideoBytes(url: string): Promise<Uint8Array | null> {
+  try {
+    const res = await fetch(url, {
+      headers: { "user-agent": "Mozilla/5.0", accept: "video/*,*/*" },
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const len = Number(res.headers.get("content-length") ?? "0");
+    if (len && len > MAX_VIDEO_BYTES) return null;
+    const buf = await res.arrayBuffer();
+    if (buf.byteLength > MAX_VIDEO_BYTES) return null;
+    return new Uint8Array(buf);
+  } catch {
+    return null;
+  }
+}
+
+/** Transcribe el audio del video (lo que se dice). Mejor que OCR del preview. */
+async function transcribeVideo(url: string): Promise<string | null> {
+  const bytes = await fetchVideoBytes(url);
+  if (!bytes) return null;
+  try {
+    const { text } = await transcribe({ model: openai.transcription(transcribeModel()), audio: bytes });
+    const t = text.replace(/\s+/g, " ").trim();
+    return t ? t.slice(0, 600) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Texto del creativo por campaña (key = collation_id ?? ad_archive_id).
+ * Video → transcripción del audio (con fallback a OCR del poster).
+ * Estático → OCR de la imagen.
+ */
 async function extractCreativeTexts(campaigns: StoredAd[], limit: number): Promise<Map<string, string>> {
   const out = new Map<string, string>();
-  const targets = campaigns.filter((c) => c.media?.images?.[0]);
+  const targets = campaigns.filter((c) => c.media?.videos?.[0] || c.media?.images?.[0]);
   let i = 0;
   const worker = async () => {
     while (i < targets.length) {
       const c = targets[i++];
-      const txt = await extractCreativeText(c.media.images[0]);
+      let txt: string | null = null;
+      const video = c.media?.videos?.[0];
+      if (video) txt = await transcribeVideo(video);
+      if (!txt && c.media?.images?.[0]) txt = await extractCreativeText(c.media.images[0]);
       if (txt) out.set(c.collation_id ?? c.ad_archive_id, txt);
     }
   };
@@ -212,7 +257,7 @@ export async function analyzeCompetitor(
         `#${i + 1}`,
         c.title ? `título: ${c.title}` : "",
         c.body_text ? `copy: ${c.body_text.replace(/\s+/g, " ").slice(0, 400)}` : "",
-        cr ? `texto en creativo: ${cr}` : "",
+        cr ? `texto/voz del creativo: ${cr}` : "",
         c.cta_text ? `cta: ${c.cta_text}` : "",
         c.display_format ? `formato: ${c.display_format}` : "",
         linkDomain(c.link_url) ? `destino: ${linkDomain(c.link_url)}` : "",
@@ -230,8 +275,8 @@ export async function analyzeCompetitor(
     "USANDO EXCLUSIVAMENTE la lista de pains provista (si ninguno aplica, dejá vacío).",
     "(2) CLASIFICACIÓN: clasificá CADA aviso individualmente por su # — su objetivo (goal, inferido del CTA + copy),",
     "su tipo de contenido (content_type) y los pains a los que apunta. Devolvé una entrada por cada #.",
-    "El campo 'texto en creativo' es lo que aparece DENTRO de la imagen/video del aviso (suele tener el mensaje real):",
-    "usalo junto al copy para los ángulos y la clasificación.",
+    "El campo 'texto/voz del creativo' es lo que aparece DENTRO de la imagen o lo que se DICE en el video",
+    "(suele tener el mensaje real): usalo junto al copy para los ángulos y la clasificación.",
     "Las citas de ejemplo deben ser textuales de los copies. No inventes nada que no esté en los avisos.",
     "Respondé en español rioplatense.",
   ].join(" ");

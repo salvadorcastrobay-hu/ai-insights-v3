@@ -484,7 +484,7 @@ function AdCard({ c, cls }: { c: Campaign; cls: PerAd | null }) {
       {cls?.creative_text ? (
         <p
           className="text-[11px] leading-snug text-[var(--color-text-secondary)]"
-          title="Texto detectado dentro del creativo (visión)"
+          title="Texto/voz del creativo (OCR en imagen, transcripción en video)"
         >
           🖼️ <span className="italic">“{cls.creative_text}”</span>
         </p>
