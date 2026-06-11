@@ -420,13 +420,18 @@ function AdCard({ c, cls }: { c: Campaign; cls: PerAd | null }) {
       </div>
 
       {thumb ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={`/api/competitor-ads/img?u=${encodeURIComponent(thumb)}`}
-          alt=""
-          className="h-28 w-full rounded-[var(--radius-s)] object-cover"
-          loading="lazy"
-        />
+        // Creativo completo (sin crop), centrado sobre fondo neutro, como en
+        // Meta Ad Library. object-contain + tope de altura para que un retrato
+        // muy alto no domine la tarjeta.
+        <div className="overflow-hidden rounded-[var(--radius-s)] bg-[var(--color-neutral-100)]">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={`/api/competitor-ads/img?u=${encodeURIComponent(thumb)}`}
+            alt=""
+            className="mx-auto block max-h-[400px] w-full object-contain"
+            loading="lazy"
+          />
+        </div>
       ) : null}
 
       {cls ? (
