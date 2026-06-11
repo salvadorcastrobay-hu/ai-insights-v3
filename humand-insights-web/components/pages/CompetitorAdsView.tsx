@@ -94,13 +94,23 @@ type Group = {
 
 const campaignKey = (a: StoredAd) => a.collation_id ?? a.ad_archive_id;
 
+function hasMedia(a: StoredAd): boolean {
+  return (a.media?.images?.length ?? 0) > 0 || (a.media?.videos?.length ?? 0) > 0;
+}
+
 function dedupeCampaigns(ads: StoredAd[]): Campaign[] {
   const map = new Map<string, Campaign>();
   for (const a of ads) {
     const key = campaignKey(a);
     const existing = map.get(key);
-    if (existing) existing.variants += 1;
-    else map.set(key, { lead: a, variants: 1 });
+    if (existing) {
+      existing.variants += 1;
+      // Preferir como lead la variante que tenga creativo: las campañas con
+      // múltiples versiones a veces traen el media en una variante y no en otra.
+      if (!hasMedia(existing.lead) && hasMedia(a)) existing.lead = a;
+    } else {
+      map.set(key, { lead: a, variants: 1 });
+    }
   }
   return [...map.values()];
 }
