@@ -16,6 +16,7 @@ type Result = {
   upserted: number;
   analyzed: boolean;
   error?: string;
+  analyzeError?: string;
 };
 
 // Corre tasks con un cap de concurrencia (gentil con la API externa).
@@ -67,14 +68,17 @@ export async function POST(): Promise<Response> {
         r.fetched = ads.length;
         r.upserted = await upsertAds(ads);
       }
-      // Análisis IA (no rompe el refresh si falla).
+      // Análisis IA (no rompe el refresh si falla, pero el error se reporta).
       try {
         const synthesis = await analyzeCompetitor(c.name, c.source);
         if (synthesis) {
           await saveAdInsight(c.name, c.source, synthesis, adsModel());
           r.analyzed = true;
+        } else {
+          r.analyzeError = "analyzeCompetitor devolvió null (sin avisos)";
         }
       } catch (e) {
+        r.analyzeError = e instanceof Error ? e.message : String(e);
         console.error(`[competitor-ads] analyze ${c.name} falló:`, e);
       }
     } catch (err) {

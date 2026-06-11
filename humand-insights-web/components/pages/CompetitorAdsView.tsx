@@ -145,15 +145,20 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, read
       const json = (await res.json()) as {
         totalUpserted?: number;
         error?: string;
-        results?: Array<{ competitor: string; error?: string; analyzed?: boolean }>;
+        results?: Array<{ competitor: string; error?: string; analyzeError?: string; analyzed?: boolean }>;
       };
       if (!res.ok) {
         setMsg(json.error ?? `Error ${res.status}`);
       } else {
-        const failed = (json.results ?? []).filter((r) => r.error);
-        setMsg(
-          `Actualizado: ${json.totalUpserted ?? 0} avisos${failed.length ? ` · ${failed.length} con error` : ""}. Análisis IA regenerado.`,
-        );
+        const results = json.results ?? [];
+        const fetchErr = results.find((r) => r.error)?.error;
+        const analyzeErr = results.find((r) => r.analyzeError)?.analyzeError;
+        const analyzedOk = results.filter((r) => r.analyzed).length;
+        const parts = [`Actualizado: ${json.totalUpserted ?? 0} avisos`];
+        if (fetchErr) parts.push(`fetch falló: ${fetchErr}`);
+        if (analyzeErr) parts.push(`análisis falló: ${analyzeErr}`);
+        else parts.push(`análisis OK (${analyzedOk})`);
+        setMsg(parts.join(" · "));
         router.refresh();
       }
     } catch (e) {
