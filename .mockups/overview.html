@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Overview — mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --brand-50:#f1f4fd; --brand-100:#dee5fb; --brand-200:#c5d4f8; --brand-300:#9db8f3;
+    --brand-400:#6f93eb; --brand-500:#496be3; --brand-600:#3851d8; --brand-900:#29317f;
+    --n-50:#f5f6f8; --n-100:#eeeef1; --n-150:#E9E9ED; --n-200:#dfe0e6; --n-300:#cbcdd6;
+    --n-500:#aaaaba; --n-800:#636271; --n-950:#303036;
+    --green-600:#28c040; --green-700:#249637; --green-50:#f5fdf6;
+    --red-600:#d42e2e; --red-50:#fef2f2;
+    --amber-600:#de920c; --amber-50:#fdfaec;
+    --shadow-4dp:-1px 4px 8px 0px rgba(233,233,244,1);
+    --shadow-8dp:-1px 8px 16px 0px rgba(170,170,186,0.45);
+    --radius-s:4px; --radius-m:8px; --radius-l:16px;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body {
+    font-family:Roboto, system-ui, sans-serif; background:var(--n-50);
+    color:var(--n-950); letter-spacing:.2px; line-height:1.4; font-size:14px;
+  }
+  .app { display:flex; min-height:100vh; }
+
+  /* Sidebar */
+  .sidebar {
+    width:212px; flex-shrink:0; background:#fff; border-right:1px solid var(--n-200);
+    padding:16px 12px; display:flex; flex-direction:column; gap:2px;
+  }
+  .logo { display:flex; align-items:center; gap:8px; padding:8px 8px 16px; font-weight:600; font-size:16px; }
+  .logo .dot { width:24px; height:24px; border-radius:6px; background:var(--brand-500); color:#fff; display:grid; place-items:center; font-size:13px; }
+  .nav-item { display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:var(--radius-s); color:var(--n-800); font-size:13px; cursor:pointer; }
+  .nav-item .ic { width:16px; text-align:center; opacity:.7; }
+  .nav-item:hover { background:var(--n-100); }
+  .nav-item.active { background:var(--brand-50); color:var(--brand-500); font-weight:600; }
+  .nav-sep { height:1px; background:var(--n-150); margin:8px 4px; }
+  .nav-label { font-size:10px; text-transform:uppercase; letter-spacing:.5px; color:var(--n-500); padding:8px 10px 4px; }
+
+  /* Main */
+  .main { flex:1; display:flex; flex-direction:column; min-width:0; }
+  .topbar { padding:16px 24px 0; }
+  .filterbar {
+    display:flex; align-items:center; gap:10px; background:#fff; border:1px solid var(--n-200);
+    border-radius:var(--radius-m); padding:8px 12px; font-size:12px;
+  }
+  .filterbar .fbtn { display:flex; align-items:center; gap:6px; font-weight:600; }
+  .filterbar .fbtn .sq { width:24px;height:24px;border-radius:var(--radius-s);background:var(--brand-50);color:var(--brand-500);display:grid;place-items:center; }
+  .chip { display:inline-flex; align-items:center; gap:6px; padding:3px 10px; border-radius:999px; background:var(--n-100); color:var(--n-800); font-size:12px; }
+  .chip.brand { background:var(--brand-50); color:var(--brand-500); }
+  .updating { margin-left:auto; display:inline-flex; align-items:center; gap:6px; color:var(--brand-500); background:var(--brand-50); padding:3px 10px; border-radius:999px; font-weight:500; font-size:11px; }
+  .spin { width:11px;height:11px;border:2px solid var(--brand-300);border-top-color:var(--brand-500);border-radius:50%; animation:sp 0.7s linear infinite; }
+  @keyframes sp { to { transform:rotate(360deg);} }
+
+  .content { padding:18px 24px 40px; overflow-y:auto; }
+  .page-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+  .page-title { font-size:24px; font-weight:600; }
+  .seg { display:inline-flex; background:#fff; border:1px solid var(--n-200); border-radius:999px; padding:3px; gap:2px; font-size:12px; }
+  .seg button { border:0; background:transparent; padding:5px 14px; border-radius:999px; cursor:pointer; color:var(--n-800); font-family:inherit; font-size:12px; }
+  .seg button.on { background:var(--brand-500); color:#fff; font-weight:600; }
+
+  .card { background:#fff; border:1px solid var(--n-200); border-radius:var(--radius-m); box-shadow:var(--shadow-4dp); }
+  .card-h { font-size:14px; font-weight:600; padding:14px 16px 0; }
+  .card-sub { font-size:12px; color:var(--n-800); padding:2px 16px 0; }
+
+  /* Weekly recap */
+  .recap { background:linear-gradient(180deg,var(--brand-50),#fff 60%); border:1px solid var(--brand-200); border-radius:var(--radius-l); padding:18px 20px; margin-bottom:18px; }
+  .recap-h { display:flex; align-items:center; gap:8px; font-weight:600; font-size:15px; margin-bottom:14px; }
+  .recap-h .tag { font-size:11px; font-weight:400; color:var(--n-800); background:#fff; border:1px solid var(--brand-100); padding:2px 8px; border-radius:999px; }
+  .recap-metrics { display:flex; gap:28px; margin-bottom:14px; flex-wrap:wrap; }
+  .rmetric .v { font-size:30px; font-weight:600; line-height:1.1; }
+  .rmetric .l { font-size:12px; color:var(--n-800); }
+  .delta { font-size:13px; font-weight:600; margin-left:6px; }
+  .up { color:var(--green-700); } .down { color:var(--red-600); }
+  .recap-rows { display:flex; flex-direction:column; gap:6px; font-size:13px; }
+  .recap-rows .lbl { color:var(--n-800); display:inline-block; width:130px; }
+  .pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; margin-right:6px; }
+  .pill.up { background:var(--green-50); color:var(--green-700); }
+  .pill.down { background:var(--red-50); color:var(--red-600); }
+  .pill.new { background:var(--amber-50); color:var(--amber-600); }
+
+  /* KPI row */
+  .kpis { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:18px; }
+  .kpi { background:#fff; border:1px solid var(--n-200); border-radius:var(--radius-m); box-shadow:var(--shadow-4dp); padding:14px 16px; }
+  .kpi .l { font-size:12px; color:var(--n-800); }
+  .kpi .v { font-size:30px; font-weight:600; line-height:1.15; }
+  .kpi .c { font-size:11px; color:var(--n-800); }
+
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:18px; }
+  .list { padding:12px 16px 16px; display:flex; flex-direction:column; gap:10px; }
+  .bar-row { display:grid; grid-template-columns:1fr auto; gap:10px; align-items:center; font-size:13px; }
+  .bar-row .name { display:flex; flex-direction:column; gap:4px; min-width:0; }
+  .bar-row .name .t { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .track { height:7px; background:var(--n-100); border-radius:999px; overflow:hidden; }
+  .fill { height:100%; background:var(--brand-500); border-radius:999px; }
+  .val { font-weight:600; font-variant-numeric:tabular-nums; }
+  .muted { color:var(--n-800); font-weight:400; font-size:12px; }
+
+  .q-row { display:grid; grid-template-columns:1fr auto; gap:10px; font-size:13px; padding:7px 0; border-bottom:1px solid var(--n-100); }
+  .q-row:last-child { border-bottom:0; }
+
+  /* inbound */
+  .inbound { padding:14px 16px 18px; }
+  .spark { display:flex; align-items:flex-end; gap:6px; height:90px; margin-top:10px; }
+  .spark .b { flex:1; background:var(--brand-200); border-radius:4px 4px 0 0; }
+  .spark .b.last { background:var(--brand-500); }
+  .deepen { font-size:12px; color:var(--n-800); margin:6px 0 18px; }
+  .deepen a { color:var(--brand-500); text-decoration:none; font-weight:500; }
+
+  .footer { background:#fff; border:1px solid var(--n-200); border-radius:var(--radius-m); padding:12px 16px; font-size:12px; color:var(--n-800); box-shadow:var(--shadow-4dp); }
+  .footer b { color:var(--n-950); font-weight:600; }
+  .fab { position:fixed; bottom:22px; right:22px; background:linear-gradient(90deg,var(--brand-500),var(--brand-400)); color:#fff; padding:11px 18px; border-radius:999px; font-weight:600; font-size:13px; box-shadow:var(--shadow-8dp); display:flex; align-items:center; gap:8px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="logo"><span class="dot">✦</span> Humand Insights</div>
+    <div class="nav-item active"><span class="ic">▦</span> Overview</div>
+    <div class="nav-label">Análisis</div>
+    <div class="nav-item"><span class="ic">◴</span> Executive Summary</div>
+    <div class="nav-item"><span class="ic">⚑</span> Pains</div>
+    <div class="nav-item"><span class="ic">⚔</span> Competidores</div>
+    <div class="nav-item"><span class="ic">◍</span> Regional / GTM</div>
+    <div class="nav-item"><span class="ic">▤</span> Product</div>
+    <div class="nav-item"><span class="ic">?</span> FAQs</div>
+    <div class="nav-item"><span class="ic">⇄</span> Comparativo</div>
+    <div class="nav-sep"></div>
+    <div class="nav-item"><span class="ic">✦</span> Chat IA</div>
+  </aside>
+
+  <!-- Main -->
+  <div class="main">
+    <div class="topbar">
+      <div class="filterbar">
+        <span class="fbtn"><span class="sq">⚙</span> Filtros ▸</span>
+        <span class="chip brand">Región: Todas ✕</span>
+        <span class="chip">Fecha ▾</span>
+        <span class="chip">Canal ▾</span>
+        <span class="chip">Industria ▾</span>
+        <span class="updating"><span class="spin"></span> Actualizando…</span>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="page-head">
+        <div class="page-title">Overview</div>
+        <div class="seg">
+          <button class="on">Todos</button>
+          <button>Clientes</button>
+          <button>No-clientes</button>
+        </div>
+      </div>
+
+      <!-- WEEKLY RECAP -->
+      <section class="recap">
+        <div class="recap-h">📅 Qué pasó esta semana <span class="tag">últimos 7 días · vs. 7 días previos</span></div>
+        <div class="recap-metrics">
+          <div class="rmetric"><div class="v">47<span class="delta up">▲ 12%</span></div><div class="l">Demos</div></div>
+          <div class="rmetric"><div class="v">31<span class="delta up">▲ 4%</span></div><div class="l">Deals nuevos</div></div>
+          <div class="rmetric"><div class="v">$1.2M<span class="delta down">▼ 3%</span></div><div class="l">Pipeline tocado</div></div>
+        </div>
+        <div class="recap-rows">
+          <div><span class="lbl">▲ Subieron</span>
+            <span class="pill up">Procesos manuales +8</span>
+            <span class="pill up">Pricing +5</span>
+            <span class="pill up">Integraciones +3</span>
+          </div>
+          <div><span class="lbl">▼ Bajaron</span>
+            <span class="pill down">Onboarding −3</span>
+            <span class="pill down">Soporte −2</span>
+          </div>
+          <div><span class="lbl">🆕 Competidores</span>
+            <span class="pill new">Factorial</span>
+            <span class="pill new">Rippling</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- KPIs -->
+      <section class="kpis">
+        <div class="kpi"><div class="l">Calls analizadas</div><div class="v">8.088</div><div class="c">12% del período</div></div>
+        <div class="kpi"><div class="l">Deals</div><div class="v">7.329</div><div class="c">con insight</div></div>
+        <div class="kpi"><div class="l">Revenue</div><div class="v">$42.6M</div><div class="c">pipeline único</div></div>
+        <div class="kpi"><div class="l">Cobertura</div><div class="v">12%</div><div class="c">de calls totales</div></div>
+        <div class="kpi"><div class="l">Confianza prom.</div><div class="v">0.92</div><div class="c">99.7% alta</div></div>
+      </section>
+
+      <!-- Top 5 pains + preguntas -->
+      <section class="grid2">
+        <div class="card">
+          <div class="card-h">Top 5 Pains</div>
+          <div class="card-sub">% de demos donde apareció</div>
+          <div class="list">
+            <div class="bar-row"><div class="name"><span class="t">Procesos manuales</span><span class="track"><span class="fill" style="width:100%"></span></span></div><span class="val">62%</span></div>
+            <div class="bar-row"><div class="name"><span class="t">Herramientas fragmentadas</span><span class="track"><span class="fill" style="width:94%"></span></span></div><span class="val">58%</span></div>
+            <div class="bar-row"><div class="name"><span class="t">Sobrecarga de managers</span><span class="track"><span class="fill" style="width:66%"></span></span></div><span class="val">41%</span></div>
+            <div class="bar-row"><div class="name"><span class="t">Sin autogestión</span><span class="track"><span class="fill" style="width:60%"></span></span></div><span class="val">37%</span></div>
+            <div class="bar-row"><div class="name"><span class="t">Baja adopción</span><span class="track"><span class="fill" style="width:50%"></span></span></div><span class="val">31%</span></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-h">Top 5 Preguntas (FAQ)</div>
+          <div class="card-sub">por cantidad de demos</div>
+          <div class="list" style="gap:0">
+            <div class="q-row"><span>¿Integra con [sistema X]?</span><span class="val">120</span></div>
+            <div class="q-row"><span>¿Precio por usuario?</span><span class="val">98</span></div>
+            <div class="q-row"><span>¿Tiempo de implementación?</span><span class="val">71</span></div>
+            <div class="q-row"><span>¿Tienen app mobile?</span><span class="val">64</span></div>
+            <div class="q-row"><span>¿Soporte en español?</span><span class="val">52</span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Top 5 industrias + segmentos -->
+      <section class="grid2">
+        <div class="card">
+          <div class="card-h">Top 5 Industrias</div>
+          <div class="list" style="gap:0">
+            <div class="q-row"><span>Manufacturing</span><span class="val">444</span></div>
+            <div class="q-row"><span>Consumer Goods</span><span class="val">232</span></div>
+            <div class="q-row"><span>Software &amp; IT</span><span class="val">213</span></div>
+            <div class="q-row"><span>Financial services</span><span class="val">180</span></div>
+            <div class="q-row"><span>Construction</span><span class="val">177</span></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-h">Top 5 Segmentos</div>
+          <div class="list" style="gap:0">
+            <div class="q-row"><span>SMB <span class="muted">(&lt;250)</span></span><span class="val">3.307</span></div>
+            <div class="q-row"><span>Mid Market <span class="muted">(250–1000)</span></span><span class="val">2.218</span></div>
+            <div class="q-row"><span>Enterprise <span class="muted">(1001–3000)</span></span><span class="val">890</span></div>
+            <div class="q-row"><span>Large Enterprise <span class="muted">(&gt;3000)</span></span><span class="val">662</span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- inbound -->
+      <section class="card" style="margin-bottom:14px">
+        <div class="card-h">Crecimiento inbound</div>
+        <div class="card-sub">demos que vienen de marketing inbound · % del total: <b>64%</b></div>
+        <div class="inbound">
+          <div class="spark">
+            <span class="b" style="height:30%"></span><span class="b" style="height:42%"></span>
+            <span class="b" style="height:38%"></span><span class="b" style="height:55%"></span>
+            <span class="b" style="height:61%"></span><span class="b" style="height:70%"></span>
+            <span class="b" style="height:66%"></span><span class="b" style="height:82%"></span>
+            <span class="b last" style="height:95%"></span>
+          </div>
+        </div>
+      </section>
+
+      <div class="deepen">¿Querés profundizar? → <a>Pains</a> · <a>Competidores</a> · <a>Regional/GTM</a> · <a>Product</a> · <a>FAQs</a></div>
+
+      <div class="footer">
+        ℹ <b>Calidad de datos</b> · 8.088 calls (12% del período) · 2025-01-16 → 2026-06-03 · confianza prom. <b>0.92</b> · 99.7% alta · última actualización 2026-06-03 14:32
+      </div>
+    </div>
+  </div>
+</div>
+<div class="fab">✦ Preguntar <span style="opacity:.7">⌘K</span></div>
+</body>
+</html>

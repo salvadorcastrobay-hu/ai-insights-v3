@@ -88,7 +88,7 @@ MODULES = {
     # talent_development
     "trainings":                {"display_name": "Capacitaciones Presenciales",           "hr_category": "talent_development", "status": "existing", "sort_order": 52},
     # employee_experience
-    "prode":                    {"display_name": "Prode",                                 "hr_category": "employee_experience", "status": "roadmap", "sort_order": 53},
+    "prode":                    {"display_name": "Prode",                                 "hr_category": "employee_experience", "status": "existing", "sort_order": 53},
     # compensation_and_benefits
     "microloans":               {"display_name": "Microcreditos",                         "hr_category": "compensation_and_benefits", "status": "existing", "sort_order": 54},
 }
