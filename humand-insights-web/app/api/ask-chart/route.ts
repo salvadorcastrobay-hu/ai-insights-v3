@@ -1,6 +1,8 @@
 import { streamText } from "ai";
 import { openai } from "@ai-sdk/openai";
 
+import { resolveChatModel } from "@/lib/chat-models";
+
 import { applyFilters, EMPTY_FILTERS, type Filters } from "@/lib/data/filters";
 import { loadInsights } from "@/lib/supabase/queries";
 import { getAuthenticatedSession } from "@/lib/supabase/server";
@@ -150,6 +152,7 @@ type Body = {
   pathname?: string;
   filters?: Partial<Filters>;
   chartContext?: ChartContext | null;
+  model?: string;
 };
 
 const PAGE_LABELS: Record<string, string> = {
@@ -530,7 +533,8 @@ export async function POST(req: Request) {
   const system = hasEvidence ? systemProse : systemTaxonomy;
   const prompt = `CONTEXTO:\n${context}\n\nPREGUNTA DEL USUARIO: ${question}`;
 
-  const modelId = process.env.ASK_CHART_MODEL ?? "gpt-5.4-mini";
+  // Modelo elegido por el usuario (allowlist; default = básico/gpt-4o-mini).
+  const modelId = resolveChatModel(body.model);
 
   const result = streamText({
     model: openai(modelId),
