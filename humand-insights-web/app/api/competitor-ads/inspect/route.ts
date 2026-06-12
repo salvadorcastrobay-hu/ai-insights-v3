@@ -1,3 +1,5 @@
+import { experimental_transcribe as transcribe } from "ai";
+import { openai } from "@ai-sdk/openai";
 import { createClient } from "@supabase/supabase-js";
 
 import { isAdmin, type AppRole } from "@/lib/auth/roles";
@@ -5,6 +7,32 @@ import { getAuthenticatedSession, getServerUserRoles } from "@/lib/supabase/serv
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 120;
+
+// Intenta transcribir el video en vivo y reporta en qué etapa falla.
+async function liveTranscribe(videoUrl: string): Promise<unknown> {
+  let res: Response;
+  try {
+    res = await fetch(videoUrl, {
+      headers: { "user-agent": "Mozilla/5.0", accept: "video/*,*/*" },
+      cache: "no-store",
+    });
+  } catch (e) {
+    return { stage: "download", ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+  const meta = { status: res.status, content_type: res.headers.get("content-type"), content_length: res.headers.get("content-length") };
+  if (!res.ok) return { stage: "download", ok: false, ...meta };
+  const buf = await res.arrayBuffer();
+  try {
+    const { text } = await transcribe({
+      model: openai.transcription(process.env.COMPETITOR_ADS_TRANSCRIBE_MODEL ?? "gpt-4o-mini-transcribe"),
+      audio: new Uint8Array(buf),
+    });
+    return { stage: "done", ok: true, ...meta, bytes: buf.byteLength, text: text.slice(0, 500) };
+  } catch (e) {
+    return { stage: "transcribe", ok: false, ...meta, bytes: buf.byteLength, error: e instanceof Error ? e.message : String(e) };
+  }
+}
 
 // Diagnóstico TEMPORAL: dado ?ad=<ad_archive_id>, devuelve el `raw` crudo que
 // guardamos de ScrapeCreators + un resumen de qué creativo trae el snapshot,
@@ -136,6 +164,16 @@ export async function GET(request: Request): Promise<Response> {
     };
   }
 
+  // ?live=1 → intenta transcribir el video ahora y reporta el error real.
+  let live: unknown = null;
+  if (new URL(request.url).searchParams.get("live") === "1") {
+    const m = (typeof row.media === "string" ? safeParse(row.media as string) : row.media) as
+      | { videos?: string[] }
+      | null;
+    const vurl = m?.videos?.[0];
+    live = vurl ? await liveTranscribe(vurl) : { error: "el aviso no tiene video" };
+  }
+
   return Response.json({
     ad_archive_id: row.ad_archive_id,
     collation_id: row.collation_id,
@@ -144,5 +182,6 @@ export async function GET(request: Request): Promise<Response> {
     snapshot_summary: summarizeSnapshot(row.raw),
     variants: siblings,
     insight_for_ad: insightForAd,
+    live_transcribe: live,
   });
 }
