@@ -15,6 +15,7 @@ type Angle = {
   weight: number;
   related_pains: string[];
   example_copies: string[];
+  oldest_start?: string | null;
 };
 type Tally = { key: string; count: number };
 type PerAd = {
@@ -413,7 +414,10 @@ function SynthesisBlock({ s }: { s: Synthesis }) {
             <div className="flex flex-wrap items-baseline gap-x-2 text-[13px]">
               <span className="font-semibold">{a.label}</span>
               {typeof a.weight === "number" ? (
-                <span className="text-[11px] text-[var(--color-text-secondary)]">{a.weight} campañas</span>
+                <span className="text-[11px] text-[var(--color-text-secondary)]">
+                  {a.weight} campañas
+                  {a.oldest_start ? <> · más antiguo {fmtDate(a.oldest_start)}</> : null}
+                </span>
               ) : null}
             </div>
             {a.description ? (
