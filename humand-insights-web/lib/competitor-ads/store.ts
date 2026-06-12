@@ -8,6 +8,8 @@ export type AdAnalysis = {
   goal: string;
   content_type: string;
   related_pains: string[];
+  persona: string | null;
+  modules: string[];
 };
 
 export type StoredAd = CompetitorAd & {

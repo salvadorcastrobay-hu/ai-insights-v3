@@ -42,6 +42,18 @@ const ClassificationSchema = z.object({
   related_pains: z
     .array(z.string())
     .describe("Pains de NUESTRA taxonomía a los que apunta este aviso (de la lista provista). Vacío si ninguno."),
+  persona: z
+    .string()
+    .describe(
+      "A quién le habla el aviso, conciso (ej. 'Gerente de RRHH', 'Finanzas', 'Dueño de pyme', " +
+        "'Consultora RRHH', 'Equipo de payroll'). '—' si no se puede inferir.",
+    ),
+  modules: z
+    .array(z.string())
+    .describe(
+      "Módulos de producto que menciona (ej. remuneraciones, control de asistencia, firma digital, " +
+        "finanzas, gestión del desempeño, reclutamiento, capacitación, beneficios). Vacío si ninguno.",
+    ),
 });
 
 const ClassifyListSchema = z.object({
@@ -64,6 +76,8 @@ type PerAd = {
   content_type: string;
   related_pains: string[];
   creative_text: string | null;
+  persona: string | null;
+  modules: string[];
 };
 
 export type AdSynthesis = z.infer<typeof SynthesisSchema> & {
@@ -71,6 +85,8 @@ export type AdSynthesis = z.infer<typeof SynthesisSchema> & {
   per_ad: PerAd[];
   by_goal: Tally[];
   by_content_type: Tally[];
+  by_module: Tally[];
+  by_persona: Tally[];
 };
 
 function tally(items: string[]): Tally[] {
@@ -261,12 +277,20 @@ const CREATIVE_NOTE =
   "(suele tener el mensaje real): usalo junto al copy.";
 
 /** Clasifica SOLO los avisos nuevos (incremental). key → clasificación. */
+type Classification = {
+  goal: string;
+  content_type: string;
+  related_pains: string[];
+  persona: string | null;
+  modules: string[];
+};
+
 async function classifyAds(
   pending: StoredAd[],
   painVocab: string[],
   creativeOf: (c: StoredAd) => string | null,
-): Promise<Map<string, { goal: string; content_type: string; related_pains: string[] }>> {
-  const out = new Map<string, { goal: string; content_type: string; related_pains: string[] }>();
+): Promise<Map<string, Classification>> {
+  const out = new Map<string, Classification>();
   if (!pending.length) return out;
 
   const system = [
@@ -282,10 +306,13 @@ async function classifyAds(
   for (const c of object.classifications ?? []) {
     const camp = pending[c.ad_index - 1];
     if (camp) {
+      const persona = (c.persona ?? "").trim();
       out.set(campaignKey(camp), {
         goal: c.goal,
         content_type: c.content_type,
         related_pains: c.related_pains ?? [],
+        persona: persona && persona !== "—" ? persona : null,
+        modules: c.modules ?? [],
       });
     }
   }
@@ -345,11 +372,14 @@ export async function analyzeCompetitor(
     await Promise.all(
       pending.map(async (c) => {
         const k = campaignKey(c);
+        const cl = cls.get(k);
         const analysis = {
           creative_text: fresh.get(k) ?? null,
-          goal: cls.get(k)?.goal ?? "otro",
-          content_type: cls.get(k)?.content_type ?? "generico",
-          related_pains: cls.get(k)?.related_pains ?? [],
+          goal: cl?.goal ?? "otro",
+          content_type: cl?.content_type ?? "generico",
+          related_pains: cl?.related_pains ?? [],
+          persona: cl?.persona ?? null,
+          modules: cl?.modules ?? [],
         };
         c.analysis = analysis;
         await saveAdAnalysis(c.ad_archive_id, source, analysis);
@@ -365,6 +395,8 @@ export async function analyzeCompetitor(
     content_type: c.analysis?.content_type ?? "generico",
     related_pains: c.analysis?.related_pains ?? [],
     creative_text: c.analysis?.creative_text ?? null,
+    persona: c.analysis?.persona ?? null,
+    modules: c.analysis?.modules ?? [],
   }));
 
   // Síntesis: regenerar solo si hubo avisos nuevos o cambió la cantidad; si no,
@@ -383,5 +415,7 @@ export async function analyzeCompetitor(
     per_ad,
     by_goal: tally(per_ad.map((p) => p.goal)),
     by_content_type: tally(per_ad.map((p) => p.content_type)),
+    by_module: tally(per_ad.flatMap((p) => p.modules)),
+    by_persona: tally(per_ad.map((p) => p.persona).filter((p): p is string => Boolean(p))),
   };
 }

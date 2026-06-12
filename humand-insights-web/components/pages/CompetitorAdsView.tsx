@@ -24,6 +24,8 @@ type PerAd = {
   content_type: string;
   related_pains: string[];
   creative_text?: string | null;
+  persona?: string | null;
+  modules?: string[];
 };
 type Synthesis = {
   summary: string;
@@ -33,6 +35,8 @@ type Synthesis = {
   per_ad?: PerAd[];
   by_goal?: Tally[];
   by_content_type?: Tally[];
+  by_module?: Tally[];
+  by_persona?: Tally[];
 };
 
 const GOAL_LABELS: Record<string, string> = {
@@ -344,13 +348,15 @@ function SynthesisBlock({ s }: { s: Synthesis }) {
 function QuestionsBlock({ s, campaigns }: { s: Synthesis; campaigns: Campaign[] }) {
   const byGoal = s.by_goal ?? [];
   const byContent = (s.by_content_type ?? []).filter((t) => t.key !== "generico" || (s.by_content_type ?? []).length === 1);
+  const byModule = (s.by_module ?? []).slice(0, 10);
+  const byPersona = (s.by_persona ?? []).slice(0, 8);
 
   const veterans = [...campaigns]
     .filter((c) => c.lead.is_active && c.lead.ad_start_date)
     .sort((a, b) => (a.lead.ad_start_date ?? "").localeCompare(b.lead.ad_start_date ?? ""))
     .slice(0, 3);
 
-  if (!byGoal.length && !byContent.length && !veterans.length) return null;
+  if (!byGoal.length && !byContent.length && !byModule.length && !byPersona.length && !veterans.length) return null;
 
   return (
     <div className="mt-3 grid gap-3 rounded-[var(--radius-m)] border border-[var(--color-neutral-200)] bg-[var(--color-bg-card)] p-4 md:grid-cols-3">
@@ -380,6 +386,40 @@ function QuestionsBlock({ s, campaigns }: { s: Synthesis; campaigns: Campaign[] 
             byContent.map((t) => (
               <span key={t.key} className="rounded-full bg-[var(--color-neutral-100)] px-2 py-0.5 text-[11px]">
                 {contentLabel(t.key)} <span className="font-semibold">{t.count}</span>
+              </span>
+            ))
+          ) : (
+            <span className="text-[11px] text-[var(--color-text-secondary)]">—</span>
+          )}
+        </div>
+      </div>
+
+      <div>
+        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">
+          Por módulo
+        </p>
+        <div className="flex flex-wrap gap-1">
+          {byModule.length ? (
+            byModule.map((t) => (
+              <span key={t.key} className="rounded-full bg-[var(--color-neutral-100)] px-2 py-0.5 text-[11px]">
+                {t.key} <span className="font-semibold">{t.count}</span>
+              </span>
+            ))
+          ) : (
+            <span className="text-[11px] text-[var(--color-text-secondary)]">—</span>
+          )}
+        </div>
+      </div>
+
+      <div>
+        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">
+          Por persona
+        </p>
+        <div className="flex flex-wrap gap-1">
+          {byPersona.length ? (
+            byPersona.map((t) => (
+              <span key={t.key} className="rounded-full bg-[var(--color-neutral-100)] px-2 py-0.5 text-[11px]">
+                👤 {t.key} <span className="font-semibold">{t.count}</span>
               </span>
             ))
           ) : (
@@ -469,6 +509,23 @@ function AdCard({ c, cls }: { c: Campaign; cls: PerAd | null }) {
               {contentLabel(cls.content_type)}
             </span>
           ) : null}
+          {cls.persona ? (
+            <span
+              className="rounded-full bg-[var(--color-neutral-100)] px-1.5 py-0.5 text-[10px] font-medium"
+              title="A quién le habla el aviso"
+            >
+              👤 {cls.persona}
+            </span>
+          ) : null}
+          {(cls.modules ?? []).map((m) => (
+            <span
+              key={m}
+              className="rounded-full bg-[var(--color-neutral-100)] px-1.5 py-0.5 text-[10px] text-[var(--color-text-secondary)]"
+              title="Módulo de producto mencionado"
+            >
+              {m}
+            </span>
+          ))}
           {cls.related_pains.map((p) => (
             <span
               key={p}
