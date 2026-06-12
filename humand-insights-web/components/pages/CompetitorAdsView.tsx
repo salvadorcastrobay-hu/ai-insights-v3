@@ -733,16 +733,28 @@ function AdCard({ c, cls }: { c: Campaign; cls: PerAd | null }) {
         ) : null}
       </div>
 
-      {ad.link_url ? (
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <a
-          href={ad.link_url}
+          href={`https://www.facebook.com/ads/library/?id=${ad.ad_archive_id}`}
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1 text-[11px] font-medium text-[var(--color-brand-500)] hover:underline"
+          title="Abrir este aviso en la Meta Ad Library"
         >
-          <ExternalLink size={11} /> destino
+          <ExternalLink size={11} /> Ad Library
         </a>
-      ) : null}
+        {ad.link_url ? (
+          <a
+            href={ad.link_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-[11px] font-medium text-[var(--color-text-secondary)] hover:underline"
+            title="Landing del aviso"
+          >
+            <ExternalLink size={11} /> destino
+          </a>
+        ) : null}
+      </div>
     </div>
   );
 }
