@@ -7,6 +7,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import { useAskChart, type AskChartContext } from "./AskChartProvider";
+import { CHAT_MODELS, DEFAULT_CHAT_MODEL } from "@/lib/chat-models";
 
 type Message = { role: "user" | "assistant"; content: string };
 
@@ -149,6 +150,7 @@ export function AskChartSheet() {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [model, setModel] = useState<string>(DEFAULT_CHAT_MODEL);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -207,6 +209,7 @@ export function AskChartSheet() {
             pathname,
             filters,
             chartContext: chart ?? null,
+            model,
           }),
           signal: ctrl.signal,
         });
@@ -239,7 +242,7 @@ export function AskChartSheet() {
         abortRef.current = null;
       }
     },
-    [input, isStreaming, pathname, filters, chart],
+    [input, isStreaming, pathname, filters, chart, model],
   );
 
   const stop = () => {
@@ -409,10 +412,23 @@ export function AskChartSheet() {
                 disabled={isStreaming}
                 className="block w-full resize-none bg-transparent px-3 py-2.5 text-[13px] text-[var(--color-text-default)] placeholder:text-[var(--color-text-secondary)] focus:outline-none disabled:opacity-60"
               />
-              <div className="flex items-center justify-between border-t border-[var(--color-neutral-100)] px-3 py-1.5">
-                <span className="text-[10px] text-[var(--color-text-secondary)]">
-                  Enter para enviar · Shift+Enter nueva línea
-                </span>
+              <div className="flex items-center justify-between gap-2 border-t border-[var(--color-neutral-100)] px-3 py-1.5">
+                <div className="flex items-center gap-1.5">
+                  <label className="text-[10px] text-[var(--color-text-secondary)]">Modelo</label>
+                  <select
+                    value={model}
+                    onChange={(e) => setModel(e.target.value)}
+                    disabled={isStreaming}
+                    className="rounded border border-[var(--color-neutral-200)] bg-white px-1.5 py-0.5 text-[10px] text-[var(--color-text-default)] focus:outline-none focus:ring-1 focus:ring-[var(--color-brand-400)] disabled:opacity-50"
+                    title="Modelo a usar (más avanzado = mejor calidad, más caro)"
+                  >
+                    {CHAT_MODELS.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <button
                   type="submit"
                   disabled={!input.trim() || isStreaming}
