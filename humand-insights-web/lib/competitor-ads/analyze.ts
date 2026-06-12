@@ -171,7 +171,9 @@ async function extractCreativeText(imageUrl: string): Promise<string | null> {
 }
 
 function transcribeModel(): string {
-  return process.env.COMPETITOR_ADS_TRANSCRIBE_MODEL ?? "gpt-4o-mini-transcribe";
+  // whisper-1 acepta el contenedor video/mp4 (extrae el audio); los modelos
+  // gpt-4o-*-transcribe rechazan mp4 ("model does not support the format").
+  return process.env.COMPETITOR_ADS_TRANSCRIBE_MODEL ?? "whisper-1";
 }
 
 // Límite de la API de transcripción de OpenAI: 25MB. Si el video pesa más,

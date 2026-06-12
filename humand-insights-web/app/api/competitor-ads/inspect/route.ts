@@ -25,7 +25,7 @@ async function liveTranscribe(videoUrl: string): Promise<unknown> {
   const buf = await res.arrayBuffer();
   try {
     const { text } = await transcribe({
-      model: openai.transcription(process.env.COMPETITOR_ADS_TRANSCRIBE_MODEL ?? "gpt-4o-mini-transcribe"),
+      model: openai.transcription(process.env.COMPETITOR_ADS_TRANSCRIBE_MODEL ?? "whisper-1"),
       audio: new Uint8Array(buf),
     });
     return { stage: "done", ok: true, ...meta, bytes: buf.byteLength, text: text.slice(0, 500) };
