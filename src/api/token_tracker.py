@@ -79,10 +79,12 @@ def record_external_usage(
         logger.debug(f"record_external_usage skipped: {exc}")
 
 # ─── Config ─────────────────────────────────────────────────────────────
-# Caps INICIALES generosos. Calibrar después de 1 semana de uso real.
-DAILY_TOKEN_LIMIT   = int(os.getenv("DAILY_TOKEN_LIMIT",   "150000"))   # ~$0.15/día (mini)
-WEEKLY_TOKEN_LIMIT  = int(os.getenv("WEEKLY_TOKEN_LIMIT",  "700000"))
-MONTHLY_TOKEN_LIMIT = int(os.getenv("MONTHLY_TOKEN_LIMIT", "2000000"))
+# Límites en USD (env-configurable). El enforcement es por COSTO, no tokens:
+# así un mismo presupuesto rinde más tokens en un modelo barato y menos en uno
+# caro. cost_usd se calcula por modelo (PRICING_USD_PER_M).
+DAILY_COST_LIMIT_USD   = float(os.getenv("DAILY_COST_LIMIT_USD",   "1.0"))
+WEEKLY_COST_LIMIT_USD  = float(os.getenv("WEEKLY_COST_LIMIT_USD",  "5.0"))
+MONTHLY_COST_LIMIT_USD = float(os.getenv("MONTHLY_COST_LIMIT_USD", "15.0"))
 
 # Comma-separated emails (local-part, sin @humand.co) con enforcement activo.
 # "*" = enforza a TODOS los usuarios. Vacío = no enforza a nadie (solo loguea).
@@ -132,41 +134,23 @@ def check_quota(owner: str) -> None:
         return
 
     summary = _get_cached_usage(owner)
-    daily_tokens = summary["daily"]["input_tokens"] + summary["daily"]["output_tokens"]
-    if daily_tokens >= DAILY_TOKEN_LIMIT:
-        raise HTTPException(
-            status_code=429,
-            detail={
-                "error": "daily_token_limit_reached",
-                "message": "Llegaste al límite diario de tokens. Resetea en 24h.",
-                "used": daily_tokens,
-                "limit": DAILY_TOKEN_LIMIT,
-            },
-        )
-
-    weekly_tokens = summary["weekly"]["input_tokens"] + summary["weekly"]["output_tokens"]
-    if weekly_tokens >= WEEKLY_TOKEN_LIMIT:
-        raise HTTPException(
-            status_code=429,
-            detail={
-                "error": "weekly_token_limit_reached",
-                "message": "Llegaste al límite semanal de tokens.",
-                "used": weekly_tokens,
-                "limit": WEEKLY_TOKEN_LIMIT,
-            },
-        )
-
-    monthly_tokens = summary["monthly"]["input_tokens"] + summary["monthly"]["output_tokens"]
-    if monthly_tokens >= MONTHLY_TOKEN_LIMIT:
-        raise HTTPException(
-            status_code=429,
-            detail={
-                "error": "monthly_token_limit_reached",
-                "message": "Llegaste al límite mensual de tokens.",
-                "used": monthly_tokens,
-                "limit": MONTHLY_TOKEN_LIMIT,
-            },
-        )
+    checks = (
+        ("daily", DAILY_COST_LIMIT_USD, "Llegaste al límite diario de uso. Resetea en 24h."),
+        ("weekly", WEEKLY_COST_LIMIT_USD, "Llegaste al límite semanal de uso."),
+        ("monthly", MONTHLY_COST_LIMIT_USD, "Llegaste al límite mensual de uso."),
+    )
+    for window, limit_usd, message in checks:
+        cost = float(summary[window]["cost_usd"])
+        if limit_usd > 0 and cost >= limit_usd:
+            raise HTTPException(
+                status_code=429,
+                detail={
+                    "error": f"{window}_cost_limit_reached",
+                    "message": message,
+                    "used_usd": round(cost, 4),
+                    "limit_usd": limit_usd,
+                },
+            )
 
 
 # ─── Auto-logging via monkey-patch del OpenAI client ────────────────────
@@ -235,21 +219,21 @@ def get_usage_summary_for(owner: str) -> dict:
     """
     summary = _get_cached_usage(owner)
 
-    def _pack(usage: dict, limit: int) -> dict:
-        used = usage["input_tokens"] + usage["output_tokens"]
-        pct = round(100.0 * used / limit, 1) if limit > 0 else 0.0
+    def _pack(usage: dict, limit_usd: float) -> dict:
+        cost = float(usage["cost_usd"])
+        pct = round(100.0 * cost / limit_usd, 1) if limit_usd > 0 else 0.0
         return {
-            "used_tokens": used,
-            "limit_tokens": limit,
+            "used_tokens": usage["input_tokens"] + usage["output_tokens"],
+            "cost_usd": round(cost, 4),
+            "limit_usd": limit_usd,
             "pct": min(100.0, pct),
-            "cost_usd": usage["cost_usd"],
             "calls": usage["calls"],
         }
 
     return {
         "owner": owner,
         "enforcement_enabled": is_enforcement_enabled(owner),
-        "daily":   _pack(summary["daily"],   DAILY_TOKEN_LIMIT),
-        "weekly":  _pack(summary["weekly"],  WEEKLY_TOKEN_LIMIT),
-        "monthly": _pack(summary["monthly"], MONTHLY_TOKEN_LIMIT),
+        "daily":   _pack(summary["daily"],   DAILY_COST_LIMIT_USD),
+        "weekly":  _pack(summary["weekly"],  WEEKLY_COST_LIMIT_USD),
+        "monthly": _pack(summary["monthly"], MONTHLY_COST_LIMIT_USD),
     }
