@@ -10,6 +10,9 @@ const AngleSchema = z.object({
   label: z.string().describe("Nombre corto del ángulo/mensaje (3-5 palabras)"),
   description: z.string().describe("Una frase explicando el ángulo"),
   weight: z.number().describe("Cuántas campañas usan este ángulo (de las analizadas)"),
+  ad_indices: z
+    .array(z.number().int())
+    .describe("Los # (de la lista de avisos) que usan este ángulo. Imprescindible para ubicar las campañas."),
   related_pains: z
     .array(z.string())
     .describe("Pains de NUESTRA taxonomía a los que apunta (de la lista provista). Vacío si ninguno aplica."),
@@ -80,7 +83,13 @@ type PerAd = {
   modules: string[];
 };
 
-export type AdSynthesis = z.infer<typeof SynthesisSchema> & {
+// El ángulo guardado: sin ad_indices (interno) + la fecha del más antiguo.
+type AngleOut = Omit<z.infer<typeof AngleSchema>, "ad_indices"> & { oldest_start: string | null };
+
+export type AdSynthesis = {
+  summary: string;
+  angles: AngleOut[];
+  offer_types: string[];
   ads_analyzed: number;
   per_ad: PerAd[];
   by_goal: Tally[];
@@ -365,8 +374,8 @@ async function synthesize(
   const system = [
     "Sos un analista de inteligencia competitiva B2B (software de RRHH).",
     "Agrupá los avisos en 4-6 ÁNGULOS de mensaje (no listes anuncio por anuncio).",
-    "Para cada ángulo estimá su peso (cuántas campañas lo usan) y mapeá a qué dolores apunta",
-    "USANDO EXCLUSIVAMENTE la lista de pains provista (si ninguno aplica, dejá vacío).",
+    "Para cada ángulo: estimá su peso (cuántas campañas lo usan), listá en ad_indices los # de los avisos",
+    "que lo usan, y mapeá a qué dolores apunta USANDO EXCLUSIVAMENTE la lista de pains provista (vacío si ninguno).",
     CREATIVE_NOTE,
     "Las citas de ejemplo deben ser textuales. No inventes nada. Respondé en español rioplatense.",
   ].join(" ");
@@ -442,12 +451,32 @@ export async function analyzeCompetitor(
   const validStored = stored && Array.isArray(stored.angles);
   const changed = opts.force || pending.length > 0 || !validStored || stored.ads_analyzed !== campaigns.length;
 
-  const synth = changed
-    ? await synthesize(competitor, campaigns, painVocab, (c) => c.analysis?.creative_text ?? null)
-    : { summary: stored.summary, angles: stored.angles, offer_types: stored.offer_types };
+  let summary: string;
+  let offer_types: string[];
+  let angles: AngleOut[];
+  if (changed) {
+    const synth = await synthesize(competitor, campaigns, painVocab, (c) => c.analysis?.creative_text ?? null);
+    summary = synth.summary;
+    offer_types = synth.offer_types;
+    // Fecha del aviso más antiguo de cada ángulo (a partir de sus ad_indices).
+    angles = synth.angles.map((a) => {
+      const { ad_indices, ...rest } = a;
+      const dates = (ad_indices ?? [])
+        .map((i) => campaigns[i - 1]?.ad_start_date)
+        .filter((d): d is string => Boolean(d));
+      const oldest_start = dates.length ? dates.reduce((m, d) => (d < m ? d : m)) : null;
+      return { ...rest, oldest_start };
+    });
+  } else {
+    summary = stored.summary;
+    offer_types = stored.offer_types;
+    angles = stored.angles;
+  }
 
   return {
-    ...synth,
+    summary,
+    angles,
+    offer_types,
     ads_analyzed: campaigns.length,
     per_ad,
     by_goal: tally(per_ad.map((p) => p.goal)),
