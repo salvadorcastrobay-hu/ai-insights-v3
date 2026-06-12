@@ -3,7 +3,7 @@ import { openai } from "@ai-sdk/openai";
 import { z } from "zod";
 
 import { getPg } from "@/lib/supabase/pg";
-import { loadAdsForCompetitor, type StoredAd } from "./store";
+import { loadAdsForCompetitor, loadAdInsight, saveAdAnalysis, type StoredAd } from "./store";
 import type { AdSource } from "./types";
 
 const AngleSchema = z.object({
@@ -16,10 +16,8 @@ const AngleSchema = z.object({
   example_copies: z.array(z.string()).describe("1-2 citas textuales de copies que ejemplifican el ángulo"),
 });
 
-// Objetivo inferido del CTA + copy (clasificación confiable; reemplaza al funnel,
-// que el equipo considera demasiado subjetivo para ads de competidores).
+// Objetivo inferido del CTA + copy + creativo (reemplaza al funnel).
 const GOALS = ["lead_gen", "demo", "descarga", "contenido", "trafico", "otro"] as const;
-// Qué tipo de pieza es (Laura pidió contar casos de éxito / webinars / eventos).
 const CONTENT_TYPES = [
   "caso_exito",
   "webinar",
@@ -37,7 +35,7 @@ const ClassificationSchema = z.object({
   goal: z
     .enum(GOALS)
     .describe(
-      "Objetivo según CTA + copy: lead_gen (contacto/registro/cotizar), demo (agendar/ver demo), " +
+      "Objetivo según CTA + copy + creativo: lead_gen (contacto/registro/cotizar), demo (agendar/ver demo), " +
         "descarga (bajar material), contenido (learn/read/watch more → blog/awareness), trafico (ir al sitio), otro",
     ),
   content_type: z.enum(CONTENT_TYPES).describe("Qué tipo de pieza es"),
@@ -46,28 +44,29 @@ const ClassificationSchema = z.object({
     .describe("Pains de NUESTRA taxonomía a los que apunta este aviso (de la lista provista). Vacío si ninguno."),
 });
 
+const ClassifyListSchema = z.object({
+  classifications: z.array(ClassificationSchema).describe("UNA entrada por CADA aviso de la lista (por su #)"),
+});
+
 const SynthesisSchema = z.object({
   summary: z.string().describe("2-3 frases: qué está comunicando este competidor en general"),
   angles: z.array(AngleSchema).describe("4-6 ángulos de mensaje ordenados por peso desc"),
   offer_types: z
     .array(z.string())
     .describe("Tipos de oferta detectados: ej. 'Lead magnet (guías)', 'Webinar/evento', 'Demo/producto', 'Calculadora de precios'"),
-  classifications: z
-    .array(ClassificationSchema)
-    .describe("UNA entrada por CADA aviso de la lista (por su #), clasificándolo individualmente"),
 });
 
 type Tally = { key: string; count: number };
 type PerAd = {
   ad_archive_id: string;
   collation_id: string | null;
-  goal: (typeof GOALS)[number];
-  content_type: (typeof CONTENT_TYPES)[number];
+  goal: string;
+  content_type: string;
   related_pains: string[];
   creative_text: string | null;
 };
 
-export type AdSynthesis = Omit<z.infer<typeof SynthesisSchema>, "classifications"> & {
+export type AdSynthesis = z.infer<typeof SynthesisSchema> & {
   ads_analyzed: number;
   per_ad: PerAd[];
   by_goal: Tally[];
@@ -89,12 +88,14 @@ function linkDomain(url: string | null): string {
   }
 }
 
+const campaignKey = (c: StoredAd) => c.collation_id ?? c.ad_archive_id;
+
 /** Una campaña por collation_id (dedupe de variantes del mismo aviso). */
 function dedupeCampaigns(ads: StoredAd[]): StoredAd[] {
   const seen = new Set<string>();
   const out: StoredAd[] = [];
   for (const a of ads) {
-    const key = a.collation_id ?? a.ad_archive_id;
+    const key = campaignKey(a);
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(a);
@@ -123,10 +124,9 @@ export function adsModel(): string {
   return process.env.COMPETITOR_ADS_MODEL ?? process.env.ASK_CHART_MODEL ?? "gpt-4o-mini";
 }
 
-// ─── Visión: leer el texto incrustado en el creativo ─────────────────────────
-// En muchos avisos (sobre todo video/DCO) el mensaje está EN la imagen, no en
-// el copy. Bajamos los bytes server-side (fbcdn bloquea hotlink, OpenAI no
-// podría traerla por URL) y se la pasamos al modelo con visión.
+// ─── Visión / transcripción: leer el texto/voz del creativo ──────────────────
+// En muchos avisos el mensaje está EN el creativo, no en el copy. Bajamos los
+// bytes server-side (fbcdn bloquea hotlink) y se los damos al modelo.
 
 async function fetchImageBytes(url: string): Promise<Uint8Array | null> {
   try {
@@ -141,7 +141,7 @@ async function fetchImageBytes(url: string): Promise<Uint8Array | null> {
   }
 }
 
-async function extractCreativeText(imageUrl: string): Promise<string | null> {
+async function extractImageText(imageUrl: string): Promise<string | null> {
   const bytes = await fetchImageBytes(imageUrl);
   if (!bytes) return null;
   try {
@@ -176,8 +176,7 @@ function transcribeModel(): string {
   return process.env.COMPETITOR_ADS_TRANSCRIBE_MODEL ?? "whisper-1";
 }
 
-// Límite de la API de transcripción de OpenAI: 25MB. Si el video pesa más,
-// saltamos (cae a OCR del poster).
+// Límite de la API de transcripción de OpenAI: 25MB.
 const MAX_VIDEO_BYTES = 24 * 1024 * 1024;
 
 async function fetchVideoBytes(url: string): Promise<Uint8Array | null> {
@@ -197,7 +196,6 @@ async function fetchVideoBytes(url: string): Promise<Uint8Array | null> {
   }
 }
 
-/** Transcribe el audio del video (lo que se dice). Mejor que OCR del preview. */
 async function transcribeVideo(url: string): Promise<string | null> {
   const bytes = await fetchVideoBytes(url);
   if (!bytes) return null;
@@ -211,9 +209,8 @@ async function transcribeVideo(url: string): Promise<string | null> {
 }
 
 /**
- * Texto del creativo por campaña (key = collation_id ?? ad_archive_id).
- * Video → transcripción del audio (con fallback a OCR del poster).
- * Estático → OCR de la imagen.
+ * Texto/voz del creativo por campaña (key = collation_id ?? ad_archive_id).
+ * Video → transcripción del audio (fallback OCR del poster). Estático → OCR.
  */
 async function extractCreativeTexts(campaigns: StoredAd[], limit: number): Promise<Map<string, string>> {
   const out = new Map<string, string>();
@@ -225,36 +222,20 @@ async function extractCreativeTexts(campaigns: StoredAd[], limit: number): Promi
       let txt: string | null = null;
       const video = c.media?.videos?.[0];
       if (video) txt = await transcribeVideo(video);
-      if (!txt && c.media?.images?.[0]) txt = await extractCreativeText(c.media.images[0]);
-      if (txt) out.set(c.collation_id ?? c.ad_archive_id, txt);
+      if (!txt && c.media?.images?.[0]) txt = await extractImageText(c.media.images[0]);
+      if (txt) out.set(campaignKey(c), txt);
     }
   };
   await Promise.all(Array.from({ length: Math.min(limit, targets.length) }, worker));
   return out;
 }
 
-/**
- * Analiza los avisos guardados de un competidor y devuelve la síntesis
- * (ángulos + pains mapeados + ofertas). No persiste — el caller decide.
- */
-export async function analyzeCompetitor(
-  competitor: string,
-  source: AdSource,
-): Promise<AdSynthesis | null> {
-  const all = await loadAdsForCompetitor(competitor, source);
-  if (!all.length) return null;
+// ─── Bloques de prompt ───────────────────────────────────────────────────────
 
-  // Analizamos todas las campañas (guarda alta por las dudas con competidores
-  // muy grandes; para los actuales = todas).
-  const campaigns = dedupeCampaigns(all).slice(0, 80);
-  const [painVocab, creatives] = await Promise.all([
-    loadPainVocab(),
-    extractCreativeTexts(campaigns, 4),
-  ]);
-
-  const adsBlock = campaigns
+function buildBlock(campaigns: StoredAd[], creativeOf: (c: StoredAd) => string | null): string {
+  return campaigns
     .map((c, i) => {
-      const cr = creatives.get(c.collation_id ?? c.ad_archive_id);
+      const cr = creativeOf(c);
       const parts = [
         `#${i + 1}`,
         c.title ? `título: ${c.title}` : "",
@@ -267,58 +248,137 @@ export async function analyzeCompetitor(
       return parts.join(" · ");
     })
     .join("\n");
+}
+
+function painsLine(painVocab: string[]): string {
+  return painVocab.length
+    ? `PAINS DE NUESTRA TAXONOMÍA (mapeá related_pains solo a estos):\n${painVocab.join(", ")}`
+    : "PAINS DE NUESTRA TAXONOMÍA: (no disponible — dejá related_pains vacío)";
+}
+
+const CREATIVE_NOTE =
+  "El campo 'texto/voz del creativo' es lo que aparece DENTRO de la imagen o lo que se DICE en el video " +
+  "(suele tener el mensaje real): usalo junto al copy.";
+
+/** Clasifica SOLO los avisos nuevos (incremental). key → clasificación. */
+async function classifyAds(
+  pending: StoredAd[],
+  painVocab: string[],
+  creativeOf: (c: StoredAd) => string | null,
+): Promise<Map<string, { goal: string; content_type: string; related_pains: string[] }>> {
+  const out = new Map<string, { goal: string; content_type: string; related_pains: string[] }>();
+  if (!pending.length) return out;
 
   const system = [
     "Sos un analista de inteligencia competitiva B2B (software de RRHH).",
-    "Te paso los avisos publicitarios ACTIVOS de un competidor (uno por campaña, numerados con #).",
-    "Tenés DOS tareas:",
-    "(1) SÍNTESIS: agrupá los copies en 4-6 ÁNGULOS de mensaje (no listes anuncio por anuncio).",
+    "Clasificá CADA aviso por su # — objetivo (goal, inferido de CTA + copy + creativo),",
+    "tipo de contenido (content_type) y los pains a los que apunta (solo de la lista).",
+    CREATIVE_NOTE,
+    "Devolvé una entrada por cada #. No inventes nada que no esté en los avisos.",
+  ].join(" ");
+  const prompt = [painsLine(painVocab), "", `AVISOS (${pending.length}):`, buildBlock(pending, creativeOf)].join("\n");
+
+  const { object } = await generateObject({ model: openai(adsModel()), schema: ClassifyListSchema, system, prompt });
+  for (const c of object.classifications ?? []) {
+    const camp = pending[c.ad_index - 1];
+    if (camp) {
+      out.set(campaignKey(camp), {
+        goal: c.goal,
+        content_type: c.content_type,
+        related_pains: c.related_pains ?? [],
+      });
+    }
+  }
+  return out;
+}
+
+/** Síntesis agregada (ángulos / resumen / ofertas) sobre TODAS las campañas. */
+async function synthesize(
+  competitor: string,
+  campaigns: StoredAd[],
+  painVocab: string[],
+  creativeOf: (c: StoredAd) => string | null,
+): Promise<z.infer<typeof SynthesisSchema>> {
+  const system = [
+    "Sos un analista de inteligencia competitiva B2B (software de RRHH).",
+    "Agrupá los avisos en 4-6 ÁNGULOS de mensaje (no listes anuncio por anuncio).",
     "Para cada ángulo estimá su peso (cuántas campañas lo usan) y mapeá a qué dolores apunta",
     "USANDO EXCLUSIVAMENTE la lista de pains provista (si ninguno aplica, dejá vacío).",
-    "(2) CLASIFICACIÓN: clasificá CADA aviso individualmente por su # — su objetivo (goal, inferido del CTA + copy),",
-    "su tipo de contenido (content_type) y los pains a los que apunta. Devolvé una entrada por cada #.",
-    "El campo 'texto/voz del creativo' es lo que aparece DENTRO de la imagen o lo que se DICE en el video",
-    "(suele tener el mensaje real): usalo junto al copy para los ángulos y la clasificación.",
-    "Las citas de ejemplo deben ser textuales de los copies. No inventes nada que no esté en los avisos.",
-    "Respondé en español rioplatense.",
+    CREATIVE_NOTE,
+    "Las citas de ejemplo deben ser textuales. No inventes nada. Respondé en español rioplatense.",
   ].join(" ");
-
   const prompt = [
     `COMPETIDOR: ${competitor}`,
-    painVocab.length
-      ? `PAINS DE NUESTRA TAXONOMÍA (mapeá related_pains solo a estos):\n${painVocab.join(", ")}`
-      : "PAINS DE NUESTRA TAXONOMÍA: (no disponible — dejá related_pains vacío)",
+    painsLine(painVocab),
     "",
     `AVISOS (${campaigns.length} campañas):`,
-    adsBlock,
+    buildBlock(campaigns, creativeOf),
   ].join("\n");
 
-  const { object } = await generateObject({
-    model: openai(adsModel()),
-    schema: SynthesisSchema,
-    system,
-    prompt,
-  });
+  const { object } = await generateObject({ model: openai(adsModel()), schema: SynthesisSchema, system, prompt });
+  return object;
+}
 
-  // Mapeo defensivo #→clasificación (el modelo podría saltarse alguno).
-  const byIndex = new Map<number, z.infer<typeof ClassificationSchema>>();
-  for (const c of object.classifications ?? []) byIndex.set(c.ad_index, c);
+/**
+ * Analiza los avisos de un competidor reusando el cache por aviso:
+ *  - solo procesa (transcripción/OCR + clasificación) los avisos NUEVOS,
+ *  - reusa la síntesis guardada si no cambió el set de avisos.
+ */
+export async function analyzeCompetitor(
+  competitor: string,
+  source: AdSource,
+): Promise<AdSynthesis | null> {
+  const all = await loadAdsForCompetitor(competitor, source);
+  if (!all.length) return null;
 
-  const per_ad: PerAd[] = campaigns.map((camp, i) => {
-    const cls = byIndex.get(i + 1);
-    return {
-      ad_archive_id: camp.ad_archive_id,
-      collation_id: camp.collation_id,
-      goal: cls?.goal ?? "otro",
-      content_type: cls?.content_type ?? "generico",
-      related_pains: cls?.related_pains ?? [],
-      creative_text: creatives.get(camp.collation_id ?? camp.ad_archive_id) ?? null,
-    };
-  });
+  const campaigns = dedupeCampaigns(all).slice(0, 80);
+  const painVocab = await loadPainVocab();
 
-  const { classifications: _drop, ...synthesis } = object;
+  // Nuevos = sin análisis cacheado.
+  const pending = campaigns.filter((c) => !c.analysis);
+
+  if (pending.length) {
+    const fresh = await extractCreativeTexts(pending, 4);
+    const creativeOf = (c: StoredAd) => fresh.get(campaignKey(c)) ?? null;
+    const cls = await classifyAds(pending, painVocab, creativeOf);
+    // Persistir y aplicar en memoria.
+    await Promise.all(
+      pending.map(async (c) => {
+        const k = campaignKey(c);
+        const analysis = {
+          creative_text: fresh.get(k) ?? null,
+          goal: cls.get(k)?.goal ?? "otro",
+          content_type: cls.get(k)?.content_type ?? "generico",
+          related_pains: cls.get(k)?.related_pains ?? [],
+        };
+        c.analysis = analysis;
+        await saveAdAnalysis(c.ad_archive_id, source, analysis);
+      }),
+    );
+  }
+
+  // per_ad + agregados salen del cache (cero LLM).
+  const per_ad: PerAd[] = campaigns.map((c) => ({
+    ad_archive_id: c.ad_archive_id,
+    collation_id: c.collation_id,
+    goal: c.analysis?.goal ?? "otro",
+    content_type: c.analysis?.content_type ?? "generico",
+    related_pains: c.analysis?.related_pains ?? [],
+    creative_text: c.analysis?.creative_text ?? null,
+  }));
+
+  // Síntesis: regenerar solo si hubo avisos nuevos o cambió la cantidad; si no,
+  // reusar la guardada (refresh repetido sin cambios = 0 llamadas al LLM).
+  const stored = (await loadAdInsight(competitor, source)) as AdSynthesis | null;
+  const validStored = stored && Array.isArray(stored.angles);
+  const changed = pending.length > 0 || !validStored || stored.ads_analyzed !== campaigns.length;
+
+  const synth = changed
+    ? await synthesize(competitor, campaigns, painVocab, (c) => c.analysis?.creative_text ?? null)
+    : { summary: stored.summary, angles: stored.angles, offer_types: stored.offer_types };
+
   return {
-    ...synthesis,
+    ...synth,
     ads_analyzed: campaigns.length,
     per_ad,
     by_goal: tally(per_ad.map((p) => p.goal)),
