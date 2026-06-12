@@ -4,6 +4,8 @@ import { AlertCircle, Languages, Link as LinkIcon, Lock, Plus, SlidersHorizontal
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ChatInterface } from "@/components/chat/ChatInterface";
 import { UsageRing } from "@/components/usage/UsageRing";
+import { ModelPicker } from "@/components/chat/ModelPicker";
+import { DEFAULT_CHAT_MODEL } from "@/lib/chat-models";
 import type {
   AdvisorMetadata,
   ChatMessageModel,
@@ -143,6 +145,7 @@ export function CampaignAdvisorClient({ filterBar }: { filterBar?: ReactNode } =
   const [showSources, setShowSources] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [hasRecommendation, setHasRecommendation] = useState(false);
+  const [model, setModel] = useState<string>(DEFAULT_CHAT_MODEL);
   const abortRef = useRef<AbortController | null>(null);
 
   const refreshConversations = useCallback(async () => {
@@ -236,6 +239,7 @@ export function CampaignAdvisorClient({ filterBar }: { filterBar?: ReactNode } =
             conversation_id: activeId,
             filters: toRequestFilters(globalFilters, local),
             external_sources: externalUrls,
+            model,
           }),
           signal: controller.signal,
         });
@@ -276,6 +280,7 @@ export function CampaignAdvisorClient({ filterBar }: { filterBar?: ReactNode } =
           question,
           target_language: targetLanguage || "",
           chat_history: chatHistoryForFollowup,
+          model,
         }),
         signal: controller.signal,
       });
@@ -309,6 +314,7 @@ export function CampaignAdvisorClient({ filterBar }: { filterBar?: ReactNode } =
     isSubmitting,
     refreshConversations,
     targetLanguage,
+    model,
   ]);
 
   const renameConversation = useCallback(
@@ -659,7 +665,8 @@ export function CampaignAdvisorClient({ filterBar }: { filterBar?: ReactNode } =
       assistantLabel="Advisor"
       onCancel={cancel}
       inputAccessory={
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-2">
+          <ModelPicker value={model} onChange={setModel} disabled={isSubmitting} />
           {filtersAccessory}
           {externalSourcesAccessory}
         </div>
