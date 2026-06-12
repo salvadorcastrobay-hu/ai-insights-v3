@@ -240,6 +240,15 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, read
             <p className="mb-3 text-[12px] text-[var(--color-text-secondary)]">
               <span className="font-semibold text-emerald-700">{g.active} avisos activos</span> ·{" "}
               {g.campaigns.length} campañas · {g.total} variantes
+              {(() => {
+                const ts = campaignTimeStats(g.campaigns);
+                return (
+                  <>
+                    {ts.oldest ? <> · más antigua desde {fmtDate(ts.oldest)}</> : null}
+                    {ts.new30 ? <> · {ts.new30} nuevas (30d)</> : null}
+                  </>
+                );
+              })()}
             </p>
 
             {g.synthesis ? <SynthesisBlock s={g.synthesis} /> : null}
@@ -251,6 +260,35 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, read
       )}
     </div>
   );
+}
+
+// Stats de tiempo de las campañas (todo derivado de ad_start_date + is_active).
+type TimeBucket = { label: string; count: number };
+function campaignTimeStats(campaigns: Campaign[]): {
+  oldest: string | null;
+  new30: number;
+  buckets: TimeBucket[];
+} {
+  const now = Date.now();
+  const DAY = 86_400_000;
+  const active = campaigns.filter((c) => c.lead.is_active && c.lead.ad_start_date);
+  let oldest: string | null = null;
+  let new30 = 0;
+  const b = { "≥6 meses": 0, "3–6 meses": 0, "1–3 meses": 0, "<1 mes": 0 };
+  for (const c of active) {
+    const iso = c.lead.ad_start_date as string;
+    if (!oldest || iso < oldest) oldest = iso;
+    const days = (now - new Date(iso).getTime()) / DAY;
+    if (days <= 30) new30 += 1;
+    if (days >= 182) b["≥6 meses"] += 1;
+    else if (days >= 91) b["3–6 meses"] += 1;
+    else if (days >= 30) b["1–3 meses"] += 1;
+    else b["<1 mes"] += 1;
+  }
+  const buckets = (Object.entries(b) as [string, number][])
+    .filter(([, count]) => count > 0)
+    .map(([label, count]) => ({ label, count }));
+  return { oldest, new30, buckets };
 }
 
 // Grid de avisos con desplegable: muestra un preview y "Ver todos los anuncios".
@@ -350,13 +388,22 @@ function QuestionsBlock({ s, campaigns }: { s: Synthesis; campaigns: Campaign[] 
   const byContent = (s.by_content_type ?? []).filter((t) => t.key !== "generico" || (s.by_content_type ?? []).length === 1);
   const byModule = (s.by_module ?? []).slice(0, 10);
   const byPersona = (s.by_persona ?? []).slice(0, 8);
+  const ageBuckets = campaignTimeStats(campaigns).buckets;
 
   const veterans = [...campaigns]
     .filter((c) => c.lead.is_active && c.lead.ad_start_date)
     .sort((a, b) => (a.lead.ad_start_date ?? "").localeCompare(b.lead.ad_start_date ?? ""))
     .slice(0, 3);
 
-  if (!byGoal.length && !byContent.length && !byModule.length && !byPersona.length && !veterans.length) return null;
+  if (
+    !byGoal.length &&
+    !byContent.length &&
+    !byModule.length &&
+    !byPersona.length &&
+    !ageBuckets.length &&
+    !veterans.length
+  )
+    return null;
 
   return (
     <div className="mt-3 grid gap-3 rounded-[var(--radius-m)] border border-[var(--color-neutral-200)] bg-[var(--color-bg-card)] p-4 md:grid-cols-3">
@@ -420,6 +467,23 @@ function QuestionsBlock({ s, campaigns }: { s: Synthesis; campaigns: Campaign[] 
             byPersona.map((t) => (
               <span key={t.key} className="rounded-full bg-[var(--color-neutral-100)] px-2 py-0.5 text-[11px]">
                 👤 {t.key} <span className="font-semibold">{t.count}</span>
+              </span>
+            ))
+          ) : (
+            <span className="text-[11px] text-[var(--color-text-secondary)]">—</span>
+          )}
+        </div>
+      </div>
+
+      <div>
+        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">
+          Antigüedad (activas)
+        </p>
+        <div className="flex flex-wrap gap-1">
+          {ageBuckets.length ? (
+            ageBuckets.map((t) => (
+              <span key={t.label} className="rounded-full bg-[var(--color-neutral-100)] px-2 py-0.5 text-[11px]">
+                {t.label} <span className="font-semibold">{t.count}</span>
               </span>
             ))
           ) : (
