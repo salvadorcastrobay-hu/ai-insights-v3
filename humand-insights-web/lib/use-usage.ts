@@ -4,9 +4,9 @@ import { useCallback, useEffect, useState } from "react";
 
 export type UsageWindow = {
   used_tokens: number;
-  limit_tokens: number;
-  pct: number;
   cost_usd: number;
+  limit_usd: number;
+  pct: number;
   calls: number;
 };
 

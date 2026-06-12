@@ -47,8 +47,8 @@ export function UsageRing({ visibleForOwners, autoRefreshMs = 90000 }: Props) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        title={`Token usage diario: ${pct.toFixed(0)}%`}
-        aria-label="Token usage"
+        title={`Uso diario: ${pct.toFixed(0)}%`}
+        aria-label="Uso"
         className="flex shrink-0 items-center justify-center rounded-full p-0.5 hover:bg-[var(--color-neutral-100)]"
       >
         <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`}>
@@ -91,7 +91,7 @@ export function UsageRing({ visibleForOwners, autoRefreshMs = 90000 }: Props) {
         <div className="absolute right-0 bottom-[calc(100%+8px)] z-50 w-72 rounded-[var(--radius-m)] border border-[var(--color-neutral-200)] bg-white p-3 shadow-[var(--shadow-4dp)]">
           <div className="flex items-center justify-between">
             <span className="text-[12px] font-semibold text-[var(--color-text-default)]">
-              Uso de tokens
+              Uso (USD)
             </span>
             <span className="text-[11px] text-[var(--color-text-secondary)]">
               {data.enforcement_enabled ? "Cap activo" : "Sin enforcement"}
@@ -109,6 +109,12 @@ export function UsageRing({ visibleForOwners, autoRefreshMs = 90000 }: Props) {
   );
 }
 
+function fmtUsd(n: number): string {
+  if (n >= 1) return `$${n.toFixed(2)}`;
+  if (n >= 0.01) return `$${n.toFixed(3)}`;
+  return `$${n.toFixed(4)}`;
+}
+
 function UsageBar({ label, window: w }: { label: string; window: UsageWindow }) {
   const pct = Math.min(100, w.pct);
   const stroke = colorForPct(pct);
@@ -117,7 +123,7 @@ function UsageBar({ label, window: w }: { label: string; window: UsageWindow }) 
       <div className="flex items-center justify-between text-[11px]">
         <span className="text-[var(--color-text-secondary)]">{label}</span>
         <span className="font-mono text-[var(--color-text-default)]">
-          {w.used_tokens.toLocaleString()} / {w.limit_tokens.toLocaleString()}
+          {fmtUsd(w.cost_usd)} / {fmtUsd(w.limit_usd)}
         </span>
       </div>
       <div className="h-1.5 w-full rounded-full bg-[var(--color-neutral-100)]">
@@ -128,7 +134,7 @@ function UsageBar({ label, window: w }: { label: string; window: UsageWindow }) 
       </div>
       <div className="flex items-center justify-between text-[10px] text-[var(--color-text-secondary)]">
         <span>{pct.toFixed(0)}%</span>
-        <span>${w.cost_usd.toFixed(4)} · {w.calls} calls</span>
+        <span>{w.used_tokens.toLocaleString()} tokens · {w.calls} calls</span>
       </div>
     </div>
   );
