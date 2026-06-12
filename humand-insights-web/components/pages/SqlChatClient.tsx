@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { SlidersHorizontal, X } from "lucide-react";
 import { ChatInterface } from "@/components/chat/ChatInterface";
 import { UsageRing } from "@/components/usage/UsageRing";
+import { ModelPicker } from "@/components/chat/ModelPicker";
+import { DEFAULT_CHAT_MODEL } from "@/lib/chat-models";
 import type {
   ChartPayload,
   ChatMessageModel,
@@ -107,6 +109,7 @@ export function SqlChatClient({ filterBar }: { filterBar?: ReactNode } = {}) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessageModel[]>([]);
   const [input, setInput] = useState("");
+  const [model, setModel] = useState<string>(DEFAULT_CHAT_MODEL);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingConversations, setIsLoadingConversations] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
@@ -215,6 +218,7 @@ export function SqlChatClient({ filterBar }: { filterBar?: ReactNode } = {}) {
           conversation_id: activeId,
           history,
           filters: activeFiltersPayload,
+          model,
         }),
         signal: controller.signal,
       });
@@ -238,7 +242,7 @@ export function SqlChatClient({ filterBar }: { filterBar?: ReactNode } = {}) {
     } finally {
       setIsSubmitting(false);
     }
-  }, [activeId, activeFiltersPayload, input, isSubmitting, messages, refreshConversations]);
+  }, [activeId, activeFiltersPayload, input, isSubmitting, messages, refreshConversations, model]);
 
   const renameConversation = useCallback(
     async (id: string, currentTitle: string) => {
@@ -299,7 +303,9 @@ export function SqlChatClient({ filterBar }: { filterBar?: ReactNode } = {}) {
       assistantLabel="AI"
       onCancel={cancel}
       inputAccessory={
-        filterBar ? (
+        <div className="flex items-center gap-2">
+          <ModelPicker value={model} onChange={setModel} disabled={isSubmitting} />
+          {filterBar ? (
           <div className="relative">
             <button
               type="button"
@@ -327,7 +333,8 @@ export function SqlChatClient({ filterBar }: { filterBar?: ReactNode } = {}) {
               </div>
             ) : null}
           </div>
-        ) : undefined
+          ) : null}
+        </div>
       }
       inputTrailing={<UsageRing />}
       starterPrompts={[

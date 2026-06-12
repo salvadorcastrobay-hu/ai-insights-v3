@@ -735,8 +735,21 @@ def _get_secret_optional(key: str) -> str | None:
         return None
 
 
+# Modelo pedido por request (lo setea el endpoint según el selector del chat).
+# Si está, manda sobre el default de env. Per-call vía contextvar.
+import contextvars as _ctxvars
+
+_requested_model: "_ctxvars.ContextVar[str | None]" = _ctxvars.ContextVar(
+    "sql_chat_requested_model", default=None
+)
+
+
+def set_requested_model(model: str | None) -> None:
+    _requested_model.set(model or None)
+
+
 def _get_chat_model() -> str:
-    return os.getenv("OPENAI_CHAT_AGENT_MODEL", "gpt-4o")
+    return _requested_model.get() or os.getenv("OPENAI_CHAT_AGENT_MODEL", "gpt-4o")
 
 
 def _get_openai_client() -> OpenAI:

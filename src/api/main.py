@@ -20,6 +20,7 @@ from openai import OpenAI
 from sql_chat_agent import (
     execute_query,
     generate_response,
+    set_requested_model,
     search_transcript_chunks,
     summarize_hybrid_results,
     summarize_results,
@@ -67,11 +68,21 @@ app.add_middleware(
 )
 
 
+# Modelos permitidos en los selectores de chat (mirror del web lib/chat-models).
+ALLOWED_CHAT_MODELS = {"gpt-4o-mini", "gpt-5.4-mini", "gpt-5.4"}
+
+
+def resolve_chat_model(model: str | None) -> str | None:
+    """Devuelve el modelo si está en el allowlist; si no, None (usa el default)."""
+    return model if model in ALLOWED_CHAT_MODELS else None
+
+
 class ChatQueryBody(BaseModel):
     question: str
     conversation_id: str | None = None
     history: list[dict[str, Any]] = Field(default_factory=list)
     filters: dict[str, Any] = Field(default_factory=dict)
+    model: str | None = None
 
 
 class ConversationPatchBody(BaseModel):
@@ -83,6 +94,7 @@ class AdvisorGenerateBody(BaseModel):
     question: str = ""
     conversation_id: str | None = None
     external_sources: list[str] = Field(default_factory=list)
+    model: str | None = None
 
 
 class AdvisorFollowupBody(BaseModel):
@@ -90,6 +102,7 @@ class AdvisorFollowupBody(BaseModel):
     question: str
     target_language: str = ""
     chat_history: list[dict[str, Any]] = Field(default_factory=list)
+    model: str | None = None
 
 
 class AdvisorTranslateBody(BaseModel):
@@ -342,6 +355,7 @@ def sql_chat_query(body: ChatQueryBody, owner: str = Depends(verify_jwt)) -> dic
     # Token usage: setea contexto + chequea quota antes de hacer cualquier call.
     set_request_context(owner, "sql-chat")
     check_quota(owner)
+    set_requested_model(resolve_chat_model(body.model))
 
     filters_payload = _normalize_filters_payload(body.filters)
     filter_context = _format_filter_context(filters_payload)
@@ -441,7 +455,7 @@ def advisor_generate(body: AdvisorGenerateBody, owner: str = Depends(verify_jwt)
     filters = dict(body.filters or {})
     question = body.question.strip()
     external_context, external_records, external_warnings = _build_external_context(body.external_sources)
-    agent = MarketingAdvisorAgent()
+    agent = MarketingAdvisorAgent(model=resolve_chat_model(body.model))
     pipeline = get_pipeline_breakdown(filters)
     insights = get_segment_insights(filters)
     recommendation = agent.generate_recommendations(
@@ -499,7 +513,7 @@ def advisor_followup(body: AdvisorFollowupBody, owner: str = Depends(verify_jwt)
     if not recommendation or not pipeline or not insights:
         raise HTTPException(status_code=404, detail="Advisor snapshot not found for this conversation.")
 
-    agent = MarketingAdvisorAgent()
+    agent = MarketingAdvisorAgent(model=resolve_chat_model(body.model))
     answer = agent.answer_followup(
         body.question,
         recommendation,
