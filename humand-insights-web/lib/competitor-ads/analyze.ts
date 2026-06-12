@@ -390,6 +390,7 @@ async function synthesize(
 export async function analyzeCompetitor(
   competitor: string,
   source: AdSource,
+  opts: { force?: boolean } = {},
 ): Promise<AdSynthesis | null> {
   const all = await loadAdsForCompetitor(competitor, source);
   if (!all.length) return null;
@@ -397,8 +398,8 @@ export async function analyzeCompetitor(
   const campaigns = dedupeCampaigns(all).slice(0, 80);
   const painVocab = await loadPainVocab();
 
-  // Nuevos = sin análisis cacheado.
-  const pending = campaigns.filter((c) => !c.analysis);
+  // Nuevos = sin análisis cacheado. force = re-analizar TODO (ignora el cache).
+  const pending = opts.force ? campaigns : campaigns.filter((c) => !c.analysis);
 
   if (pending.length) {
     const fresh = await extractCreativeTexts(competitor, pending, 4);
@@ -439,7 +440,7 @@ export async function analyzeCompetitor(
   // reusar la guardada (refresh repetido sin cambios = 0 llamadas al LLM).
   const stored = (await loadAdInsight(competitor, source)) as AdSynthesis | null;
   const validStored = stored && Array.isArray(stored.angles);
-  const changed = pending.length > 0 || !validStored || stored.ads_analyzed !== campaigns.length;
+  const changed = opts.force || pending.length > 0 || !validStored || stored.ads_analyzed !== campaigns.length;
 
   const synth = changed
     ? await synthesize(competitor, campaigns, painVocab, (c) => c.analysis?.creative_text ?? null)
