@@ -2,9 +2,18 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 import type { AdSource, CompetitorAd } from "./types";
 
+// Análisis cacheado por aviso (se computa una vez y se reusa).
+export type AdAnalysis = {
+  creative_text: string | null;
+  goal: string;
+  content_type: string;
+  related_pains: string[];
+};
+
 export type StoredAd = CompetitorAd & {
   first_seen_at: string;
   last_seen_at: string;
+  analysis: AdAnalysis | null;
 };
 
 // Cliente Supabase (PostgREST/HTTP, service_role). Reemplaza a getPg/postgres.js
@@ -33,7 +42,7 @@ function getSupabase(): SupabaseClient {
 const AD_COLS =
   "source, competitor, ad_archive_id, collation_id, page_id, page_name, is_active, " +
   "ad_start_date, ad_end_date, publisher_platform, display_format, body_text, title, " +
-  "cta_text, cta_type, link_url, categories, media, country, first_seen_at, last_seen_at";
+  "cta_text, cta_type, link_url, categories, media, country, first_seen_at, last_seen_at, analysis";
 
 // Último error de lectura, para diagnóstico en la propia página (admin).
 let lastReadError: string | null = null;
@@ -123,6 +132,7 @@ type Row = {
   country: string | null;
   first_seen_at: string;
   last_seen_at: string;
+  analysis: unknown;
 };
 
 function toIso(d: string | Date | null): string | null {
@@ -175,6 +185,7 @@ function mapRow(r: Row): StoredAd {
     raw: null,
     first_seen_at: toIso(r.first_seen_at)!,
     last_seen_at: toIso(r.last_seen_at)!,
+    analysis: asJson<AdAnalysis | null>(r.analysis, null),
   };
 }
 
@@ -260,5 +271,35 @@ export async function saveAdInsight(
       { competitor, source, payload, model, generated_at: new Date().toISOString() },
       { onConflict: "competitor,source" },
     );
+  if (error) throw new Error(error.message);
+}
+
+/** Insight ya guardado de un competidor (para reusar la síntesis si no cambió). */
+export async function loadAdInsight(competitor: string, source: AdSource): Promise<unknown | null> {
+  return safeRead("loadAdInsight", null, async () => {
+    const sb = getSupabase();
+    const { data, error } = await sb
+      .from("competitor_ad_insights")
+      .select("payload")
+      .eq("competitor", competitor)
+      .eq("source", source)
+      .limit(1);
+    if (error) throw new Error(error.message);
+    return data?.length ? asJson<unknown>(data[0].payload, null) : null;
+  });
+}
+
+/** Persiste el análisis cacheado de UN aviso (creative_text + clasificación). */
+export async function saveAdAnalysis(
+  adArchiveId: string,
+  source: AdSource,
+  analysis: AdAnalysis,
+): Promise<void> {
+  const sb = getSupabase();
+  const { error } = await sb
+    .from("competitor_ads")
+    .update({ analysis })
+    .eq("ad_archive_id", adArchiveId)
+    .eq("source", source);
   if (error) throw new Error(error.message);
 }

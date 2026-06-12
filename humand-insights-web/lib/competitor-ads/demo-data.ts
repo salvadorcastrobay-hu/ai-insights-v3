@@ -40,6 +40,7 @@ function mk(o: {
     raw: null,
     first_seen_at: o.start,
     last_seen_at: o.start,
+    analysis: null,
   };
 }
 
