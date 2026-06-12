@@ -42,14 +42,15 @@ type RawResponse = { results?: RawAd[] | null; cursor?: string | null };
 
 // Fetch a ScrapeCreators con reintentos ante errores transitorios (5xx/429).
 // La Ad Library de FB devuelve 500 de a ratos; un par de reintentos lo salva.
-async function scFetch(url: URL, key: string, retries = 2): Promise<Response> {
+async function scFetch(url: URL, key: string, retries = 3): Promise<Response> {
   let last: Response | null = null;
   for (let attempt = 0; attempt <= retries; attempt++) {
     const res = await fetch(url, { headers: { "x-api-key": key }, cache: "no-store" });
     if (res.ok) return res;
     last = res;
     if (res.status < 500 && res.status !== 429) return res; // 4xx → no reintentar
-    if (attempt < retries) await new Promise((r) => setTimeout(r, 800 * 2 ** attempt));
+    // Backoff generoso: FB devuelve 429 (rate limit) envuelto en 500.
+    if (attempt < retries) await new Promise((r) => setTimeout(r, 1500 * 2 ** attempt));
   }
   return last as Response;
 }
@@ -192,6 +193,9 @@ export async function fetchCompanyAds(
     const res = await scFetch(url, key);
     if (!res.ok) {
       const text = await res.text().catch(() => "");
+      if (res.status === 429 || /\b429\b/.test(text)) {
+        throw new Error("Facebook está limitando los pedidos (429 / rate limit). Esperá unos minutos y reintentá.");
+      }
       throw new Error(`ScrapeCreators ${res.status}: ${text.slice(0, 200)}`);
     }
     const json = (await res.json()) as RawResponse;
@@ -205,7 +209,9 @@ export async function fetchCompanyAds(
 
   const ads = [...out.values()];
   if (params.enrichMissingMedia) {
-    await enrichMissingMedia(ads, 4);
+    // Concurrencia baja: el detalle por aviso son pedidos extra a FB; con 4 en
+    // paralelo se dispara el rate limit (429). 2 es más gentil.
+    await enrichMissingMedia(ads, 2);
   }
   return ads;
 }
