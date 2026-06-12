@@ -2,7 +2,7 @@
 
 import { ChevronDown, ExternalLink, Loader2, RefreshCw, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 
 import { ChartCard } from "@/components/charts/ChartCard";
 import { PageTitle } from "@/components/pages/common";
@@ -235,28 +235,7 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, read
           </p>
         </ChartCard>
       ) : (
-        groups.map((g) => (
-          <ChartCard key={g.competitor} title={g.competitor}>
-            <p className="mb-3 text-[12px] text-[var(--color-text-secondary)]">
-              <span className="font-semibold text-emerald-700">{g.active} avisos activos</span> ·{" "}
-              {g.campaigns.length} campañas · {g.total} variantes
-              {(() => {
-                const ts = campaignTimeStats(g.campaigns);
-                return (
-                  <>
-                    {ts.oldest ? <> · más antigua desde {fmtDate(ts.oldest)}</> : null}
-                    {ts.new30 ? <> · {ts.new30} nuevas (30d)</> : null}
-                  </>
-                );
-              })()}
-            </p>
-
-            {g.synthesis ? <SynthesisBlock s={g.synthesis} /> : null}
-            {g.synthesis ? <QuestionsBlock s={g.synthesis} campaigns={g.campaigns} /> : null}
-
-            <CampaignGrid campaigns={g.campaigns} classByKey={g.classByKey} />
-          </ChartCard>
-        ))
+        groups.map((g) => <CompetitorSection key={g.competitor} g={g} />)
       )}
     </div>
   );
@@ -289,6 +268,102 @@ function campaignTimeStats(campaigns: Campaign[]): {
     .filter(([, count]) => count > 0)
     .map(([label, count]) => ({ label, count }));
   return { oldest, new30, buckets };
+}
+
+function ageBucketOf(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const days = (Date.now() - new Date(iso).getTime()) / 86_400_000;
+  if (Number.isNaN(days)) return null;
+  if (days >= 182) return "≥6 meses";
+  if (days >= 91) return "3–6 meses";
+  if (days >= 30) return "1–3 meses";
+  return "<1 mes";
+}
+
+// Filtro de la grilla, manejado clickeando los chips de agregados.
+type AdFilter = { kind: "goal" | "content_type" | "module" | "persona" | "age"; value: string };
+
+function campaignMatches(c: Campaign, cls: PerAd | null, f: AdFilter): boolean {
+  switch (f.kind) {
+    case "goal":
+      return cls?.goal === f.value;
+    case "content_type":
+      return cls?.content_type === f.value;
+    case "module":
+      return (cls?.modules ?? []).includes(f.value);
+    case "persona":
+      return cls?.persona === f.value;
+    case "age":
+      return ageBucketOf(c.lead.ad_start_date) === f.value;
+  }
+}
+
+function filterLabel(f: AdFilter): string {
+  if (f.kind === "goal") return goalLabel(f.value);
+  if (f.kind === "content_type") return contentLabel(f.value);
+  return f.value;
+}
+
+// Chip clickeable (para filtrar). active = filtro aplicado.
+function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "rounded-full px-2 py-0.5 text-[11px] transition",
+        active
+          ? "bg-[var(--color-brand-500)] text-white"
+          : "bg-[var(--color-neutral-100)] hover:bg-[var(--color-neutral-200)]",
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+// Sección por competidor: mantiene el estado de filtro y filtra la grilla.
+function CompetitorSection({ g }: { g: Group }) {
+  const [filter, setFilter] = useState<AdFilter | null>(null);
+  const pick = (kind: AdFilter["kind"], value: string) =>
+    setFilter((f) => (f && f.kind === kind && f.value === value ? null : { kind, value }));
+
+  const ts = campaignTimeStats(g.campaigns);
+  const filtered = filter
+    ? g.campaigns.filter((c) => campaignMatches(c, g.classByKey.get(campaignKey(c.lead)) ?? null, filter))
+    : g.campaigns;
+
+  return (
+    <ChartCard title={g.competitor}>
+      <p className="mb-3 text-[12px] text-[var(--color-text-secondary)]">
+        <span className="font-semibold text-emerald-700">{g.active} avisos activos</span> · {g.campaigns.length}{" "}
+        campañas · {g.total} variantes
+        {ts.oldest ? <> · más antigua desde {fmtDate(ts.oldest)}</> : null}
+        {ts.new30 ? <> · {ts.new30} nuevas (30d)</> : null}
+      </p>
+
+      {g.synthesis ? <SynthesisBlock s={g.synthesis} /> : null}
+      {g.synthesis ? <QuestionsBlock s={g.synthesis} campaigns={g.campaigns} filter={filter} onPick={pick} /> : null}
+
+      {filter ? (
+        <div className="mt-3 flex items-center gap-2 text-[12px]">
+          <span className="text-[var(--color-text-secondary)]">
+            Filtro: <span className="font-semibold text-[var(--color-text-default)]">{filterLabel(filter)}</span> ·{" "}
+            {filtered.length} campañas
+          </span>
+          <button
+            type="button"
+            onClick={() => setFilter(null)}
+            className="rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] px-2 py-0.5 text-[11px] font-medium hover:bg-[var(--color-neutral-100)]"
+          >
+            Limpiar
+          </button>
+        </div>
+      ) : null}
+
+      <CampaignGrid campaigns={filtered} classByKey={g.classByKey} />
+    </ChartCard>
+  );
 }
 
 // Grid de avisos con desplegable: muestra un preview y "Ver todos los anuncios".
@@ -383,7 +458,17 @@ function SynthesisBlock({ s }: { s: Synthesis }) {
 // Bloque "qué responde esta data" — agregados que pidió el equipo:
 // distribución por objetivo (CTA), por tipo de contenido y los avisos más
 // longevos (proxy de "ad ganador": si lleva mucho corriendo, funciona).
-function QuestionsBlock({ s, campaigns }: { s: Synthesis; campaigns: Campaign[] }) {
+function QuestionsBlock({
+  s,
+  campaigns,
+  filter,
+  onPick,
+}: {
+  s: Synthesis;
+  campaigns: Campaign[];
+  filter: AdFilter | null;
+  onPick: (kind: AdFilter["kind"], value: string) => void;
+}) {
   const byGoal = s.by_goal ?? [];
   const byContent = (s.by_content_type ?? []).filter((t) => t.key !== "generico" || (s.by_content_type ?? []).length === 1);
   const byModule = (s.by_module ?? []).slice(0, 10);
@@ -414,9 +499,13 @@ function QuestionsBlock({ s, campaigns }: { s: Synthesis; campaigns: Campaign[] 
         <div className="flex flex-wrap gap-1">
           {byGoal.length ? (
             byGoal.map((t) => (
-              <span key={t.key} className="rounded-full bg-[var(--color-brand-50)] px-2 py-0.5 text-[11px] text-[var(--color-brand-500)]">
+              <Chip
+                key={t.key}
+                active={filter?.kind === "goal" && filter.value === t.key}
+                onClick={() => onPick("goal", t.key)}
+              >
                 {goalLabel(t.key)} <span className="font-semibold">{t.count}</span>
-              </span>
+              </Chip>
             ))
           ) : (
             <span className="text-[11px] text-[var(--color-text-secondary)]">—</span>
@@ -431,9 +520,13 @@ function QuestionsBlock({ s, campaigns }: { s: Synthesis; campaigns: Campaign[] 
         <div className="flex flex-wrap gap-1">
           {byContent.length ? (
             byContent.map((t) => (
-              <span key={t.key} className="rounded-full bg-[var(--color-neutral-100)] px-2 py-0.5 text-[11px]">
+              <Chip
+                key={t.key}
+                active={filter?.kind === "content_type" && filter.value === t.key}
+                onClick={() => onPick("content_type", t.key)}
+              >
                 {contentLabel(t.key)} <span className="font-semibold">{t.count}</span>
-              </span>
+              </Chip>
             ))
           ) : (
             <span className="text-[11px] text-[var(--color-text-secondary)]">—</span>
@@ -448,9 +541,13 @@ function QuestionsBlock({ s, campaigns }: { s: Synthesis; campaigns: Campaign[] 
         <div className="flex flex-wrap gap-1">
           {byModule.length ? (
             byModule.map((t) => (
-              <span key={t.key} className="rounded-full bg-[var(--color-neutral-100)] px-2 py-0.5 text-[11px]">
+              <Chip
+                key={t.key}
+                active={filter?.kind === "module" && filter.value === t.key}
+                onClick={() => onPick("module", t.key)}
+              >
                 {t.key} <span className="font-semibold">{t.count}</span>
-              </span>
+              </Chip>
             ))
           ) : (
             <span className="text-[11px] text-[var(--color-text-secondary)]">—</span>
@@ -465,9 +562,13 @@ function QuestionsBlock({ s, campaigns }: { s: Synthesis; campaigns: Campaign[] 
         <div className="flex flex-wrap gap-1">
           {byPersona.length ? (
             byPersona.map((t) => (
-              <span key={t.key} className="rounded-full bg-[var(--color-neutral-100)] px-2 py-0.5 text-[11px]">
+              <Chip
+                key={t.key}
+                active={filter?.kind === "persona" && filter.value === t.key}
+                onClick={() => onPick("persona", t.key)}
+              >
                 👤 {t.key} <span className="font-semibold">{t.count}</span>
-              </span>
+              </Chip>
             ))
           ) : (
             <span className="text-[11px] text-[var(--color-text-secondary)]">—</span>
@@ -482,9 +583,13 @@ function QuestionsBlock({ s, campaigns }: { s: Synthesis; campaigns: Campaign[] 
         <div className="flex flex-wrap gap-1">
           {ageBuckets.length ? (
             ageBuckets.map((t) => (
-              <span key={t.label} className="rounded-full bg-[var(--color-neutral-100)] px-2 py-0.5 text-[11px]">
+              <Chip
+                key={t.label}
+                active={filter?.kind === "age" && filter.value === t.label}
+                onClick={() => onPick("age", t.label)}
+              >
                 {t.label} <span className="font-semibold">{t.count}</span>
-              </span>
+              </Chip>
             ))
           ) : (
             <span className="text-[11px] text-[var(--color-text-secondary)]">—</span>
