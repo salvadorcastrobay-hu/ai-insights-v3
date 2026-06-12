@@ -282,7 +282,7 @@ function ageBucketOf(iso: string | null | undefined): string | null {
 }
 
 // Filtro de la grilla, manejado clickeando los chips de agregados.
-type AdFilter = { kind: "goal" | "content_type" | "module" | "persona" | "age"; value: string };
+type AdFilter = { kind: "goal" | "content_type" | "module" | "persona" | "age" | "format"; value: string };
 
 function campaignMatches(c: Campaign, cls: PerAd | null, f: AdFilter): boolean {
   switch (f.kind) {
@@ -296,12 +296,28 @@ function campaignMatches(c: Campaign, cls: PerAd | null, f: AdFilter): boolean {
       return cls?.persona === f.value;
     case "age":
       return ageBucketOf(c.lead.ad_start_date) === f.value;
+    case "format":
+      return f.value === "video" ? Boolean(c.lead.media?.videos?.[0]) : !c.lead.media?.videos?.[0];
   }
+}
+
+function formatCounts(campaigns: Campaign[]): { key: string; label: string; count: number }[] {
+  let video = 0;
+  let estatico = 0;
+  for (const c of campaigns) {
+    if (c.lead.media?.videos?.[0]) video += 1;
+    else estatico += 1;
+  }
+  return [
+    { key: "video", label: "Video", count: video },
+    { key: "estatico", label: "Estático", count: estatico },
+  ].filter((x) => x.count > 0);
 }
 
 function filterLabel(f: AdFilter): string {
   if (f.kind === "goal") return goalLabel(f.value);
   if (f.kind === "content_type") return contentLabel(f.value);
+  if (f.kind === "format") return f.value === "video" ? "Video" : "Estático";
   return f.value;
 }
 
@@ -478,6 +494,7 @@ function QuestionsBlock({
   const byModule = (s.by_module ?? []).slice(0, 10);
   const byPersona = (s.by_persona ?? []).slice(0, 8);
   const ageBuckets = campaignTimeStats(campaigns).buckets;
+  const formats = formatCounts(campaigns);
 
   const veterans = [...campaigns]
     .filter((c) => c.lead.is_active && c.lead.ad_start_date)
@@ -490,6 +507,7 @@ function QuestionsBlock({
     !byModule.length &&
     !byPersona.length &&
     !ageBuckets.length &&
+    !formats.length &&
     !veterans.length
   )
     return null;
@@ -572,6 +590,27 @@ function QuestionsBlock({
                 onClick={() => onPick("persona", t.key)}
               >
                 👤 {t.key} <span className="font-semibold">{t.count}</span>
+              </Chip>
+            ))
+          ) : (
+            <span className="text-[11px] text-[var(--color-text-secondary)]">—</span>
+          )}
+        </div>
+      </div>
+
+      <div>
+        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">
+          Formato
+        </p>
+        <div className="flex flex-wrap gap-1">
+          {formats.length ? (
+            formats.map((t) => (
+              <Chip
+                key={t.key}
+                active={filter?.kind === "format" && filter.value === t.key}
+                onClick={() => onPick("format", t.key)}
+              >
+                {t.label} <span className="font-semibold">{t.count}</span>
               </Chip>
             ))
           ) : (
