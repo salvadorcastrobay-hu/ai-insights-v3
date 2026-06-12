@@ -225,6 +225,31 @@ async function transcribeVideo(url: string): Promise<string | null> {
 }
 
 /**
+ * Valida la transcripción: whisper ALUCINA con audio sin habla (música/silencio)
+ * → inventa frases ("Subtítulos de Amara.org", repeticiones, etc.). Si el texto
+ * no es contenido publicitario real, devolvemos null para caer al OCR del frame.
+ */
+async function validateTranscript(raw: string): Promise<string | null> {
+  const t = raw.trim();
+  if (t.length < 12) return null; // muy corto → no aporta
+  try {
+    const { text } = await generateText({
+      model: openai(adsModel()),
+      system:
+        "Recibís la transcripción del audio de un anuncio. Si es contenido publicitario con sentido " +
+        "(habla del producto, oferta, beneficios, CTA), devolvelo TAL CUAL. Si es música, ruido, silencio, " +
+        "repeticiones sin sentido o frases sin relación con un anuncio (alucinaciones típicas de transcripción), " +
+        "devolvé EXACTAMENTE '—'. Sin comentarios ni explicaciones.",
+      prompt: t.slice(0, 800),
+    });
+    const out = text.trim();
+    return out && out !== "—" ? out.slice(0, 600) : null;
+  } catch {
+    return t.slice(0, 600); // si el juez falla, conservamos el crudo
+  }
+}
+
+/**
  * Texto/voz del creativo por campaña (key = collation_id ?? ad_archive_id).
  * Video → transcripción del audio (fallback OCR del poster). Estático → OCR.
  */
@@ -237,7 +262,12 @@ async function extractCreativeTexts(campaigns: StoredAd[], limit: number): Promi
       const c = targets[i++];
       let txt: string | null = null;
       const video = c.media?.videos?.[0];
-      if (video) txt = await transcribeVideo(video);
+      if (video) {
+        const raw = await transcribeVideo(video);
+        // Filtra música/silencio/alucinaciones; si no dice nada relevante → null.
+        txt = raw ? await validateTranscript(raw) : null;
+      }
+      // Estático, o video sin habla relevante → OCR del frame/imagen.
       if (!txt && c.media?.images?.[0]) txt = await extractImageText(c.media.images[0]);
       if (txt) out.set(campaignKey(c), txt);
     }
