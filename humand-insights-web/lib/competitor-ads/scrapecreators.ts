@@ -40,6 +40,20 @@ type RawAd = {
 
 type RawResponse = { results?: RawAd[] | null; cursor?: string | null };
 
+// Fetch a ScrapeCreators con reintentos ante errores transitorios (5xx/429).
+// La Ad Library de FB devuelve 500 de a ratos; un par de reintentos lo salva.
+async function scFetch(url: URL, key: string, retries = 2): Promise<Response> {
+  let last: Response | null = null;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const res = await fetch(url, { headers: { "x-api-key": key }, cache: "no-store" });
+    if (res.ok) return res;
+    last = res;
+    if (res.status < 500 && res.status !== 429) return res; // 4xx → no reintentar
+    if (attempt < retries) await new Promise((r) => setTimeout(r, 800 * 2 ** attempt));
+  }
+  return last as Response;
+}
+
 function unixToIso(ts: number | null | undefined): string | null {
   if (ts == null || !Number.isFinite(ts)) return null;
   const d = new Date(ts * 1000);
@@ -120,7 +134,7 @@ export async function fetchAdMedia(adArchiveId: string): Promise<{ images: strin
   if (!key) throw new Error("Falta SCRAPECREATORS_API_KEY");
   const url = new URL(DETAIL);
   url.searchParams.set("id", adArchiveId);
-  const res = await fetch(url, { headers: { "x-api-key": key }, cache: "no-store" });
+  const res = await scFetch(url, key);
   if (!res.ok) return null;
   const json = (await res.json()) as { snapshot?: RawSnapshot } | RawSnapshot;
   const snap = ("snapshot" in json && json.snapshot ? json.snapshot : json) as RawSnapshot;
@@ -175,7 +189,7 @@ export async function fetchCompanyAds(
     url.searchParams.set("sort_by", sortBy);
     if (cursor) url.searchParams.set("cursor", cursor);
 
-    const res = await fetch(url, { headers: { "x-api-key": key }, cache: "no-store" });
+    const res = await scFetch(url, key);
     if (!res.ok) {
       const text = await res.text().catch(() => "");
       throw new Error(`ScrapeCreators ${res.status}: ${text.slice(0, 200)}`);
