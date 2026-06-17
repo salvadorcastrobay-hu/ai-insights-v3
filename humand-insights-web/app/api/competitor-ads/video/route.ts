@@ -1,4 +1,5 @@
 import { getAuthenticatedSession } from "@/lib/supabase/server";
+import { refreshStoredAdMedia } from "@/lib/competitor-ads/media-repair";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,12 +11,28 @@ function isAllowedHost(host: string): boolean {
   return host.endsWith(".fbcdn.net") || host.endsWith(".facebook.com");
 }
 
+async function fetchVideo(target: URL, range: string | null): Promise<Response | null> {
+  try {
+    return await fetch(target.toString(), {
+      headers: {
+        "user-agent": "Mozilla/5.0",
+        accept: "video/*,*/*",
+        ...(range ? { range } : {}),
+      },
+      cache: "no-store",
+    });
+  } catch {
+    return null;
+  }
+}
+
 export async function GET(request: Request): Promise<Response> {
   const session = await getAuthenticatedSession();
   if (!session) return new Response("Unauthorized", { status: 401 });
 
   const { searchParams } = new URL(request.url);
   const raw = searchParams.get("u");
+  const adArchiveId = searchParams.get("ad");
   if (!raw) return new Response("missing u", { status: 400 });
 
   let target: URL;
@@ -29,19 +46,20 @@ export async function GET(request: Request): Promise<Response> {
   }
 
   const range = request.headers.get("range");
-  let upstream: Response;
-  try {
-    upstream = await fetch(target.toString(), {
-      headers: {
-        "user-agent": "Mozilla/5.0",
-        accept: "video/*,*/*",
-        ...(range ? { range } : {}),
-      },
-      cache: "no-store",
-    });
-  } catch {
-    return new Response("fetch failed", { status: 502 });
+  let upstream = await fetchVideo(target, range);
+  if ((!upstream || (upstream.status !== 200 && upstream.status !== 206)) && adArchiveId) {
+    const fresh = await refreshStoredAdMedia(adArchiveId).catch(() => null);
+    const freshUrl = fresh?.videos?.[0];
+    if (freshUrl) {
+      const freshTarget = new URL(freshUrl);
+      if (freshTarget.protocol === "https:" && isAllowedHost(freshTarget.hostname)) {
+        upstream = await fetchVideo(freshTarget, range);
+      } else if (freshTarget.protocol === "https:") {
+        return Response.redirect(freshUrl, 307);
+      }
+    }
   }
+  if (!upstream) return new Response("fetch failed", { status: 502 });
   if (!upstream.body || (upstream.status !== 200 && upstream.status !== 206)) {
     return new Response("upstream error", { status: 502 });
   }
