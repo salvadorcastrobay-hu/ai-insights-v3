@@ -339,28 +339,39 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
   );
 }
 
+// ¿La campaña tiene algo para mostrar? (creativo o texto). Si no, se oculta
+// para no dejar tarjetas vacías raras.
+function campaignHasContent(c: Campaign, cls: PerAd | null): boolean {
+  if (hasMedia(c.lead)) return true;
+  if (c.lead.body_text && c.lead.body_text.trim()) return true;
+  if (cls?.creative_text && cls.creative_text.trim()) return true;
+  return false;
+}
+
 // Sección por competidor: mantiene el estado de filtro y filtra la grilla.
 function CompetitorSection({ g }: { g: Group }) {
   const [filter, setFilter] = useState<AdFilter | null>(null);
   const pick = (kind: AdFilter["kind"], value: string) =>
     setFilter((f) => (f && f.kind === kind && f.value === value ? null : { kind, value }));
 
-  const ts = campaignTimeStats(g.campaigns);
+  // Base: solo campañas con creativo o texto (oculta las vacías).
+  const visible = g.campaigns.filter((c) => campaignHasContent(c, g.classByKey.get(campaignKey(c.lead)) ?? null));
+  const ts = campaignTimeStats(visible);
   const filtered = filter
-    ? g.campaigns.filter((c) => campaignMatches(c, g.classByKey.get(campaignKey(c.lead)) ?? null, filter))
-    : g.campaigns;
+    ? visible.filter((c) => campaignMatches(c, g.classByKey.get(campaignKey(c.lead)) ?? null, filter))
+    : visible;
 
   return (
     <ChartCard title={g.competitor}>
       <p className="mb-3 text-[12px] text-[var(--color-text-secondary)]">
-        <span className="font-semibold text-emerald-700">{g.active} avisos activos</span> · {g.campaigns.length}{" "}
+        <span className="font-semibold text-emerald-700">{g.active} avisos activos</span> · {visible.length}{" "}
         campañas · {g.total} variantes
         {ts.oldest ? <> · más antigua desde {fmtDate(ts.oldest)}</> : null}
         {ts.new30 ? <> · {ts.new30} nuevas (30d)</> : null}
       </p>
 
       {g.synthesis ? <SynthesisBlock s={g.synthesis} /> : null}
-      {g.synthesis ? <QuestionsBlock s={g.synthesis} campaigns={g.campaigns} filter={filter} onPick={pick} /> : null}
+      {g.synthesis ? <QuestionsBlock s={g.synthesis} campaigns={visible} filter={filter} onPick={pick} /> : null}
 
       {filter ? (
         <div className="mt-3 flex items-center gap-2 text-[12px]">
