@@ -23,6 +23,8 @@ type RawSnapshot = {
   images?: RawImage[] | null;
   videos?: RawVideo[] | null;
   cards?: RawCard[] | null;
+  extra_images?: RawImage[] | null;
+  extra_videos?: RawVideo[] | null;
 };
 
 type RawAd = {
@@ -66,20 +68,23 @@ function unixToIso(ts: number | null | undefined): string | null {
 function extractMedia(snap: RawSnapshot): { images: string[]; videos: string[] } {
   const images: string[] = [];
   const videos: string[] = [];
-  for (const im of snap.images ?? []) {
+  const add = (list: string[], url: string | undefined) => {
+    if (url && !list.includes(url)) list.push(url);
+  };
+  for (const im of [...(snap.images ?? []), ...(snap.extra_images ?? [])]) {
     const u = im.original_image_url ?? im.resized_image_url;
-    if (u) images.push(u);
+    add(images, u);
   }
-  for (const v of snap.videos ?? []) {
-    if (v.video_preview_image_url) images.push(v.video_preview_image_url);
+  for (const v of [...(snap.videos ?? []), ...(snap.extra_videos ?? [])]) {
+    add(images, v.video_preview_image_url);
     const vu = v.video_hd_url ?? v.video_sd_url;
-    if (vu) videos.push(vu);
+    add(videos, vu);
   }
   for (const c of snap.cards ?? []) {
     const u = c.resized_image_url ?? c.original_image_url ?? c.video_preview_image_url;
-    if (u) images.push(u);
+    add(images, u);
     const vu = c.video_hd_url ?? c.video_sd_url;
-    if (vu) videos.push(vu);
+    add(videos, vu);
   }
   return { images, videos };
 }

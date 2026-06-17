@@ -1,3 +1,9 @@
+import { execFile } from "node:child_process";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { tmpdir } from "node:os";
+import { promisify } from "node:util";
+
 import { generateObject, generateText, experimental_transcribe as transcribe } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { z } from "zod";
@@ -5,6 +11,8 @@ import { z } from "zod";
 import { getPg } from "@/lib/supabase/pg";
 import { loadAdsForCompetitor, loadAdInsight, saveAdAnalysis, type StoredAd } from "./store";
 import type { AdSource } from "./types";
+
+const execFileAsync = promisify(execFile);
 
 const AngleSchema = z.object({
   label: z.string().describe("Nombre corto del ángulo/mensaje (3-5 palabras)"),
@@ -233,6 +241,100 @@ async function transcribeVideo(url: string): Promise<string | null> {
   }
 }
 
+async function probeVideoDuration(input: string): Promise<number | null> {
+  try {
+    const { stdout } = await execFileAsync("ffprobe", [
+      "-v",
+      "error",
+      "-show_entries",
+      "format=duration",
+      "-of",
+      "default=noprint_wrappers=1:nokey=1",
+      input,
+    ]);
+    const duration = Number(stdout.trim());
+    return Number.isFinite(duration) && duration > 0 ? duration : null;
+  } catch {
+    return null;
+  }
+}
+
+async function extractVideoFrames(url: string, maxFrames = 5): Promise<Uint8Array[]> {
+  const bytes = await fetchVideoBytes(url);
+  if (!bytes) return [];
+
+  const dir = await mkdtemp(path.join(tmpdir(), "competitor-ad-video-"));
+  try {
+    const input = path.join(dir, "input.mp4");
+    await writeFile(input, bytes);
+
+    const duration = await probeVideoDuration(input);
+    const ratios = [0.12, 0.3, 0.5, 0.7, 0.88].slice(0, maxFrames);
+    const times = duration ? ratios.map((r) => Math.max(0.1, duration * r)) : [0.5, 1.5, 3, 5, 7].slice(0, maxFrames);
+    const frames: Uint8Array[] = [];
+
+    for (let index = 0; index < times.length; index++) {
+      const out = path.join(dir, `frame-${index}.jpg`);
+      try {
+        await execFileAsync("ffmpeg", [
+          "-y",
+          "-ss",
+          times[index].toFixed(2),
+          "-i",
+          input,
+          "-frames:v",
+          "1",
+          "-vf",
+          "scale=960:-2:force_original_aspect_ratio=decrease",
+          "-q:v",
+          "3",
+          out,
+        ]);
+        frames.push(new Uint8Array(await readFile(out)));
+      } catch {
+        // Si un timestamp cae fuera del video o ffmpeg falla, seguimos con el resto.
+      }
+    }
+
+    return frames;
+  } catch {
+    return [];
+  } finally {
+    await rm(dir, { recursive: true, force: true }).catch(() => undefined);
+  }
+}
+
+async function extractVideoFrameText(videoUrl: string, posterUrl?: string | null): Promise<string | null> {
+  const frames = await extractVideoFrames(videoUrl);
+  if (!frames.length) return posterUrl ? extractImageText(posterUrl) : null;
+
+  try {
+    const { text } = await generateText({
+      model: openai(adsModel()),
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text:
+                "Estos frames pertenecen a un video publicitario sin narración clara. " +
+                "Transcribí y consolidá el texto visible que aparece en pantalla, en orden lógico. " +
+                "Deducí repeticiones entre frames y conservá claims, beneficios y CTA. " +
+                "Si no hay texto legible, respondé exactamente '—'. Máximo 500 caracteres, sin comentarios.",
+            },
+            ...frames.map((frame) => ({ type: "image" as const, image: frame })),
+          ],
+        },
+      ],
+    });
+    const t = text.replace(/\s+/g, " ").trim();
+    return t && t !== "—" ? t.slice(0, 500) : null;
+  } catch {
+    return posterUrl ? extractImageText(posterUrl) : null;
+  }
+}
+
 /**
  * Valida la transcripción: whisper ALUCINA con audio sin habla (música/silencio)
  * → inventa frases ("Subtítulos de Amara.org", repeticiones, etc.). Si el texto
@@ -282,7 +384,8 @@ async function extractCreativeTexts(
         // Filtra música/silencio/alucinaciones; si no dice nada relevante → null.
         txt = raw ? await validateTranscript(raw, competitor) : null;
       }
-      // Estático, o video sin habla relevante → OCR del frame/imagen.
+      // Video sin habla relevante → OCR multi-frame; estático → OCR de imagen.
+      if (!txt && video) txt = await extractVideoFrameText(video, c.media?.images?.[0] ?? null);
       if (!txt && c.media?.images?.[0]) txt = await extractImageText(c.media.images[0]);
       if (txt) out.set(campaignKey(c), txt);
     }
