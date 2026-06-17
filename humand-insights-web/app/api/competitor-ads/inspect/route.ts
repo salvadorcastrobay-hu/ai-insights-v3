@@ -46,13 +46,27 @@ function summarizeSnapshot(raw: unknown): unknown {
   const images = arr("images");
   const videos = arr("videos");
   const cards = arr("cards");
+  const extraImages = arr("extra_images");
+  const extraVideos = arr("extra_videos");
   return {
     snapshot_keys: Object.keys(snap),
     display_format: snap.display_format ?? null,
     images: { count: images.length, sample: images.slice(0, 1) },
+    extra_images: { count: extraImages.length, sample: extraImages.slice(0, 1) },
     videos: {
       count: videos.length,
       sample: videos.slice(0, 1).map((v) => {
+        const o = v as Record<string, unknown>;
+        return {
+          has_hd: Boolean(o.video_hd_url),
+          has_sd: Boolean(o.video_sd_url),
+          has_preview: Boolean(o.video_preview_image_url),
+        };
+      }),
+    },
+    extra_videos: {
+      count: extraVideos.length,
+      sample: extraVideos.slice(0, 1).map((v) => {
         const o = v as Record<string, unknown>;
         return {
           has_hd: Boolean(o.video_hd_url),
