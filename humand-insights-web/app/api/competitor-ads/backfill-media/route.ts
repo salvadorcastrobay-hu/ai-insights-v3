@@ -1,4 +1,4 @@
-import { refreshStoredAdMedia } from "@/lib/competitor-ads/media-repair";
+import { repairStoredAdMedia, type MediaRepairResult } from "@/lib/competitor-ads/media-repair";
 import { loadStoredAds } from "@/lib/competitor-ads/store";
 import { isAdmin, type AppRole } from "@/lib/auth/roles";
 import { getAuthenticatedSession, getServerUserRoles } from "@/lib/supabase/server";
@@ -23,6 +23,11 @@ function isVolatileMediaUrl(url: string): boolean {
 function needsMediaBackfill(ad: { media?: { images?: string[]; videos?: string[] } | null }): boolean {
   if (!hasMedia(ad)) return true;
   return [...(ad.media?.images ?? []), ...(ad.media?.videos ?? [])].some(isVolatileMediaUrl);
+}
+
+function isStableMedia(media: { images?: string[]; videos?: string[] } | null): boolean {
+  if (!media || !hasMedia({ media })) return false;
+  return ![...(media.images ?? []), ...(media.videos ?? [])].some(isVolatileMediaUrl);
 }
 
 function backfillReason(
@@ -55,6 +60,7 @@ export async function POST(request: Request): Promise<Response> {
   const results: Array<{
     ad_archive_id: string;
     reason: "empty" | "volatile" | "all";
+    repair_source?: MediaRepairResult["source"];
     ok: boolean;
     images?: number;
     videos?: number;
@@ -62,11 +68,13 @@ export async function POST(request: Request): Promise<Response> {
   }> = [];
   for (const ad of targets) {
     try {
-      const media = await refreshStoredAdMedia(ad.ad_archive_id);
+      const repaired = await repairStoredAdMedia(ad);
+      const media = repaired.media;
       results.push({
         ad_archive_id: ad.ad_archive_id,
         reason: backfillReason(ad, mode === "all"),
-        ok: Boolean(media && hasMedia({ media })),
+        repair_source: repaired.source,
+        ok: isStableMedia(media),
         images: media?.images.length ?? 0,
         videos: media?.videos.length ?? 0,
       });
