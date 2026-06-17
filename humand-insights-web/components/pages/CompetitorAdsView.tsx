@@ -104,6 +104,18 @@ function hasMedia(a: StoredAd): boolean {
   return (a.media?.images?.length ?? 0) > 0 || (a.media?.videos?.length ?? 0) > 0;
 }
 
+function mediaUrl(kind: "img" | "video", url: string, adArchiveId: string): string {
+  try {
+    const host = new URL(url).hostname;
+    if (host.endsWith(".fbcdn.net") || host.endsWith(".facebook.com")) {
+      return `/api/competitor-ads/${kind}?u=${encodeURIComponent(url)}&ad=${encodeURIComponent(adArchiveId)}`;
+    }
+  } catch {
+    return url;
+  }
+  return url;
+}
+
 function dedupeCampaigns(ads: StoredAd[]): Campaign[] {
   const map = new Map<string, Campaign>();
   for (const a of ads) {
@@ -701,10 +713,10 @@ function AdCard({ c, cls }: { c: Campaign; cls: PerAd | null }) {
           <video
             controls
             preload="metadata"
-            poster={thumb ? `/api/competitor-ads/img?u=${encodeURIComponent(thumb)}` : undefined}
+            poster={thumb ? mediaUrl("img", thumb, ad.ad_archive_id) : undefined}
             className="mx-auto block max-h-[400px] w-full object-contain"
           >
-            <source src={`/api/competitor-ads/video?u=${encodeURIComponent(video)}`} />
+            <source src={mediaUrl("video", video, ad.ad_archive_id)} />
           </video>
         </div>
       ) : thumb ? (
@@ -714,7 +726,7 @@ function AdCard({ c, cls }: { c: Campaign; cls: PerAd | null }) {
         <div className="overflow-hidden rounded-[var(--radius-s)] bg-[var(--color-neutral-100)]">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={`/api/competitor-ads/img?u=${encodeURIComponent(thumb)}`}
+            src={mediaUrl("img", thumb, ad.ad_archive_id)}
             alt=""
             className="mx-auto block max-h-[400px] w-full object-contain"
             loading="lazy"

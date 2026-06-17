@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 import type { AdSource, CompetitorAd } from "./types";
+import { archiveCompetitorAdMedia } from "./media-archive";
 
 // Análisis cacheado por aviso (se computa una vez y se reusa).
 export type AdAnalysis = {
@@ -79,9 +80,16 @@ export async function upsertAds(ads: CompetitorAd[]): Promise<number> {
   if (!ads.length) return 0;
   const sb = getSupabase();
   const now = new Date().toISOString();
+  const archivedAds: CompetitorAd[] = [];
+  for (const ad of ads) {
+    archivedAds.push({
+      ...ad,
+      media: await archiveCompetitorAdMedia(ad).catch(() => ad.media),
+    });
+  }
   // first_seen_at se omite a propósito: en INSERT toma el default de la tabla,
   // en UPDATE conserva su valor (PostgREST solo setea las columnas provistas).
-  const rows = ads.map((a) => ({
+  const rows = archivedAds.map((a) => ({
     source: a.source,
     competitor: a.competitor,
     ad_archive_id: a.ad_archive_id,
