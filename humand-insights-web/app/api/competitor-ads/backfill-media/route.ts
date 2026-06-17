@@ -25,6 +25,15 @@ function needsMediaBackfill(ad: { media?: { images?: string[]; videos?: string[]
   return [...(ad.media?.images ?? []), ...(ad.media?.videos ?? [])].some(isVolatileMediaUrl);
 }
 
+function backfillReason(
+  ad: { media?: { images?: string[]; videos?: string[] } | null },
+  forceAll: boolean,
+): "empty" | "volatile" | "all" {
+  if (!hasMedia(ad)) return "empty";
+  if ([...(ad.media?.images ?? []), ...(ad.media?.videos ?? [])].some(isVolatileMediaUrl)) return "volatile";
+  return forceAll ? "all" : "volatile";
+}
+
 export async function POST(request: Request): Promise<Response> {
   const session = await getAuthenticatedSession();
   if (!session) return new Response("Unauthorized", { status: 401 });
@@ -38,13 +47,14 @@ export async function POST(request: Request): Promise<Response> {
 
   const params = new URL(request.url).searchParams;
   const limit = Math.min(50, Math.max(1, Number(params.get("limit") ?? "20")));
+  const mode = params.get("mode") === "all" ? "all" : "stale";
   const all = await loadStoredAds();
-  const allTargets = all.filter(needsMediaBackfill);
+  const allTargets = mode === "all" ? all : all.filter(needsMediaBackfill);
   const targets = allTargets.slice(0, limit);
 
   const results: Array<{
     ad_archive_id: string;
-    reason: "empty" | "volatile";
+    reason: "empty" | "volatile" | "all";
     ok: boolean;
     images?: number;
     videos?: number;
@@ -55,7 +65,7 @@ export async function POST(request: Request): Promise<Response> {
       const media = await refreshStoredAdMedia(ad.ad_archive_id);
       results.push({
         ad_archive_id: ad.ad_archive_id,
-        reason: hasMedia(ad) ? "volatile" : "empty",
+        reason: backfillReason(ad, mode === "all"),
         ok: Boolean(media && hasMedia({ media })),
         images: media?.images.length ?? 0,
         videos: media?.videos.length ?? 0,
@@ -63,7 +73,7 @@ export async function POST(request: Request): Promise<Response> {
     } catch (e) {
       results.push({
         ad_archive_id: ad.ad_archive_id,
-        reason: hasMedia(ad) ? "volatile" : "empty",
+        reason: backfillReason(ad, mode === "all"),
         ok: false,
         error: e instanceof Error ? e.message : String(e),
       });
@@ -71,6 +81,7 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   return Response.json({
+    mode,
     checked: targets.length,
     remaining_needing_backfill: Math.max(0, allTargets.length - targets.length),
     remaining_empty_media: Math.max(0, all.filter((ad) => !hasMedia(ad)).length - targets.filter((ad) => !hasMedia(ad)).length),
