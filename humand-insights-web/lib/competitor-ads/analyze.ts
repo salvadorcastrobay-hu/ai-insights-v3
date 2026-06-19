@@ -269,8 +269,21 @@ async function extractVideoFrames(url: string, maxFrames = 5): Promise<Uint8Arra
     await writeFile(input, bytes);
 
     const duration = await probeVideoDuration(input);
-    const ratios = [0.12, 0.3, 0.5, 0.7, 0.88].slice(0, maxFrames);
-    const times = duration ? ratios.map((r) => Math.max(0.1, duration * r)) : [0.5, 1.5, 3, 5, 7].slice(0, maxFrames);
+    let times: number[];
+    if (!duration) {
+      // Duración desconocida: muestreo denso al inicio donde suelen estar los claims principales.
+      times = [0.3, 1, 2, 4, 6, 9].slice(0, maxFrames);
+    } else if (duration < 10) {
+      // Ads cortos: más agresivo al inicio (headline en primeros 2s).
+      times = [0.05, 0.2, 0.4, 0.65, 0.9].slice(0, maxFrames).map((r) => Math.max(0.1, duration * r));
+    } else if (duration <= 30) {
+      // Rango estándar: distribución uniforme funciona bien.
+      times = [0.12, 0.3, 0.5, 0.7, 0.88].slice(0, maxFrames).map((r) => Math.max(0.1, duration * r));
+    } else {
+      // Ads largos (>30s): primer tercio más denso + frame extra.
+      const cap = Math.max(maxFrames, 6);
+      times = [0.05, 0.15, 0.35, 0.6, 0.85].slice(0, cap).map((r) => Math.max(0.1, duration * r));
+    }
     const frames: Uint8Array[] = [];
 
     for (let index = 0; index < times.length; index++) {

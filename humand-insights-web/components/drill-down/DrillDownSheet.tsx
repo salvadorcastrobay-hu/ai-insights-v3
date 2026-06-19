@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { useDrillDown } from "./DrillDownProvider";
+import { useTaxonomyLabel } from "@/lib/taxonomy-labels";
 
 type SubRow = { name: string; value: number };
 type QuoteRow = {
@@ -73,6 +74,7 @@ function fmtDate(iso: string | null): string | null {
 
 export function DrillDownSheet() {
   const t = useTranslations("drillDown");
+  const tl = useTaxonomyLabel();
   const { current, close, filters, isOpen } = useDrillDown();
   const [data, setData] = useState<DrillResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -160,7 +162,7 @@ export function DrillDownSheet() {
                 </span>
               </div>
               <h2 className="mt-1.5 truncate text-[18px] font-semibold leading-tight text-[var(--color-text-default)]">
-                {current.value}
+                {tl(current.value)}
               </h2>
             </div>
             <button
@@ -198,7 +200,7 @@ export function DrillDownSheet() {
             {t("verbatims")} {data?.quotes?.length ? `(${data.quotes.length})` : ""}
           </TabBtn>
           <TabBtn active={tab === "split"} onClick={() => setTab("split")} icon={<TrendingUp className="h-3.5 w-3.5" />}>
-            Cortes
+            {t("cuts")}
           </TabBtn>
         </div>
 
@@ -207,7 +209,7 @@ export function DrillDownSheet() {
           {loading ? (
             <div className="flex h-40 items-center justify-center text-[var(--color-text-secondary)]">
               <Loader2 className="h-4 w-4 animate-spin" />
-              <span className="ml-2 text-[13px]">Cargando detalle…</span>
+              <span className="ml-2 text-[13px]">{t("loading")}</span>
             </div>
           ) : error ? (
             <div className="m-4 rounded-[var(--radius-m)] border border-red-200 bg-red-50 p-3 text-[12px] text-red-900">
@@ -215,8 +217,8 @@ export function DrillDownSheet() {
             </div>
           ) : data ? (
             <>
-              {tab === "sub" ? <SubBreakdown rows={data.subBreakdown} /> : null}
-              {tab === "quotes" ? <QuotesList quotes={data.quotes} /> : null}
+              {tab === "sub" ? <SubBreakdown rows={data.subBreakdown} tl={tl} /> : null}
+              {tab === "quotes" ? <QuotesList quotes={data.quotes} tl={tl} /> : null}
               {tab === "split" ? (
                 <div className="space-y-3 p-4">
                   <MiniBars title={t("bySegment")} rows={data.segmentSplit} />
@@ -284,7 +286,7 @@ function TabBtn({
   );
 }
 
-function SubBreakdown({ rows }: { rows: SubRow[] }) {
+function SubBreakdown({ rows, tl }: { rows: SubRow[]; tl: (s: string) => string }) {
   if (!rows.length) {
     return (
       <div className="m-4 rounded-[var(--radius-m)] border border-dashed border-[var(--color-neutral-200)] bg-white p-6 text-center text-[12px] text-[var(--color-text-secondary)]">
@@ -301,7 +303,7 @@ function SubBreakdown({ rows }: { rows: SubRow[] }) {
           className="group rounded-[var(--radius-m)] border border-[var(--color-neutral-200)] bg-white px-3 py-2.5 transition-colors hover:border-[var(--color-brand-400)]"
         >
           <div className="mb-1.5 flex items-center justify-between gap-3">
-            <span className="truncate text-[13px] font-medium text-[var(--color-text-default)]">{r.name}</span>
+            <span className="truncate text-[13px] font-medium text-[var(--color-text-default)]">{tl(r.name)}</span>
             <span className="shrink-0 text-[12px] font-semibold text-[var(--color-brand-500)]">
               {r.value.toLocaleString("en-US")}
             </span>
@@ -321,7 +323,7 @@ function SubBreakdown({ rows }: { rows: SubRow[] }) {
   );
 }
 
-function QuotesList({ quotes }: { quotes: QuoteRow[] }) {
+function QuotesList({ quotes, tl }: { quotes: QuoteRow[]; tl: (s: string) => string }) {
   if (!quotes.length) {
     return (
       <div className="m-4 rounded-[var(--radius-m)] border border-dashed border-[var(--color-neutral-200)] bg-white p-6 text-center text-[12px] text-[var(--color-text-secondary)]">
@@ -356,7 +358,7 @@ function QuotesList({ quotes }: { quotes: QuoteRow[] }) {
             {q.deal_name ? <span className="truncate">· {q.deal_name}</span> : null}
             {q.segment ? <Chip>{q.segment}</Chip> : null}
             {q.region ? <Chip>{q.region}</Chip> : null}
-            {q.subtype ? <Chip tone="brand">{q.subtype}</Chip> : null}
+            {q.subtype ? <Chip tone="brand">{tl(q.subtype)}</Chip> : null}
             {q.call_date ? <span className="ml-auto">{fmtDate(q.call_date)}</span> : null}
           </div>
         </article>
