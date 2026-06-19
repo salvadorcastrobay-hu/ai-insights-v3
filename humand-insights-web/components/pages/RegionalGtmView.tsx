@@ -9,11 +9,13 @@ import { MetricCard } from "@/components/layout/MetricCard";
 import { SectionHeader } from "@/components/layout/SectionHeader";
 import { PageTitle } from "@/components/pages/common";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@/components/ui/table";
+import { useTranslations } from "next-intl";
 import type { RegionalGtmData } from "@/lib/data/regional-gtm-data";
 
 type Props = { data: RegionalGtmData };
 
 export function RegionalGtmView({ data }: Props) {
+  const t = useTranslations("regionalGtm");
   const {
     countryInsight,
     painRegionHeatPct,
@@ -33,27 +35,27 @@ export function RegionalGtmView({ data }: Props) {
 
   return (
     <div className="space-y-6">
-      <PageTitle title="Regional / GTM" />
+      <PageTitle title={t("title")} />
 
       <SectionHeader
-        title="A. ¿Cuánto vale cada mercado?"
-        description="Vista rápida de cobertura y pipeline por región."
+        title={t("sectionA")}
+        description={t("sectionADesc")}
       />
       <section className="grid gap-3 md:grid-cols-3">
         <MetricCard
-          label="Región con más pipeline"
+          label={t("topRegion")}
           value={pipelineKpis.topRegion}
           delta={`${pipelineKpis.topRegionPct} del total`}
         />
-        <MetricCard label="Pipeline total" value={pipelineKpis.totalPipeline} />
+        <MetricCard label={t("totalPipeline")} value={pipelineKpis.totalPipeline} />
         <MetricCard
-          label="Mayor ticket promedio"
+          label={t("highestAvg")}
           value={pipelineKpis.highestAvgValue}
           delta={`${pipelineKpis.highestAvgRegion} — ${pipelineKpis.highestAvgDeals} deals`}
         />
       </section>
 
-      <ChartCard title="Pipeline por Segmento × Región">
+      <ChartCard title={t("pipelineBySegment")}>
         <p className="mb-2 text-[12px] text-[var(--color-text-secondary)]">
           Cada celda: Revenue · Deals · Ticket Promedio.
         </p>
@@ -88,10 +90,10 @@ export function RegionalGtmView({ data }: Props) {
       </ChartCard>
 
       <SectionHeader
-        title="B. ¿Dónde estamos teniendo más conversaciones?"
-        description="Top 15 países por cantidad de insights, con desglose por tipo."
+        title={t("sectionB")}
+        description={t("sectionBDesc")}
       />
-      <ChartCard title="Country × Insight Type">
+      <ChartCard title={t("countryInsightType")}>
         <StackedBarChart
           data={countryInsight.data}
           yKey="name"
@@ -101,11 +103,11 @@ export function RegionalGtmView({ data }: Props) {
       </ChartCard>
 
       <SectionHeader
-        title="C. ¿Qué encontramos en cada mercado?"
+        title={t("sectionC")}
         description="Top 3 pains por región como % de las demos únicas en esa región — comparable entre mercados de distinto tamaño."
       />
       <ChartCard
-        title="Top 3 Pains por Región (% de demos)"
+        title={t("topPainsByRegion")}
         ask={{
           chartTitle: "Top 3 Pains por Región (% de demos)",
           chartKind: "heatmap",
@@ -148,7 +150,7 @@ export function RegionalGtmView({ data }: Props) {
         intensidad (%). Leer junto al volumen absoluto de demos de cada mercado.
       </p>
 
-      <ChartCard title="Módulos demandados por región">
+      <ChartCard title={t("modulesByRegion")}>
         <HeatMap
           rowLabels={moduleRegionHeat.rowLabels}
           colLabels={moduleRegionHeat.colLabels}
@@ -158,13 +160,13 @@ export function RegionalGtmView({ data }: Props) {
       </ChartCard>
 
       <SectionHeader
-        title="Competidores por País"
-        description="Ranking de competidores por país con menciones y relación principal detectada."
+        title={t("competitorsByCountry")}
+        description={t("competitorsByCountryDesc")}
       />
       <ChartCard>
         <div className="mb-3">
           <label className="mr-2 text-[12px] text-[var(--color-text-secondary)]">
-            Filtrar por país:
+            {t("filterByCountry")}
           </label>
           <select
             className="rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] p-2 text-[12px]"

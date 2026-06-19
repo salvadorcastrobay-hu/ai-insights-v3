@@ -14,6 +14,7 @@ import type {
   SearchResult,
 } from "@/components/chat/types";
 import { FILTER_PARSERS, useGlobalFilters } from "@/lib/data/filter-state";
+import { useTranslations } from "next-intl";
 
 const FILTER_KEYS = FILTER_PARSERS;
 
@@ -105,6 +106,7 @@ function messagesFromLoaded(loaded: LoadedConversation): ChatMessageModel[] {
 }
 
 export function SqlChatClient({ filterBar }: { filterBar?: ReactNode } = {}) {
+  const t = useTranslations("sqlChat");
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessageModel[]>([]);
@@ -284,8 +286,8 @@ export function SqlChatClient({ filterBar }: { filterBar?: ReactNode } = {}) {
 
   return (
     <ChatInterface
-      title="Chat con IA"
-      description="Respuestas sobre pains, gaps, competidores y deals usando datos reales de demos y pipeline. Modos: SQL cuantitativo, hybrid (cuanti+cuali), semantic search y chat."
+      title={t("title")}
+      description={t("description")}
       conversations={conversations}
       activeConversationId={activeId}
       onSelectConversation={selectConversation}
@@ -298,9 +300,9 @@ export function SqlChatClient({ filterBar }: { filterBar?: ReactNode } = {}) {
       onInputChange={setInput}
       onSubmit={submit}
       isSubmitting={isSubmitting}
-      inputPlaceholder="Ej: Top 10 pains en Enterprise en los ultimos 90 dias"
-      sidebarTitle="Consultas guardadas"
-      assistantLabel="AI"
+      inputPlaceholder={t("inputPlaceholder")}
+      sidebarTitle={t("sidebarTitle")}
+      assistantLabel={t("assistantLabel")}
       onCancel={cancel}
       inputAccessory={
         <div className="flex items-center gap-2">
@@ -310,7 +312,7 @@ export function SqlChatClient({ filterBar }: { filterBar?: ReactNode } = {}) {
             <button
               type="button"
               onClick={() => setShowFilters((v) => !v)}
-              title="Filtros"
+              title={t("filterLabel")}
               className="flex h-8 w-8 items-center justify-center rounded-full text-[var(--color-text-secondary)] transition hover:bg-[var(--color-neutral-100)] hover:text-[var(--color-brand-500)]"
             >
               <SlidersHorizontal size={15} strokeWidth={2} />
@@ -319,7 +321,7 @@ export function SqlChatClient({ filterBar }: { filterBar?: ReactNode } = {}) {
               <div className="absolute bottom-10 left-0 z-30 w-[640px] max-w-[90vw] rounded-[var(--radius-m)] border border-[var(--color-neutral-200)] bg-white p-3 shadow-[var(--shadow-8dp)]">
                 <div className="mb-2 flex items-center gap-2">
                   <SlidersHorizontal size={13} className="text-[var(--color-brand-500)]" />
-                  <span className="text-[12px] font-semibold text-[var(--color-text-default)]">Filtros</span>
+                  <span className="text-[12px] font-semibold text-[var(--color-text-default)]">{t("filterLabel")}</span>
                   <button
                     type="button"
                     onClick={() => setShowFilters(false)}

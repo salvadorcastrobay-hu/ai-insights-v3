@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { FIELD_LABELS } from "@/lib/data/constants";
 import { useFilteredRows } from "@/lib/data/use-filtered-rows";
 import type { InsightRow } from "@/lib/supabase/types";
+import { useTranslations } from "next-intl";
 
 type ChartType = "bar" | "stacked-bar" | "line" | "area" | "pie" | "scatter" | "histogram";
 type AggType = "count" | "sum" | "mean" | "median" | "distinct";
@@ -248,6 +249,7 @@ function newChart(): ChartConfig {
 }
 
 export function CustomDashboardsClient({ rows }: { rows: InsightRow[] }) {
+  const t = useTranslations("customDashboards");
   const { filteredRows } = useFilteredRows(rows);
 
   const [dashboards, setDashboards] = useState<Dashboard[]>([]);
@@ -332,8 +334,8 @@ export function CustomDashboardsClient({ rows }: { rows: InsightRow[] }) {
   return (
     <div className="space-y-6">
       <PageTitle
-        title="Custom Dashboards"
-        subtitle="Combiná tus propios gráficos. Cada dashboard puede tener varios charts y se guarda en tu cuenta."
+        title={t("title")}
+        subtitle={t("subtitle")}
       />
 
       <div className="grid gap-3 lg:grid-cols-[260px_1fr]">

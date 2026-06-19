@@ -2,6 +2,7 @@
 
 import { Building2, Quote, TrendingUp, X, Layers3, Target, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 
 import { useDrillDown } from "./DrillDownProvider";
 
@@ -35,22 +36,22 @@ type DrillResponse = {
   quotes: QuoteRow[];
 };
 
-const SUB_DIM_LABELS: Record<string, string> = {
-  insight_subtype_display: "Subtipo",
-  competitor_relationship_display: "Relación",
-  gap_priority: "Prioridad",
-  deal_stage: "Deal stage",
-  module_status: "Estado del módulo",
-  module_display: "Módulo",
+const SUB_DIM_KEYS: Record<string, string> = {
+  insight_subtype_display: "insight_subtype_display",
+  competitor_relationship_display: "competitor_relationship_display",
+  gap_priority: "gap_priority",
+  deal_stage: "deal_stage",
+  module_status: "module_status",
+  module_display: "module_display",
 };
 
-const DIM_LABELS: Record<string, string> = {
-  pain_theme: "Pain",
-  competitor_name: "Competidor",
-  feature_display: "Feature gap",
-  friction_subtype: "Fricción",
-  module_display: "Módulo",
-  insight_subtype_display: "Subtipo",
+const DIM_KEYS: Record<string, string> = {
+  pain_theme: "pain_theme",
+  competitor_name: "competitor_name",
+  feature_display: "feature_display",
+  friction_subtype: "friction_subtype",
+  module_display: "module_display",
+  insight_subtype_display: "insight_subtype_display",
 };
 
 function fmtUSD(n: number): string {
@@ -71,6 +72,7 @@ function fmtDate(iso: string | null): string | null {
 }
 
 export function DrillDownSheet() {
+  const t = useTranslations("drillDown");
   const { current, close, filters, isOpen } = useDrillDown();
   const [data, setData] = useState<DrillResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -120,7 +122,8 @@ export function DrillDownSheet() {
 
   if (!isOpen || !current) return null;
 
-  const dimLabel = DIM_LABELS[current.dimension] ?? current.label ?? current.dimension;
+  const dimKey = DIM_KEYS[current.dimension];
+  const dimLabel = dimKey ? t(`labels.${dimKey}` as Parameters<typeof t>[0]) : (current.label ?? current.dimension);
 
   return (
     <div
@@ -172,10 +175,10 @@ export function DrillDownSheet() {
           {/* KPIs */}
           {data ? (
             <div className="relative grid grid-cols-4 gap-2 px-5 pb-4">
-              <Kpi label="Insights" value={data.totals.insights.toLocaleString("en-US")} />
-              <Kpi label="Calls" value={data.totals.unique_transcripts.toLocaleString("en-US")} />
-              <Kpi label="Deals" value={data.totals.unique_deals.toLocaleString("en-US")} />
-              <Kpi label="Revenue" value={fmtUSD(data.totals.revenue_usd)} />
+              <Kpi label={t("insights")} value={data.totals.insights.toLocaleString("en-US")} />
+              <Kpi label={t("calls")} value={data.totals.unique_transcripts.toLocaleString("en-US")} />
+              <Kpi label={t("deals")} value={data.totals.unique_deals.toLocaleString("en-US")} />
+              <Kpi label={t("revenue")} value={fmtUSD(data.totals.revenue_usd)} />
             </div>
           ) : (
             <div className="relative grid grid-cols-4 gap-2 px-5 pb-4">
@@ -189,10 +192,10 @@ export function DrillDownSheet() {
         {/* Tabs */}
         <div className="flex shrink-0 items-center gap-1 border-b border-[var(--color-neutral-200)] bg-white px-3">
           <TabBtn active={tab === "sub"} onClick={() => setTab("sub")} icon={<Target className="h-3.5 w-3.5" />}>
-            {data ? SUB_DIM_LABELS[data.subDimension] ?? "Subtipos" : "Subtipos"}
+            {data ? (SUB_DIM_KEYS[data.subDimension] ? t(`labels.${SUB_DIM_KEYS[data.subDimension]}` as Parameters<typeof t>[0]) : t("subtypes")) : t("subtypes")}
           </TabBtn>
           <TabBtn active={tab === "quotes"} onClick={() => setTab("quotes")} icon={<Quote className="h-3.5 w-3.5" />}>
-            Verbatims {data?.quotes?.length ? `(${data.quotes.length})` : ""}
+            {t("verbatims")} {data?.quotes?.length ? `(${data.quotes.length})` : ""}
           </TabBtn>
           <TabBtn active={tab === "split"} onClick={() => setTab("split")} icon={<TrendingUp className="h-3.5 w-3.5" />}>
             Cortes
@@ -216,10 +219,10 @@ export function DrillDownSheet() {
               {tab === "quotes" ? <QuotesList quotes={data.quotes} /> : null}
               {tab === "split" ? (
                 <div className="space-y-3 p-4">
-                  <MiniBars title="Por segmento" rows={data.segmentSplit} />
-                  <MiniBars title="Por región" rows={data.regionSplit} />
-                  <MiniBars title="Por industria" rows={data.industrySplit} />
-                  <MiniBars title="Por deal stage" rows={data.stageSplit} />
+                  <MiniBars title={t("bySegment")} rows={data.segmentSplit} />
+                  <MiniBars title={t("byRegion")} rows={data.regionSplit} />
+                  <MiniBars title={t("byIndustry")} rows={data.industrySplit} />
+                  <MiniBars title={t("byStage")} rows={data.stageSplit} />
                 </div>
               ) : null}
             </>

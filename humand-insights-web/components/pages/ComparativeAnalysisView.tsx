@@ -21,6 +21,7 @@ import { MetricCard } from "@/components/layout/MetricCard";
 import { SectionHeader } from "@/components/layout/SectionHeader";
 import { PageTitle } from "@/components/pages/common";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@/components/ui/table";
+import { useTranslations } from "next-intl";
 import {
   applyDateWindow,
   buildComparison,
@@ -65,6 +66,7 @@ function selectStyle() {
 }
 
 export function ComparativeAnalysisView({ data }: Props) {
+  const t = useTranslations("comparativeAnalysis");
   const rows = data.rows;
 
   const facetOptions = useFacetOptions(rows);
@@ -251,8 +253,8 @@ export function ComparativeAnalysisView({ data }: Props) {
   return (
     <div className="space-y-5">
       <PageTitle
-        title="Comparative Analysis"
-        subtitle="Compará períodos o mercados y elegí qué arista leer: pains, gaps, competidores, módulos, stages y más."
+        title={t("title")}
+        subtitle={t("subtitle")}
       />
 
       <SectionHeader title="Configurar comparación" />

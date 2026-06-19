@@ -13,6 +13,7 @@ import { PageTitle } from "@/components/pages/common";
 import { ConfidenceBadge } from "@/components/ui/ConfidenceBadge";
 import { Input } from "@/components/ui/input";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@/components/ui/table";
+import { useTranslations } from "next-intl";
 import type { ProductGapsDetailData } from "@/lib/data/product-gaps-detail-data";
 import type { InsightRow } from "@/lib/supabase/types";
 
@@ -25,6 +26,7 @@ const PRIORITY_COLORS: Record<string, string> = {
 };
 
 export function ProductGapsDetailView({ data, filteredRows }: Props) {
+  const t = useTranslations("productGaps");
   const { open: drill } = useDrillDown();
   const {
     kpis,
@@ -84,29 +86,29 @@ export function ProductGapsDetailView({ data, filteredRows }: Props) {
 
   return (
     <div className="space-y-6">
-      <PageTitle title="Product Gaps — Detalle" subtitle="Priorización de gaps, revenue en riesgo y señales por segmento." />
+      <PageTitle title={t("title")} subtitle={t("subtitle")} />
 
       <section className="grid gap-3 md:grid-cols-3">
         <MetricCard
-          label="Total Detecciones de Gaps"
+          label={t("totalDetections")}
           value={kpis.total}
           caption={`en ${kpis.distinctDeals} demos · ${kpis.perDemo} gaps por demo`}
         />
         <MetricCard
-          label="Features en Taxonomía"
+          label={t("inTaxonomy")}
           value={kpis.inTaxonomy}
-          caption="seeds definidos previamente por el equipo"
+          caption={t("inTaxonomyCaption")}
         />
         <MetricCard
-          label="Features Nuevas Detectadas"
+          label={t("newFeatures")}
           value={kpis.newFeatures}
-          caption="detectadas por el modelo · revisar para ampliar taxonomía"
+          caption={t("newFeaturesCaption")}
         />
       </section>
 
       <SectionHeader
-        title="Top 20 Features Faltantes"
-        description="Ordenado por deals únicos que mencionaron la feature. El emoji indica la prioridad dominante."
+        title={t("topFeaturesTitle")}
+        description={t("topFeaturesDesc")}
       />
       <ChartCard
         rawRows={filteredRows.filter((r) => r.insight_type === "product_gap")}
@@ -134,7 +136,7 @@ export function ProductGapsDetailView({ data, filteredRows }: Props) {
       </ChartCard>
 
       <SectionHeader
-        title="Distribución por Prioridad"
+        title={t("priorityTitle")}
         description="Revenue en Riesgo = suma del amount de los deals únicos que mencionaron este tipo de gap."
       />
       <ChartCard>
@@ -170,7 +172,7 @@ export function ProductGapsDetailView({ data, filteredRows }: Props) {
       </ChartCard>
 
       <SectionHeader
-        title="Prioridad de Gaps por Segmento (%)"
+        title={t("segmentPriorityTitle")}
         description="Distribución relativa de las prioridades dentro de cada segmento. Lectura normalizada por volumen de gaps."
       />
       <ChartCard>
@@ -189,7 +191,7 @@ export function ProductGapsDetailView({ data, filteredRows }: Props) {
       </ChartCard>
 
       <SectionHeader
-        title="Feature Gaps por Segmento (Top 15)"
+        title={t("featureSegmentTitle")}
         description="Porcentaje de deals del segmento que mencionaron cada feature gap. Entre paréntesis, los deals absolutos."
       />
       <ChartCard>
@@ -207,7 +209,7 @@ export function ProductGapsDetailView({ data, filteredRows }: Props) {
       </ChartCard>
 
       <SectionHeader
-        title="Módulos: Existentes vs. Faltantes"
+        title={t("moduleStatusTitle")}
         description={`El ${existingModulePct}% de los feature gaps son en módulos que YA EXISTEN en Humand. El problema es de profundidad funcional, no de cobertura.`}
       />
       <ChartCard>
@@ -223,8 +225,8 @@ export function ProductGapsDetailView({ data, filteredRows }: Props) {
       </ChartCard>
 
       <SectionHeader
-        title="Detalle de Gaps"
-        description="Filtrá por prioridad para aislar los Dealbreakers. Las filas rojas corresponden a gaps tipo dealbreaker."
+        title={t("detailTitle")}
+        description={t("detailDesc")}
       />
       <ChartCard>
         <div className="mb-3 grid gap-2 md:grid-cols-3">
@@ -253,7 +255,7 @@ export function ProductGapsDetailView({ data, filteredRows }: Props) {
             ))}
           </select>
           <Input
-            placeholder="Buscar en resumen..."
+            placeholder={t("searchGap")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />

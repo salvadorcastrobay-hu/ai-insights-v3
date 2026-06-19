@@ -9,12 +9,14 @@ import { MetricCard } from "@/components/layout/MetricCard";
 import { SectionHeader } from "@/components/layout/SectionHeader";
 import { EmptyState, PageTitle } from "@/components/pages/common";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@/components/ui/table";
+import { useTranslations } from "next-intl";
 import { formatCurrency } from "@/lib/data/computations";
 import type { SalesEnablementData } from "@/lib/data/sales-enablement-data";
 
 type Props = { data: SalesEnablementData; filteredRows: import("@/lib/supabase/types").InsightRow[] };
 
 export function SalesEnablementView({ data, filteredRows }: Props) {
+  const t = useTranslations("salesEnablement");
   const { open: drill } = useDrillDown();
   const {
     isEmpty,
@@ -39,23 +41,23 @@ export function SalesEnablementView({ data, filteredRows }: Props) {
       <PageTitle title="Sales Enablement" />
 
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Total Fricciones" value={kpis.totalFricciones} />
-        <MetricCard label="Deals Afectados" value={kpis.affectedDeals} />
-        <MetricCard label="Revenue en Riesgo" value={formatCurrency(kpis.revenueAtRisk)} />
+        <MetricCard label={t("totalFrictions")} value={kpis.totalFricciones} />
+        <MetricCard label={t("affectedDeals")} value={kpis.affectedDeals} />
+        <MetricCard label={t("revenueAtRisk")} value={formatCurrency(kpis.revenueAtRisk)} />
         <MetricCard
-          label="Fricciones por deal"
+          label={t("frictionPerDeal")}
           value={kpis.frictionsPerDeal}
-          caption="Promedio de fricciones por deal afectado"
+          caption={t("frictionPerDealCaption")}
         />
       </section>
 
       <SectionHeader
-        title="A. ¿Qué está frenando los deals?"
-        description="Ranking de fricciones por deals únicos y desglose narrativo de las dos principales."
+        title={t("frictionRankingTitle")}
+        description={t("frictionRankingDesc")}
       />
       <section className="grid gap-3 lg:grid-cols-2">
         <ChartCard
-          title="¿Qué está frenando más los deals?"
+          title={t("frictionRankingChart")}
           rawRows={filteredRows.filter((r) => r.insight_type === "deal_friction")}
           ask={{
             chartTitle: "Top fricciones",
@@ -74,7 +76,7 @@ export function SalesEnablementView({ data, filteredRows }: Props) {
             }
           />
         </ChartCard>
-        <ChartCard title="¿Varía la fricción según el tamaño de empresa?">
+        <ChartCard title={t("frictionBySize")}>
           <StackedBarChart
             data={frictionSegment.data}
             yKey="name"
@@ -84,7 +86,7 @@ export function SalesEnablementView({ data, filteredRows }: Props) {
         </ChartCard>
       </section>
 
-      <ChartCard title="Fricción Breakdown — Top 2">
+      <ChartCard title={t("frictionBreakdown")}>
         <div className="grid gap-4 md:grid-cols-2">
           {top2Friction.length === 0 ? (
             <p className="text-[13px] text-[var(--color-text-secondary)]">Sin datos suficientes.</p>
@@ -116,7 +118,7 @@ export function SalesEnablementView({ data, filteredRows }: Props) {
       </ChartCard>
 
       <section className="space-y-3">
-        <ChartCard title="¿En qué etapa del deal aparece cada fricción?">
+        <ChartCard title={t("frictionByStage")}>
           <HeatMap
             rowLabels={stageHeat.rowLabels}
             colLabels={stageHeat.colLabels}
@@ -124,7 +126,7 @@ export function SalesEnablementView({ data, filteredRows }: Props) {
             height={Math.max(360, stageHeat.rowLabels.length * 32 + 140)}
           />
         </ChartCard>
-        <ChartCard title="¿Qué fricción predomina según la industria?">
+        <ChartCard title={t("frictionByIndustry")}>
           <HeatMap
             rowLabels={industryHeat.rowLabels}
             colLabels={industryHeat.colLabels}
@@ -140,8 +142,8 @@ export function SalesEnablementView({ data, filteredRows }: Props) {
       </p>
 
       <SectionHeader
-        title="B. ¿Qué AEs necesitan más soporte?"
-        description="Ordenado por fricciones promedio por deal — el AE con más complejidad aparece primero."
+        title={t("aeSupport")}
+        description={t("aeSupportDesc")}
       />
       <ChartCard>
         <div className="max-h-[480px] overflow-auto">
@@ -174,7 +176,7 @@ export function SalesEnablementView({ data, filteredRows }: Props) {
         </div>
       </ChartCard>
 
-      <ChartCard title="¿Qué tipo de fricciones enfrenta cada AE?">
+      <ChartCard title={t("frictionByAe")}>
         <StackedBarChart
           data={aeFrictionStack.data}
           yKey="name"
@@ -186,8 +188,8 @@ export function SalesEnablementView({ data, filteredRows }: Props) {
       {hasFaqs ? (
         <>
           <SectionHeader
-            title="C. ¿Qué preguntan los prospects? (Battle Cards)"
-            description="Top 5 preguntas por topic, priorizadas por frecuencia. Base para preparar respuestas antes de la próxima demo."
+            title={t("battleCards")}
+            description={t("battleCardsDesc")}
           />
           <section className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
             {faqBattleCards.map((card) => (

@@ -10,6 +10,7 @@ import { MetricCard } from "@/components/layout/MetricCard";
 import { SectionHeader } from "@/components/layout/SectionHeader";
 import { EmptyState, PageTitle } from "@/components/pages/common";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@/components/ui/table";
+import { useTranslations } from "next-intl";
 import { formatCurrency } from "@/lib/data/computations";
 import type { CompetitiveIntelligenceData } from "@/lib/data/competitive-intelligence-data";
 
@@ -25,6 +26,7 @@ const RELATIONSHIP_LEGEND: Array<{ label: string; color: string; note: string }>
 ];
 
 export function CompetitiveIntelligenceView({ data, filteredRows }: Props) {
+  const t = useTranslations("competitiveIntelligence");
   const { open: drill } = useDrillDown();
   const {
     isEmpty,
@@ -44,29 +46,29 @@ export function CompetitiveIntelligenceView({ data, filteredRows }: Props) {
 
   return (
     <div className="space-y-6">
-      <PageTitle title="Competitive Intelligence" />
+      <PageTitle title={t("title")} />
 
       <section className="grid gap-3 md:grid-cols-3">
         <MetricCard
-          label="Competidores relevantes"
+          label={t("relevantCompetitors")}
           value={kpis.relevantCompetitors}
-          caption="Con señal de relación fuerte"
+          caption={t("relevantCompetitorsCaption")}
         />
         <MetricCard
-          label="Deals con señal competitiva"
+          label={t("dealsWithSignal")}
           value={kpis.dealsWithSignal}
           delta={`${kpis.dealsPct}% del total`}
         />
-        <MetricCard label="Revenue con competencia activa" value={formatCurrency(kpis.compRevenue)} />
+        <MetricCard label={t("revenueWithComp")} value={formatCurrency(kpis.compRevenue)} />
       </section>
 
       <SectionHeader
-        title="A. ¿Contra quién competimos?"
-        description="Ranking de competidores por deals únicos, con desglose de la relación que el prospect tiene con ellos."
+        title={t("sectionA")}
+        description={t("sectionADesc")}
       />
       <section className="space-y-3">
         <ChartCard
-          title="¿Contra quién competimos más seguido?"
+          title={t("competitorRanking")}
           rawRows={filteredRows.filter((r) => r.insight_type === "competitive_signal" && !r.is_own_brand_competitor)}
           ask={{
             chartTitle: "Ranking de competidores",
@@ -85,7 +87,7 @@ export function CompetitiveIntelligenceView({ data, filteredRows }: Props) {
             }
           />
         </ChartCard>
-        <ChartCard title="¿Cuál es la relación del prospect con el competidor?">
+        <ChartCard title={t("relationshipType")}>
           <StackedBarChart
             data={relationStack.data}
             yKey="name"
@@ -96,7 +98,7 @@ export function CompetitiveIntelligenceView({ data, filteredRows }: Props) {
         </ChartCard>
       </section>
 
-      <ChartCard title="Leyenda de tipos de relación competitiva">
+      <ChartCard title={t("relationshipLegend")}>
         <div className="grid gap-2 text-[12px] md:grid-cols-3">
           {RELATIONSHIP_LEGEND.map((item) => (
             <div key={item.label} className="flex items-start gap-2">
@@ -114,10 +116,10 @@ export function CompetitiveIntelligenceView({ data, filteredRows }: Props) {
       </ChartCard>
 
       <SectionHeader
-        title="B. ¿Dónde y con quién?"
-        description="Presencia de cada competidor por país, segmento comercial e industria."
+        title={t("sectionB")}
+        description={t("sectionBDesc")}
       />
-      <ChartCard title="¿En qué países aparece cada competidor?">
+      <ChartCard title={t("byCountry")}>
         <HeatMap
           rowLabels={countryHeat.rowLabels}
           colLabels={countryHeat.colLabels}
@@ -126,7 +128,7 @@ export function CompetitiveIntelligenceView({ data, filteredRows }: Props) {
         />
       </ChartCard>
       <section className="grid gap-3 lg:grid-cols-2">
-        <ChartCard title="¿En qué segmento aparece cada competidor?">
+        <ChartCard title={t("bySegment")}>
           <StackedBarChart
             data={segmentStack.data}
             yKey="name"
@@ -134,7 +136,7 @@ export function CompetitiveIntelligenceView({ data, filteredRows }: Props) {
             height={Math.max(320, segmentStack.data.length * 32)}
           />
         </ChartCard>
-        <ChartCard title="¿En qué industrias aparece cada competidor?">
+        <ChartCard title={t("byIndustry")}>
           <StackedBarChart
             data={industryStack.data}
             yKey="name"
@@ -145,10 +147,10 @@ export function CompetitiveIntelligenceView({ data, filteredRows }: Props) {
       </section>
 
       <SectionHeader
-        title="C. ¿En qué momento del deal aparecen?"
-        description="Cruce competidor × etapa del deal. Si un competidor se repite en etapas Lost, priorizar battle card."
+        title={t("sectionC")}
+        description={t("sectionCDesc")}
       />
-      <ChartCard title="¿En qué etapa del deal aparece cada competidor?">
+      <ChartCard title={t("byStage")}>
         <StackedBarChart
           data={stageStack.data}
           yKey="name"
@@ -158,8 +160,8 @@ export function CompetitiveIntelligenceView({ data, filteredRows }: Props) {
       </ChartCard>
 
       <SectionHeader
-        title="D. Migration Opportunities"
-        description="Deals donde el prospect usa actualmente o migra desde un competidor directo. Ordenado por revenue descendente."
+        title={t("sectionD")}
+        description={t("sectionDDesc")}
       />
       <ChartCard>
         {migrationRows.length === 0 ? (

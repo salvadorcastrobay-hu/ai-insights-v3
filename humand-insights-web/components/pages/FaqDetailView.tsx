@@ -9,11 +9,13 @@ import { PageTitle } from "@/components/pages/common";
 import { ConfidenceBadge } from "@/components/ui/ConfidenceBadge";
 import { Input } from "@/components/ui/input";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@/components/ui/table";
+import { useTranslations } from "next-intl";
 import type { FaqDetailData } from "@/lib/data/faq-detail-data";
 
 type Props = { data: FaqDetailData; filteredRows: import("@/lib/supabase/types").InsightRow[] };
 
 export function FaqDetailView({ data, filteredRows }: Props) {
+  const t = useTranslations("faq");
   const { kpis, topicCounts, topics, topQuestionsByTopic, faqTableRows } = data;
 
   const [topic, setTopic] = useState(topics[0] ?? "");
@@ -34,13 +36,13 @@ export function FaqDetailView({ data, filteredRows }: Props) {
 
   return (
     <div className="space-y-6">
-      <PageTitle title="FAQs — Detalle" subtitle="Detalle de preguntas frecuentes para priorizar Battle Cards." />
+      <PageTitle title={t("title")} subtitle={t("subtitle")} />
 
       <section className="grid gap-3 md:grid-cols-3">
-        <MetricCard label="Total FAQs" value={kpis.totalFaqs} caption="insights de tipo FAQ" />
-        <MetricCard label="Topics Únicos" value={kpis.uniqueTopics} caption="categorías de preguntas detectadas" />
+        <MetricCard label={t("total")} value={kpis.totalFaqs} caption={t("totalCaption")} />
+        <MetricCard label={t("uniqueTopics")} value={kpis.uniqueTopics} caption={t("uniqueTopicsCaption")} />
         <MetricCard
-          label="Preguntas por Demo"
+          label={t("perDemo")}
           value={kpis.questionsPerDemo}
           caption="promedio · si baja con el tiempo, el pre-demo está funcionando"
         />
@@ -53,12 +55,12 @@ export function FaqDetailView({ data, filteredRows }: Props) {
 
       <section className="grid gap-3 lg:grid-cols-2">
         <ChartCard
-          title="FAQs por Topic (deals únicos con al menos 1 pregunta)"
+          title={t("byTopic")}
           rawRows={filteredRows.filter((r) => r.insight_type === "faq")}
           ask={{
-            chartTitle: "FAQs por Topic",
+            chartTitle: t("byTopicChartTitle"),
             chartKind: "horizontal-bar",
-            description: "Topics de preguntas frecuentes por deals únicos.",
+            description: t("byTopicDesc"),
             dimension: "insight_subtype_display",
             scopeType: "faq",
             rows: topicCounts.map((r) => ({ label: r.name, value: r.value })),
@@ -70,7 +72,7 @@ export function FaqDetailView({ data, filteredRows }: Props) {
           </p>
           <HorizontalBarChart data={topicCounts} height={380} />
         </ChartCard>
-        <ChartCard title="Top 5 preguntas por topic">
+        <ChartCard title={t("topByTopic")}>
           <p className="mb-2 text-[12px] text-[var(--color-text-secondary)]">
             Estas 5 preguntas son la base para la Battle Card del topic seleccionado.
           </p>
@@ -81,7 +83,7 @@ export function FaqDetailView({ data, filteredRows }: Props) {
         </ChartCard>
       </section>
 
-      <ChartCard title="Detalle FAQ">
+      <ChartCard title={t("detail")}>
         <p className="mb-2 text-[12px] text-[var(--color-text-secondary)]">
           Filtrá por topic o busca palabras clave para revisar ejemplos reales antes de preparar
           respuestas estándar.
@@ -91,7 +93,7 @@ export function FaqDetailView({ data, filteredRows }: Props) {
             <option value="">Todos los topics</option>
             {topics.map((option) => (<option key={option} value={option}>{option}</option>))}
           </select>
-          <Input placeholder="Buscar pregunta..." value={search} onChange={(e) => setSearch(e.target.value)} />
+          <Input placeholder={t("searchFaq")} value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         <div className="max-h-[420px] overflow-auto">
           <Table>

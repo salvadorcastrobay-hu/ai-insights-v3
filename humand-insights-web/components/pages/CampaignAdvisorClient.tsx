@@ -15,6 +15,7 @@ import type {
 } from "@/components/chat/types";
 import { MultiSelectCombobox } from "@/components/layout/MultiSelectCombobox";
 import { useGlobalFilters } from "@/lib/data/filter-state";
+import { useTranslations } from "next-intl";
 
 const DEAL_STAGE_OPTIONS = [
   "qualified",
@@ -129,6 +130,7 @@ function messagesFromLoaded(loaded: LoadedAdvisorConversation): ChatMessageModel
 }
 
 export function CampaignAdvisorClient({ filterBar }: { filterBar?: ReactNode } = {}) {
+  const t = useTranslations("advisor");
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessageModel[]>([]);
@@ -417,7 +419,7 @@ export function CampaignAdvisorClient({ filterBar }: { filterBar?: ReactNode } =
       return;
     }
     if (externalUrls.length >= 5) {
-      setError("Máximo 5 URLs de contexto.");
+      setError(t("maxUrls"));
       return;
     }
     setExternalUrls((prev) => [...prev, normalized]);
@@ -436,7 +438,7 @@ export function CampaignAdvisorClient({ filterBar }: { filterBar?: ReactNode } =
   const advisorFilterBar = hasRecommendation ? (
     <div className="flex items-center gap-1.5 rounded-[var(--radius-s)] border border-[var(--color-brand-100)] bg-[var(--color-brand-50)] px-2.5 py-1 text-[11px] text-[var(--color-brand-500)]">
       <Lock size={11} strokeWidth={2.5} />
-      Filtros bloqueados para esta recomendación. Creá una conversación nueva para cambiarlos.
+      {t("closedFilters")}
     </div>
   ) : null;
 
@@ -447,7 +449,7 @@ export function CampaignAdvisorClient({ filterBar }: { filterBar?: ReactNode } =
         type="button"
         onClick={() => setShowFilters((v) => !v)}
         disabled={hasRecommendation}
-        title={hasRecommendation ? "Filtros bloqueados" : "Filtros"}
+        title={hasRecommendation ? t("closedFilters") : t("filterLabel")}
         className="flex h-8 w-8 items-center justify-center rounded-full text-[var(--color-text-secondary)] transition hover:bg-[var(--color-neutral-100)] hover:text-[var(--color-brand-500)] disabled:cursor-not-allowed disabled:opacity-40"
       >
         <SlidersHorizontal size={15} strokeWidth={2} />
@@ -456,7 +458,7 @@ export function CampaignAdvisorClient({ filterBar }: { filterBar?: ReactNode } =
         <div className="absolute bottom-10 left-0 z-30 w-[640px] max-w-[90vw] rounded-[var(--radius-m)] border border-[var(--color-neutral-200)] bg-white p-3 shadow-[var(--shadow-8dp)]">
           <div className="mb-2 flex items-center gap-2">
             <SlidersHorizontal size={13} className="text-[var(--color-brand-500)]" />
-            <span className="text-[12px] font-semibold text-[var(--color-text-default)]">Filtros</span>
+            <span className="text-[12px] font-semibold text-[var(--color-text-default)]">{t("filterLabel")}</span>
             <button
               type="button"
               onClick={() => setShowFilters(false)}
@@ -473,7 +475,7 @@ export function CampaignAdvisorClient({ filterBar }: { filterBar?: ReactNode } =
                 Advisor — etapa del deal
               </div>
               <MultiSelectCombobox
-                label="Etapa"
+                label={t("stageLabel")}
                 options={[...DEAL_STAGE_OPTIONS]}
                 value={local.deal_stage}
                 onChange={(next) => setLocal((prev) => ({ ...prev, deal_stage: next }))}
@@ -487,7 +489,7 @@ export function CampaignAdvisorClient({ filterBar }: { filterBar?: ReactNode } =
 
   // Mini-select de idiomas + botón translate (lado derecho del chatbar).
   const LANG_OPTIONS: Array<{ value: string; label: string }> = [
-    { value: "", label: "Idioma original" },
+    { value: "", label: t("originalLang") },
     { value: "en-US", label: "English (en-US)" },
     { value: "pt-BR", label: "Português (pt-BR)" },
   ];
@@ -499,7 +501,7 @@ export function CampaignAdvisorClient({ filterBar }: { filterBar?: ReactNode } =
         onChange={(e) => setTargetLanguage(e.target.value)}
         disabled={!hasRecommendation || isSubmitting}
         className="h-8 rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] bg-white px-2 text-[11px] font-medium text-[var(--color-text-default)] outline-none transition-colors focus:border-[var(--color-brand-400)] disabled:cursor-not-allowed disabled:bg-[var(--color-neutral-100)] disabled:text-[var(--color-text-secondary)]"
-        title={hasRecommendation ? "Traducir recomendación al idioma seleccionado" : "Generá una recomendación primero"}
+        title={hasRecommendation ? t("translateTitle") : t("translateNeedsRec")}
       >
         {LANG_OPTIONS.map((o) => (
           <option key={o.value} value={o.value}>{o.label}</option>
@@ -527,8 +529,8 @@ export function CampaignAdvisorClient({ filterBar }: { filterBar?: ReactNode } =
         disabled={hasRecommendation && externalUrls.length === 0}
         title={
           hasRecommendation
-            ? "Fuentes externas (bloqueado en esta conversación)"
-            : "Adjuntar fuentes externas (hasta 5 URLs)"
+            ? t("externalSourcesBlocked")
+            : t("externalSources")
         }
         className="relative flex h-8 w-8 items-center justify-center rounded-full text-[var(--color-text-secondary)] transition hover:bg-[var(--color-neutral-100)] hover:text-[var(--color-brand-500)] disabled:cursor-not-allowed disabled:opacity-40"
       >
@@ -549,7 +551,7 @@ export function CampaignAdvisorClient({ filterBar }: { filterBar?: ReactNode } =
         <div className="absolute bottom-10 left-0 z-30 w-[420px] max-w-[80vw] rounded-[var(--radius-m)] border border-[var(--color-neutral-200)] bg-white p-3 shadow-[var(--shadow-8dp)]">
           <div className="mb-2 flex items-center gap-2">
             <LinkIcon size={13} className="text-[var(--color-brand-500)]" />
-            <span className="text-[12px] font-semibold text-[var(--color-text-default)]">Fuentes externas</span>
+            <span className="text-[12px] font-semibold text-[var(--color-text-default)]">{t("externalSources")}</span>
             <span className="ml-auto text-[10px] text-[var(--color-text-secondary)]">
               {externalUrls.length}/5
             </span>
@@ -625,7 +627,7 @@ export function CampaignAdvisorClient({ filterBar }: { filterBar?: ReactNode } =
                       onClick={() => removeExternalUrl(url)}
                       disabled={hasRecommendation}
                       className="ml-auto rounded-full p-0.5 text-[var(--color-text-secondary)] transition hover:bg-[var(--color-neutral-200)] hover:text-[var(--color-text-default)] disabled:opacity-40"
-                      aria-label="Quitar"
+                      aria-label={t("removeUrl")}
                     >
                       <X size={11} />
                     </button>
@@ -641,8 +643,8 @@ export function CampaignAdvisorClient({ filterBar }: { filterBar?: ReactNode } =
 
   return (
     <ChatInterface
-      title="Campaign Advisor"
-      description="Generador de angulos de campana con datos reales del pipeline y transcripts. Seleccion filtros para la primera generacion; luego seguimos la conversacion y podemos traducir la recomendacion."
+      title={t("title")}
+      description={t("description")}
       conversations={conversations}
       activeConversationId={activeId}
       onSelectConversation={selectConversation}
@@ -657,12 +659,12 @@ export function CampaignAdvisorClient({ filterBar }: { filterBar?: ReactNode } =
       isSubmitting={isSubmitting}
       inputPlaceholder={
         hasRecommendation
-          ? "Pregunta de follow-up sobre la recomendacion..."
-          : "Ej: Como atacamos Enterprise en HISPAM este Q"
+          ? t("followupPlaceholder")
+          : t("initPlaceholder")
       }
-      sidebarTitle="Recomendaciones"
+      sidebarTitle={t("sidebarTitle")}
       filterBar={advisorFilterBar}
-      assistantLabel="Advisor"
+      assistantLabel={t("assistantLabel")}
       onCancel={cancel}
       inputAccessory={
         <div className="flex items-center gap-2">

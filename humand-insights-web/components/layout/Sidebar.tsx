@@ -21,13 +21,15 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useTranslations } from "next-intl";
 import type { LucideIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { LocaleToggle } from "@/components/layout/LocaleToggle";
 
 type Item = {
   href: string;
-  label: string;
+  labelKey: string;
   section: string;
   icon: LucideIcon;
   roles?: string[];
@@ -36,21 +38,21 @@ type Item = {
 };
 
 const ITEMS: Item[] = [
-  { href: "/overview", label: "Overview", section: "Dashboards", icon: Home },
-  { href: "/executive-summary", label: "Executive Summary", section: "Dashboards", icon: LayoutDashboard },
-  { href: "/product-intelligence", label: "Product Intelligence", section: "Dashboards", icon: Package },
-  { href: "/competitive-intelligence", label: "Competitive Intel", section: "Dashboards", icon: Target },
-  { href: "/sales-enablement", label: "Sales Enablement", section: "Dashboards", icon: Users },
-  { href: "/regional-gtm", label: "Regional / GTM", section: "Dashboards", icon: Globe2 },
-  { href: "/pains-detail", label: "Pains", section: "Detalle", icon: HeartCrack },
-  { href: "/product-gaps-detail", label: "Product Gaps", section: "Detalle", icon: Puzzle },
-  { href: "/faq-detail", label: "FAQs", section: "Detalle", icon: HelpCircle },
-  { href: "/comparative-analysis", label: "Comparative Analysis", section: "Herramientas", icon: GitCompare },
-  { href: "/custom-dashboards", label: "Custom Dashboards", section: "Herramientas", icon: LayoutGrid },
-  { href: "/sql-chat", label: "Chat con IA", section: "Herramientas", icon: Bot },
-  { href: "/glossary", label: "Glosario", section: "Herramientas", icon: BookOpen },
-  { href: "/campaign-advisor", label: "Campaign Advisor", section: "Marketing", icon: Megaphone, roles: ["admin", "campaign_advisor"] },
-  { href: "/competitor-ads", label: "Ads de Competidores", section: "Marketing", icon: Radar },
+  { href: "/overview", labelKey: "Overview", section: "Dashboards", icon: Home },
+  { href: "/executive-summary", labelKey: "Executive Summary", section: "Dashboards", icon: LayoutDashboard },
+  { href: "/product-intelligence", labelKey: "Product Intelligence", section: "Dashboards", icon: Package },
+  { href: "/competitive-intelligence", labelKey: "Competitive Intel", section: "Dashboards", icon: Target },
+  { href: "/sales-enablement", labelKey: "Sales Enablement", section: "Dashboards", icon: Users },
+  { href: "/regional-gtm", labelKey: "Regional / GTM", section: "Dashboards", icon: Globe2 },
+  { href: "/pains-detail", labelKey: "Pains", section: "Detalle", icon: HeartCrack },
+  { href: "/product-gaps-detail", labelKey: "Product Gaps", section: "Detalle", icon: Puzzle },
+  { href: "/faq-detail", labelKey: "FAQs", section: "Detalle", icon: HelpCircle },
+  { href: "/comparative-analysis", labelKey: "Comparative Analysis", section: "Herramientas", icon: GitCompare },
+  { href: "/custom-dashboards", labelKey: "Custom Dashboards", section: "Herramientas", icon: LayoutGrid },
+  { href: "/sql-chat", labelKey: "Chat con IA", section: "Herramientas", icon: Bot },
+  { href: "/glossary", labelKey: "Glosario", section: "Herramientas", icon: BookOpen },
+  { href: "/campaign-advisor", labelKey: "Campaign Advisor", section: "Marketing", icon: Megaphone, roles: ["admin", "campaign_advisor"] },
+  { href: "/competitor-ads", labelKey: "Ads de Competidores", section: "Marketing", icon: Radar },
 ];
 
 type Props = {
@@ -60,6 +62,7 @@ type Props = {
 
 export function Sidebar({ roles, userEmail }: Props) {
   const pathname = usePathname();
+  const t = useTranslations("nav");
   const emailPrefix = (userEmail ?? "").split("@")[0]?.toLowerCase() ?? "";
   const available = ITEMS.filter((item) => {
     if (item.ownerPrefixes && !item.ownerPrefixes.includes(emailPrefix)) return false;
@@ -97,7 +100,7 @@ export function Sidebar({ roles, userEmail }: Props) {
         {sections.map((section, idx) => (
           <div key={section} className={cn("space-y-0.5", idx > 0 && "mt-4")}>
             <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--color-text-secondary)]">
-              {section}
+              {t(`sections.${section}`)}
             </p>
             {available
               .filter((item) => item.section === section)
@@ -129,7 +132,7 @@ export function Sidebar({ roles, userEmail }: Props) {
                           : "text-[var(--color-text-secondary)]",
                       )}
                     />
-                    <span className="truncate">{item.label}</span>
+                    <span className="truncate">{t(`items.${item.labelKey}`)}</span>
                   </Link>
                 );
               })}
@@ -138,14 +141,14 @@ export function Sidebar({ roles, userEmail }: Props) {
       </nav>
 
       {/* User footer */}
-      <div className="border-t border-[var(--color-neutral-100)] px-3 py-3">
+      <div className="border-t border-[var(--color-neutral-100)] px-3 py-3 space-y-2">
         <div className="flex items-center gap-2.5 rounded-[8px] px-2 py-1.5">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-brand-100)] text-[11px] font-semibold text-[var(--color-brand-500)]">
             {initials || "·"}
           </div>
           <div className="min-w-0 flex-1 leading-tight">
             <div className="truncate text-[12px] font-semibold text-[var(--color-text-default)]">
-              {userEmail?.split("@")[0] ?? "Invitado"}
+              {userEmail?.split("@")[0] ?? t("guest")}
             </div>
             <div className="truncate text-[10px] text-[var(--color-text-secondary)]">
               {roles[0] ?? "viewer"}
@@ -154,13 +157,16 @@ export function Sidebar({ roles, userEmail }: Props) {
           <form action="/api/auth/signout" method="post">
             <button
               type="submit"
-              aria-label="Cerrar sesion"
-              title="Cerrar sesion"
+              aria-label={t("signout")}
+              title={t("signout")}
               className="flex h-8 w-8 items-center justify-center rounded-[6px] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-neutral-100)] hover:text-[var(--color-text-default)]"
             >
               <LogOut size={14} />
             </button>
           </form>
+        </div>
+        <div className="flex justify-end px-2">
+          <LocaleToggle />
         </div>
       </div>
     </aside>

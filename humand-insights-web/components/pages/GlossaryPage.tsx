@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { PageTitle } from "@/components/pages/common";
 import { ChartCard } from "@/components/charts/ChartCard";
 import { SectionHeader } from "@/components/layout/SectionHeader";
@@ -309,10 +310,11 @@ const BEST_PRACTICES: Array<{ title: string; body: string }> = [
   },
 ];
 
-export function GlossaryPage() {
+export async function GlossaryPage() {
+  const t = await getTranslations("glossary");
   return (
     <div className="space-y-6">
-      <PageTitle title="Glossary" subtitle="Definiciones y referencia rápida sobre los datos, métricas y herramientas del dashboard." />
+      <PageTitle title={t("title")} subtitle={t("subtitle")} />
 
       {/* INSIGHT TYPES */}
       <div className="space-y-3">
@@ -323,12 +325,12 @@ export function GlossaryPage() {
               <Tr><Th>Código</Th><Th>Nombre</Th><Th>Definición</Th><Th>Ejemplo</Th></Tr>
             </Thead>
             <Tbody>
-              {INSIGHT_TYPES.map((t) => (
-                <Tr key={t.code}>
-                  <Td><code className="text-[12px]">{t.code}</code></Td>
-                  <Td className="font-semibold">{t.display}</Td>
-                  <Td>{t.description}</Td>
-                  <Td className="italic text-[var(--color-text-secondary)]">{t.example}</Td>
+              {INSIGHT_TYPES.map((it) => (
+                <Tr key={it.code}>
+                  <Td><code className="text-[12px]">{it.code}</code></Td>
+                  <Td className="font-semibold">{it.display}</Td>
+                  <Td>{it.description}</Td>
+                  <Td className="italic text-[var(--color-text-secondary)]">{it.example}</Td>
                 </Tr>
               ))}
             </Tbody>

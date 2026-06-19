@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowDownRight, ArrowUpRight, Sparkles } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import { ChartCard } from "@/components/charts/ChartCard";
 import { MetricCard } from "@/components/layout/MetricCard";
@@ -34,11 +35,13 @@ function DeltaBadge({ deltaPct }: { deltaPct: number | null }) {
 }
 
 export function OverviewView({ data, coveragePct, validated }: Props) {
+  const t = useTranslations("overview");
+  const tc = useTranslations("common");
   const { kpis, recap, topPains, topFaqs, topIndustries, topSegments, wonLostPains, winRateBaseline } = data;
 
   return (
     <div className="space-y-5">
-      <PageTitle title="Overview" subtitle="Vista rápida de lo más relevante. Usá los filtros para acotar; el sidebar para profundizar." />
+      <PageTitle title={t("title")} subtitle={t("subtitle")} />
 
       {/* Weekly recap */}
       <section className="rounded-[var(--radius-l)] border border-[var(--color-brand-200)] bg-gradient-to-b from-[var(--color-brand-50)] to-[var(--color-bg-card)] p-5">
@@ -145,16 +148,16 @@ export function OverviewView({ data, coveragePct, validated }: Props) {
 
       {/* KPIs */}
       <section className="grid gap-3 md:grid-cols-3 lg:grid-cols-5">
-        <MetricCard label="Calls analizadas" value={fmt(kpis.uniqueCalls)} caption={`${coveragePct.toFixed(1)}% del período`} />
-        <MetricCard label="Deals" value={fmt(kpis.uniqueDeals)} caption="con insight" />
-        <MetricCard label="Insights" value={fmt(kpis.insightsCount)} />
+        <MetricCard label={t("analyzedCalls")} value={fmt(kpis.uniqueCalls)} caption={t("coveragePct", { pct: coveragePct.toFixed(1) })} />
+        <MetricCard label={tc("deals")} value={fmt(kpis.uniqueDeals)} caption={t("dealsWithInsight")} />
+        <MetricCard label={tc("insights")} value={fmt(kpis.insightsCount)} />
         <MetricCard
-          label="Confianza prom."
+          label={tc("confidence")}
           value={kpis.avgConfidence != null ? kpis.avgConfidence.toFixed(2) : "—"}
           caption={kpis.highConfidencePct != null ? `${kpis.highConfidencePct.toFixed(0)}% alta` : undefined}
         />
         <MetricCard
-          label="Período"
+          label={tc("period")}
           value={kpis.periodEnd ?? "—"}
           caption={kpis.periodStart ? `desde ${kpis.periodStart}` : undefined}
         />
@@ -162,7 +165,7 @@ export function OverviewView({ data, coveragePct, validated }: Props) {
 
       {/* Top 5 pains + FAQs */}
       <section className="grid gap-4 lg:grid-cols-2">
-        <ChartCard title="Pains principales">
+        <ChartCard title={t("mainPains")}>
           <p className="mb-2 text-[12px] text-[var(--color-text-secondary)]">% de demos donde se mencionó</p>
           <div className="space-y-2.5">
             {topPains.length === 0 ? (
@@ -186,7 +189,7 @@ export function OverviewView({ data, coveragePct, validated }: Props) {
           </div>
         </ChartCard>
 
-        <ChartCard title="Preguntas frecuentes">
+        <ChartCard title={t("faqs")}>
           <p className="mb-2 text-[12px] text-[var(--color-text-secondary)]">por cantidad de demos</p>
           <TopList rows={topFaqs} />
         </ChartCard>
@@ -194,7 +197,7 @@ export function OverviewView({ data, coveragePct, validated }: Props) {
 
       {/* Win-rate por pain */}
       {wonLostPains.length > 0 ? (
-        <ChartCard title="Win-rate por pain">
+        <ChartCard title={t("winRateByPain")}>
           <p className="mb-3 text-[12px] text-[var(--color-text-secondary)]">
             De los deals <b>cerrados</b> donde apareció cada pain, qué % ganamos.
             Comparado con el win-rate general (<b>{winRateBaseline}%</b>):
@@ -233,10 +236,10 @@ export function OverviewView({ data, coveragePct, validated }: Props) {
 
       {/* Industrias + segmentos */}
       <section className="grid gap-4 lg:grid-cols-2">
-        <ChartCard title="Industrias">
+        <ChartCard title={t("industries")}>
           <TopList rows={topIndustries} />
         </ChartCard>
-        <ChartCard title="Segmentos">
+        <ChartCard title={t("segments")}>
           <TopList rows={topSegments} />
         </ChartCard>
       </section>

@@ -12,6 +12,7 @@ import { SectionHeader } from "@/components/layout/SectionHeader";
 import { EmptyState, PageTitle } from "@/components/pages/common";
 import { formatCurrency } from "@/lib/data/computations";
 import { shortSegmentLabel } from "@/lib/data/normalizers";
+import { useTranslations } from "next-intl";
 import type { ExecutiveSummaryData } from "@/lib/data/executive-summary-data";
 import type { InsightRow } from "@/lib/supabase/types";
 
@@ -35,6 +36,7 @@ function Note({ children }: { children: React.ReactNode }) {
 }
 
 export function ExecutiveSummaryView({ data, filteredRows }: Props) {
+  const t = useTranslations("executiveSummary");
   const { open: drill } = useDrillDown();
   const {
     kpis,
@@ -52,46 +54,46 @@ export function ExecutiveSummaryView({ data, filteredRows }: Props) {
   return (
     <div className="space-y-8">
       <PageTitle
-        title="Executive Summary"
-        subtitle="Panorama completo de señales detectadas en el período seleccionado."
+        title={t("title")}
+        subtitle={t("subtitle")}
       />
 
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
         <MetricCard
-          label="Insights por Call"
+          label={t("insightsPerCall")}
           value={kpis.insightsPerCall}
-          caption="Promedio de señales detectadas por demo."
+          caption={t("insightsPerCallCaption")}
         />
         <MetricCard
-          label="Transcripts"
+          label={t("transcripts")}
           value={kpis.totalCalls.toLocaleString()}
-          caption="Calls únicas en el recorte actual."
+          caption={t("transcriptsCaption")}
         />
         <MetricCard
-          label="Deals con Match"
+          label={t("dealsMatched")}
           value={kpis.dealsMatched.toLocaleString()}
-          caption="Deals únicos con al menos un insight."
+          caption={t("dealsMatchedCaption")}
         />
         <MetricCard
-          label="Revenue Total"
+          label={t("revenueTotal")}
           value={formatCurrency(kpis.revenue)}
-          caption="Suma de monto por deal único."
+          caption={t("revenueTotalCaption")}
         />
         <MetricCard
-          label="Calls con Insights"
+          label={t("callsWithInsights")}
           value={`${kpis.callsWithInsights}%`}
-          caption="% del total de demos procesadas."
+          caption={t("callsWithInsightsCaption")}
         />
       </section>
 
       <div className="space-y-4">
         <SectionHeader
-          title="Composición de la muestra"
-          description="Volumen de demos únicas cubiertas por industria, segmento y país."
+          title={t("compositionTitle")}
+          description={t("compositionDesc")}
         />
         <section className="space-y-3">
           <ChartCard
-            title="Distribución por Industria (Top 15)"
+            title={t("byIndustry")}
             rawRows={filteredRows}
             ask={{
               chartTitle: "Distribución por Industria",
@@ -103,10 +105,10 @@ export function ExecutiveSummaryView({ data, filteredRows }: Props) {
             <HorizontalBarChart data={composition.byIndustry} yAxisWidth={220} />
           </ChartCard>
           <ChartCard
-            title="Distribución por Segmento"
+            title={t("bySegment")}
             rawRows={filteredRows}
             ask={{
-              chartTitle: "Distribución por Segmento",
+              chartTitle: t("bySegment"),
               chartKind: "horizontal-bar",
               description: "Distribución de insights por segmento comercial.",
               rows: composition.bySegment.map((r) => ({ label: shortSegmentLabel(r.name), value: r.value })),
@@ -119,7 +121,7 @@ export function ExecutiveSummaryView({ data, filteredRows }: Props) {
             />
           </ChartCard>
           <ChartCard
-            title="Distribución por País (Top 15)"
+            title={t("byCountry")}
             rawRows={filteredRows}
             ask={{
               chartTitle: "Distribución por País",
@@ -135,11 +137,11 @@ export function ExecutiveSummaryView({ data, filteredRows }: Props) {
 
       <div className="space-y-4">
         <SectionHeader
-          title="Resumen de señales detectadas"
-          description="Cantidad de insights únicos por tipo. Una misma demo puede generar varios."
+          title={t("signalSummaryTitle")}
+          description={t("signalSummaryDesc")}
         />
         <ChartCard
-          title="Insights por Tipo"
+          title={t("insightsByType")}
           rawRows={filteredRows}
           ask={{
             chartTitle: "Insights por Tipo",
@@ -154,11 +156,11 @@ export function ExecutiveSummaryView({ data, filteredRows }: Props) {
 
       <div className="space-y-4">
         <SectionHeader
-          title="¿Con qué problemas llegan los clientes?"
-          description="Top pains por demos únicas, desglosados por tema y por módulo."
+          title={t("painsTitle")}
+          description={t("painsDesc")}
         />
         <ChartCard
-          title="Top 10 Pains (demos únicas)"
+          title={t("topPains")}
           rawRows={filteredRows.filter((r) => r.insight_type === "pain")}
           ask={{
             chartTitle: "Top 10 Pains (demos únicas)",
@@ -225,7 +227,7 @@ export function ExecutiveSummaryView({ data, filteredRows }: Props) {
           </div>
         ) : null}
 
-        <ChartCard title="Top 15 Pains × Segmento">
+        <ChartCard title={t("painBySegment")}>
           <HeatMap
             rowLabels={pains.painSegmentHeat.rowLabels}
             colLabels={pains.painSegmentHeat.colLabels}
@@ -236,8 +238,8 @@ export function ExecutiveSummaryView({ data, filteredRows }: Props) {
 
       <div className="space-y-4">
         <SectionHeader
-          title="¿Qué módulos buscan y qué les falta?"
-          description="Demanda de módulos (pains + gaps combinados) y gaps por frecuencia y revenue."
+          title={t("modulesTitle")}
+          description={t("modulesDesc")}
         />
         <ChartCard
           title="Módulos más buscados en la primera demo"

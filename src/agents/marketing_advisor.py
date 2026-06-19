@@ -530,6 +530,24 @@ class MarketingAdvisorAgent:
                 )
             lines.append("")
 
+        if insights.competitor_ads:
+            lines.append("ADS DE COMPETIDORES (cómo atacan estos pains en sus campañas):")
+            for ad in insights.competitor_ads:
+                lines.append(
+                    f"\n{ad['competitor']} | {ad['ads_analyzed']} ads analizados:"
+                )
+                for angle in ad.get("angles", []):
+                    pains = ", ".join(angle.get("related_pains") or [])
+                    weight = int(angle.get("weight") or 0)
+                    lines.append(
+                        f"  · [{angle.get('label', '?')}] — {angle.get('description', '')} "
+                        f"({weight} ads, pains: {pains})"
+                    )
+                    copies = (angle.get("example_copies") or [])[:1]
+                    if copies:
+                        lines.append(f'    copy: "{copies[0]}"')
+            lines.append("")
+
         if insights.top_gaps:
             lines.append(f"FEATURE GAPS CRITICOS (top {len(insights.top_gaps)}):")
             for i, gap in enumerate(insights.top_gaps, 1):
@@ -560,12 +578,15 @@ de marketing concreta, justificada exclusivamente con los datos del input.
 CONTEXTOS QUE RECIBIRAS:
 - Un bloque "CONTEXTO HUMAND (FIRST-PARTY)" con verdades de producto y posicionamiento de Humand
 - Un bloque de evidencia del segmento con pipeline, pains, FAQs, modulos, competidores y gaps
+- Un bloque "ADS DE COMPETIDORES" con los angulos de mensaje que los competidores usan en sus campañas pagas para atacar los mismos pains del segmento (puede estar ausente si no hay datos)
 - Un bloque de parametros esperados con idioma de mercado, tono recomendado, confianza deterministica y ventana temporal efectiva
 
 COMO USAR CADA CONTEXTO:
 - Usa el CONTEXTO HUMAND para entender quien es Humand, que modulos existen hoy, cuales son gaps conocidos y que competidores importan estrategicamente
 - Usa la evidencia del segmento como UNICA base para claims de demanda, numeros, supporting_data y menciones competitivas del segmento
 - Si un competidor aparece solo en el catalogo curado y no en la evidencia del segmento, NO digas que fue mencionado o evaluado en la muestra
+- Si el bloque ADS DE COMPETIDORES esta presente, usalo para identificar como los competidores estan atacando los mismos pains en sus campañas. Esto es inteligencia de mercado: puedes mencionar el enfoque del competidor para justificar un angulo diferenciador de Humand, o para recomendar que Humand ocupe el mismo espacio con una propuesta mas fuerte. NUNCA inventes angles ni copies que no esten en el bloque
+- Si el bloque ADS DE COMPETIDORES esta ausente o vacio, ignora esta dimension y recomienda basandote solo en los demas datos
 - Si una necesidad depende de un modulo marcado como missing, NO lo promociones como capacidad nativa actual de Humand
 - Si el segmento muestra demanda por algo missing, responde con transparencia: recomienda calificar upfront, explicitar el caveat o posicionar un angulo alternativo basado en fortalezas actuales de Humand
 - El hero_message y el titulo deben enfocarse en pains validados + fortalezas actuales de Humand. Los gaps criticos deben ir a qualification_checks y, si hace falta, a la ultima parte del core_message, no al inicio del mensaje

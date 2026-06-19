@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Roboto } from "next/font/google";
 import type { ReactNode } from "react";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
+import { NextIntlClientProvider } from "next-intl";
+import { getLocale, getMessages } from "next-intl/server";
 
 import "@/app/globals.css";
 import { AuthProvider } from "@/lib/auth/auth-provider";
@@ -17,13 +19,18 @@ export const metadata: Metadata = {
   description: "Humand insights dashboard migrated to Next.js",
 };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  const locale = await getLocale();
+  const messages = await getMessages();
+
   return (
-    <html lang="en">
+    <html lang={locale}>
       <body className={roboto.className}>
-        <AuthProvider>
-          <NuqsAdapter>{children}</NuqsAdapter>
-        </AuthProvider>
+        <NextIntlClientProvider locale={locale} messages={messages}>
+          <AuthProvider>
+            <NuqsAdapter>{children}</NuqsAdapter>
+          </AuthProvider>
+        </NextIntlClientProvider>
       </body>
     </html>
   );
