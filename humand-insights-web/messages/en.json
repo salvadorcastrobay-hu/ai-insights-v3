@@ -113,7 +113,9 @@
     "byOutcomeSubtitle": "Which pains are associated with won vs lost deals? (minimum 5 closed deals)",
     "winLostRate": "Win-rate and lost-rate by pain",
     "detail": "Pain detail",
-    "searchPain": "Search pain…"
+    "searchPain": "Search pain…",
+    "allThemes": "All themes",
+    "allModules": "All modules"
   },
   "faq": {
     "title": "FAQs — Detail",
@@ -155,7 +157,13 @@
     "painLabel": "Pain",
     "drillGaps": "Drill-down: Feature Gaps",
     "drillGapsDesc": "Select a feature to see affected deals, sorted by amount.",
-    "featureLabel": "Feature"
+    "featureLabel": "Feature",
+    "themeBreakdownTitle": "Top 2 pain theme breakdown",
+    "themeBreakdownDesc": "For each theme, the most frequent subtypes and their % of the theme.",
+    "noSubtypes": "No subtypes for this theme.",
+    "noPainsByIndustry": "No pain data by industry.",
+    "noModulesBySegment": "No module data by segment.",
+    "noGapsBySegment": "No gap data by segment."
   },
   "salesEnablement": {
     "title": "Sales Enablement",
@@ -213,6 +221,8 @@
     "veterans": "Longest running (likely winners)",
     "noCopy": "(no copy)",
     "noTitle": "(no title)",
+    "transcription": "Transcription",
+    "copyToClipboard": "Copy to clipboard",
     "goal": {
       "lead_gen": "Lead-gen",
       "demo": "Demo",

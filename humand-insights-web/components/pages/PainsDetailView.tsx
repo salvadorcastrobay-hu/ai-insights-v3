@@ -107,17 +107,17 @@ export function PainsDetailView({ data, filteredRows }: Props) {
 
           <div className="grid gap-3 md:grid-cols-3">
             <MetricCard
-              label="Pre-venta"
+              label={t("presale")}
               value={phaseSummary.pre_sale}
               caption={`${pct(phaseSummary.pre_sale)} del total · Deals activos (lead → final negotiation)`}
             />
             <MetricCard
-              label="Cerrado"
+              label={t("closed")}
               value={phaseSummary.closed}
               caption={`${pct(phaseSummary.closed)} del total · Won, lost o postponed`}
             />
             <MetricCard
-              label="Post-venta"
+              label={t("postsale")}
               value={phaseSummary.post_sale}
               caption={`${pct(phaseSummary.post_sale)} del total · Onboarding churned, red list, churned`}
             />
@@ -132,17 +132,17 @@ export function PainsDetailView({ data, filteredRows }: Props) {
               </p>
               <StackedBarChart
                 data={topPainsByPhase.map((r) => ({
-                  pain: r.pain,
-                  "Pre-venta": r.pre_sale,
-                  Cerrado: r.closed,
-                  "Post-venta": r.post_sale,
+                  pain: tl(r.pain),
+                  [t("presale")]: r.pre_sale,
+                  [t("closed")]: r.closed,
+                  [t("postsale")]: r.post_sale,
                 }))}
                 yKey="pain"
-                stackKeys={["Pre-venta", "Cerrado", "Post-venta"]}
+                stackKeys={[t("presale"), t("closed"), t("postsale")]}
                 colorMap={{
-                  "Pre-venta": "#5B7CFA",
-                  Cerrado: "#94A3B8",
-                  "Post-venta": "#F59E0B",
+                  [t("presale")]: "#5B7CFA",
+                  [t("closed")]: "#94A3B8",
+                  [t("postsale")]: "#F59E0B",
                 }}
                 exportFileName="pains-by-phase-stacked.csv"
               />
@@ -213,13 +213,13 @@ export function PainsDetailView({ data, filteredRows }: Props) {
       <ChartCard title={t("detail")}>
         <div className="mb-3 grid gap-2 md:grid-cols-3">
           <select className="rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] p-2" value={theme} onChange={(e) => setTheme(e.target.value)}>
-            <option value="">Todos los themes</option>
+            <option value="">{t("allThemes")}</option>
             {themes.map((option) => (
               <option key={option} value={option}>{option}</option>
             ))}
           </select>
           <select className="rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] p-2" value={module} onChange={(e) => setModule(e.target.value)}>
-            <option value="">Todos los módulos</option>
+            <option value="">{t("allModules")}</option>
             {modules.map((option) => (
               <option key={option} value={option}>{option}</option>
             ))}
