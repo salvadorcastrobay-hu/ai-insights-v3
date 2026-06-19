@@ -35,6 +35,10 @@ type Props = {
   inputAccessory?: ReactNode;
   /** Slot inside the input row, AFTER the textarea but BEFORE the send button. */
   inputTrailing?: ReactNode;
+  /** Slot rendered below the input box (model/usage strip). */
+  belowInput?: ReactNode;
+  /** Called when the user requests translation of a recommendation message. */
+  onTranslate?: (language: string) => Promise<void>;
 };
 
 export function ChatInterface({
@@ -62,6 +66,8 @@ export function ChatInterface({
   onCancel,
   inputAccessory,
   inputTrailing,
+  belowInput,
+  onTranslate,
   starterPrompts,
   onStarterPromptClick,
 }: Props) {
@@ -156,6 +162,7 @@ export function ChatInterface({
               key={message.id}
               message={message}
               assistantLabel={assistantLabel}
+              onTranslate={message.mode === "advisor_recommendation" ? onTranslate : undefined}
             />
           ))}
         </div>
@@ -202,11 +209,22 @@ export function ChatInterface({
               </button>
             )}
           </div>
-          <p className="mt-1.5 px-2 text-[10px] text-[var(--color-text-secondary)]">
-            {isSubmitting
-              ? "Procesando… tocá el botón para cancelar"
-              : "Enter para enviar · Shift+Enter para nueva línea"}
-          </p>
+          {belowInput ? (
+            <div className="mt-1.5 flex items-center justify-between px-2">
+              <p className="text-[10px] text-[var(--color-text-secondary)]">
+                {isSubmitting
+                  ? "Procesando… tocá el botón para cancelar"
+                  : "Enter para enviar · Shift+Enter para nueva línea"}
+              </p>
+              {belowInput}
+            </div>
+          ) : (
+            <p className="mt-1.5 px-2 text-[10px] text-[var(--color-text-secondary)]">
+              {isSubmitting
+                ? "Procesando… tocá el botón para cancelar"
+                : "Enter para enviar · Shift+Enter para nueva línea"}
+            </p>
+          )}
         </form>
       </section>
     </div>
