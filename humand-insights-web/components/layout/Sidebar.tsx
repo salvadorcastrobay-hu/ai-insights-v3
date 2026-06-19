@@ -141,8 +141,8 @@ export function Sidebar({ roles, userEmail }: Props) {
       </nav>
 
       {/* User footer */}
-      <div className="border-t border-[var(--color-neutral-100)] px-3 py-3 space-y-2">
-        <div className="flex items-center gap-2.5 rounded-[8px] px-2 py-1.5">
+      <div className="border-t border-[var(--color-neutral-100)] px-3 py-3">
+        <div className="flex items-center gap-2 rounded-[8px] px-2 py-1.5">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-brand-100)] text-[11px] font-semibold text-[var(--color-brand-500)]">
             {initials || "·"}
           </div>
@@ -154,6 +154,7 @@ export function Sidebar({ roles, userEmail }: Props) {
               {roles[0] ?? "viewer"}
             </div>
           </div>
+          <LocaleToggle />
           <form action="/api/auth/signout" method="post">
             <button
               type="submit"
@@ -164,9 +165,6 @@ export function Sidebar({ roles, userEmail }: Props) {
               <LogOut size={14} />
             </button>
           </form>
-        </div>
-        <div className="flex justify-end px-2">
-          <LocaleToggle />
         </div>
       </div>
     </aside>
