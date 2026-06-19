@@ -43,12 +43,8 @@ import {
 
 type Props = { data: ComparativePayload };
 
-const TIME_PRESETS = [
-  "Últimos 30 días vs 30 anteriores",
-  "Últimos 90 días vs 90 anteriores",
-  "Custom",
-] as const;
-type TimePreset = (typeof TIME_PRESETS)[number];
+const TIME_PRESET_KEYS = ["last30", "last90", "custom"] as const;
+type TimePresetKey = (typeof TIME_PRESET_KEYS)[number];
 
 function useFacetOptions(rows: SlimRow[]) {
   return useMemo(() => {
@@ -80,7 +76,7 @@ export function ComparativeAnalysisView({ data }: Props) {
   const [normalizeByShare, setNormalizeByShare] = useState<boolean>(false);
 
   // time-mode state
-  const [timePreset, setTimePreset] = useState<TimePreset>("Últimos 90 días vs 90 anteriores");
+  const [timePreset, setTimePreset] = useState<TimePresetKey>("last90");
   const [customStartA, setCustomStartA] = useState(data.dateMin ?? "");
   const [customEndA, setCustomEndA] = useState(data.dateMax ?? "");
   const [customStartB, setCustomStartB] = useState(data.dateMin ?? "");
@@ -109,15 +105,15 @@ export function ComparativeAnalysisView({ data }: Props) {
         return {
           dfA: [] as SlimRow[],
           dfB: [] as SlimRow[],
-          labelA: "Lado A",
-          labelB: "Lado B",
-          errorMessage: "No hay fechas válidas para comparar períodos.",
+          labelA: t("sideA"),
+          labelB: t("sideB"),
+          errorMessage: t("errorNoDates"),
         };
       }
       let sA: string, eA: string, sB: string, eB: string;
-      if (timePreset === "Últimos 30 días vs 30 anteriores") {
+      if (timePreset === "last30") {
         ({ startA: sA, endA: eA, startB: sB, endB: eB } = windowPresets(data.dateMax, 30));
-      } else if (timePreset === "Últimos 90 días vs 90 anteriores") {
+      } else if (timePreset === "last90") {
         ({ startA: sA, endA: eA, startB: sB, endB: eB } = windowPresets(data.dateMax, 90));
       } else {
         sA = customStartA || data.dateMin;
@@ -128,9 +124,9 @@ export function ComparativeAnalysisView({ data }: Props) {
           return {
             dfA: [] as SlimRow[],
             dfB: [] as SlimRow[],
-            labelA: "Lado A",
-            labelB: "Lado B",
-            errorMessage: "Cada lado necesita un rango válido (inicial ≤ final).",
+            labelA: t("sideA"),
+            labelB: t("sideB"),
+            errorMessage: t("errorInvalidRange"),
           };
         }
       }
@@ -149,8 +145,8 @@ export function ComparativeAnalysisView({ data }: Props) {
       return {
         dfA: [] as SlimRow[],
         dfB: [] as SlimRow[],
-        labelA: valueA || "Lado A",
-        labelB: valueB || "Lado B",
+        labelA: valueA || t("sideA"),
+        labelB: valueB || t("sideB"),
         errorMessage: "",
       };
     }
@@ -257,11 +253,11 @@ export function ComparativeAnalysisView({ data }: Props) {
         subtitle={t("subtitle")}
       />
 
-      <SectionHeader title="Configurar comparación" />
-      <ChartCard title="Configuración">
+      <SectionHeader title={t("configTitle")} />
+      <ChartCard title={t("configCard")}>
         <div className="grid gap-2 md:grid-cols-4">
           <label className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wide text-[var(--color-text-secondary)]">
-            Comparar por
+            {t("compareBy")}
             <select
               className={selectStyle()}
               value={comparisonKey}
@@ -277,7 +273,7 @@ export function ComparativeAnalysisView({ data }: Props) {
             </select>
           </label>
           <label className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wide text-[var(--color-text-secondary)]">
-            Arista
+            {t("facet")}
             <select className={selectStyle()} value={facetLabel} onChange={(e) => setFacetLabel(e.target.value)}>
               {facetOptions.map(([label]) => (
                 <option key={label} value={label}>{label}</option>
@@ -285,7 +281,7 @@ export function ComparativeAnalysisView({ data }: Props) {
             </select>
           </label>
           <label className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wide text-[var(--color-text-secondary)]">
-            Métrica
+            {t("metric")}
             <select
               className={selectStyle()}
               value={metricLabel}
@@ -297,7 +293,7 @@ export function ComparativeAnalysisView({ data }: Props) {
             </select>
           </label>
           <label className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wide text-[var(--color-text-secondary)]">
-            Lectura
+            {t("reading")}
             <select
               className={selectStyle()}
               value={displayMode}
@@ -311,7 +307,7 @@ export function ComparativeAnalysisView({ data }: Props) {
         </div>
         <div className="mt-3 grid gap-3 md:grid-cols-[1.4fr_1fr]">
           <label className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wide text-[var(--color-text-secondary)]">
-            Top aristas: <span className="text-[var(--color-text-default)]">{topN}</span>
+            {t("topFacets")} <span className="text-[var(--color-text-default)]">{topN}</span>
             <input
               type="range"
               min={5}
@@ -330,9 +326,9 @@ export function ComparativeAnalysisView({ data }: Props) {
               className="h-4 w-4"
             />
             <span>
-              Normalizar por share
+              {t("normalizeByShare")}
               <span className="ml-1 text-[var(--color-text-secondary)]">
-                (lectura relativa dentro de cada lado)
+                {t("normalizeDesc")}
               </span>
             </span>
           </label>
@@ -341,27 +337,29 @@ export function ComparativeAnalysisView({ data }: Props) {
 
       {/* A/B selection */}
       {comparisonMeta.mode === "time" ? (
-        <ChartCard title="Ventana temporal">
+        <ChartCard title={t("timeWindow")}>
           <div className="grid gap-2 md:grid-cols-[1.4fr_auto]">
             <select
               className={selectStyle()}
               value={timePreset}
-              onChange={(e) => setTimePreset(e.target.value as TimePreset)}
+              onChange={(e) => setTimePreset(e.target.value as TimePresetKey)}
             >
-              {TIME_PRESETS.map((p) => (<option key={p} value={p}>{p}</option>))}
+              {TIME_PRESET_KEYS.map((key) => (
+                <option key={key} value={key}>{t(`timePreset_${key}`)}</option>
+              ))}
             </select>
           </div>
-          {timePreset === "Custom" ? (
+          {timePreset === "custom" ? (
             <div className="mt-3 grid gap-3 md:grid-cols-2">
               <div className="rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] p-3">
-                <div className="mb-2 text-[12px] font-semibold">Lado A</div>
+                <div className="mb-2 text-[12px] font-semibold">{t("sideA")}</div>
                 <div className="grid grid-cols-2 gap-2">
                   <input type="date" className={selectStyle()} value={customStartA} min={data.dateMin ?? undefined} max={data.dateMax ?? undefined} onChange={(e) => setCustomStartA(e.target.value)} />
                   <input type="date" className={selectStyle()} value={customEndA} min={data.dateMin ?? undefined} max={data.dateMax ?? undefined} onChange={(e) => setCustomEndA(e.target.value)} />
                 </div>
               </div>
               <div className="rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] p-3">
-                <div className="mb-2 text-[12px] font-semibold">Lado B</div>
+                <div className="mb-2 text-[12px] font-semibold">{t("sideB")}</div>
                 <div className="grid grid-cols-2 gap-2">
                   <input type="date" className={selectStyle()} value={customStartB} min={data.dateMin ?? undefined} max={data.dateMax ?? undefined} onChange={(e) => setCustomStartB(e.target.value)} />
                   <input type="date" className={selectStyle()} value={customEndB} min={data.dateMin ?? undefined} max={data.dateMax ?? undefined} onChange={(e) => setCustomEndB(e.target.value)} />
@@ -371,24 +369,24 @@ export function ComparativeAnalysisView({ data }: Props) {
           ) : null}
         </ChartCard>
       ) : (
-        <ChartCard title={`Comparar valores de ${comparisonMeta.label.toLowerCase()}`}>
+        <ChartCard title={t("compareValuesOf", { label: comparisonMeta.label.toLowerCase() })}>
           {categoryValues.length < 2 ? (
             <div className="text-[13px] text-[var(--color-text-secondary)]">
-              No hay suficientes valores para armar una comparación A/B.
+              {t("notEnoughValues")}
             </div>
           ) : (
             <div className="grid gap-3 md:grid-cols-2">
               <label className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wide text-[var(--color-text-secondary)]">
-                Lado A
+                {t("sideA")}
                 <select className={selectStyle()} value={valueA} onChange={(e) => setValueA(e.target.value)}>
-                  <option value="">Seleccionar…</option>
+                  <option value="">{t("selectPlaceholder")}</option>
                   {categoryValues.map((v) => (<option key={v} value={v} disabled={v === valueB}>{v}</option>))}
                 </select>
               </label>
               <label className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wide text-[var(--color-text-secondary)]">
-                Lado B
+                {t("sideB")}
                 <select className={selectStyle()} value={valueB} onChange={(e) => setValueB(e.target.value)}>
-                  <option value="">Seleccionar…</option>
+                  <option value="">{t("selectPlaceholder")}</option>
                   {categoryValues.map((v) => (<option key={v} value={v} disabled={v === valueA}>{v}</option>))}
                 </select>
               </label>
@@ -406,8 +404,8 @@ export function ComparativeAnalysisView({ data }: Props) {
       {dfA.length === 0 && dfB.length === 0 && !errorMessage ? (
         <div className="rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] bg-white p-4 text-[13px] text-[var(--color-text-secondary)]">
           {comparisonMeta.mode === "category"
-            ? "Elegí un valor en Lado A y otro en Lado B para comparar."
-            : "Sin datos para la ventana elegida."}
+            ? t("chooseValues")
+            : t("noDataWindow")}
         </div>
       ) : null}
 
@@ -415,11 +413,11 @@ export function ComparativeAnalysisView({ data }: Props) {
         <>
           {smallSampleWarning ? (
             <div className="rounded-[var(--radius-s)] border border-amber-300 bg-amber-50 p-3 text-[13px] text-amber-900">
-              Uno de los lados tiene menos de 5 calls únicas. Leé la comparación como señal exploratoria.
+              {t("smallSampleWarning")}
             </div>
           ) : null}
 
-          <SectionHeader title="Resumen A/B" />
+          <SectionHeader title={t("summaryTitle")} />
           <section className="grid gap-3 md:grid-cols-3">
             <MetricCard
               label={labelA}
@@ -432,7 +430,7 @@ export function ComparativeAnalysisView({ data }: Props) {
               caption={`${totals.callsB.toLocaleString("en-US")} calls · ${totals.dealsB.toLocaleString("en-US")} deals`}
             />
             <MetricCard
-              label="Delta"
+              label={t("deltaLabel")}
               value={formatMetricValue(totals.deltaAbs, metricKey)}
               caption={totals.deltaPct === null ? "n/a" : `${totals.deltaPct.toFixed(1)}%`}
             />
@@ -510,8 +508,8 @@ export function ComparativeAnalysisView({ data }: Props) {
                 </div>
               </ChartCard>
 
-              <SectionHeader title="Detalle de comparación" />
-              <ChartCard title="Tabla">
+              <SectionHeader title={t("detailTitle")} />
+              <ChartCard title={t("tableCard")}>
                 <Table>
                   <Thead>
                     <Tr>
@@ -540,24 +538,24 @@ export function ComparativeAnalysisView({ data }: Props) {
                 </Table>
               </ChartCard>
 
-              <SectionHeader title="Lecturas rápidas" />
+              <SectionHeader title={t("quickReadsTitle")} />
               <section className="grid gap-3 md:grid-cols-3">
                 <ChartCard title={`Top en ${labelA}`}>
                   <ul className="list-disc pl-5 text-[13px]">
                     {leaders.byA.map((x) => (<li key={x}>{x}</li>))}
-                    {leaders.byA.length === 0 ? <li className="list-none text-[var(--color-text-secondary)]">Sin datos</li> : null}
+                    {leaders.byA.length === 0 ? <li className="list-none text-[var(--color-text-secondary)]">{t("noData")}</li> : null}
                   </ul>
                 </ChartCard>
                 <ChartCard title={`Top en ${labelB}`}>
                   <ul className="list-disc pl-5 text-[13px]">
                     {leaders.byB.map((x) => (<li key={x}>{x}</li>))}
-                    {leaders.byB.length === 0 ? <li className="list-none text-[var(--color-text-secondary)]">Sin datos</li> : null}
+                    {leaders.byB.length === 0 ? <li className="list-none text-[var(--color-text-secondary)]">{t("noData")}</li> : null}
                   </ul>
                 </ChartCard>
-                <ChartCard title="Mayor uplift en A">
+                <ChartCard title={t("majorUpliftA")}>
                   <ul className="list-disc pl-5 text-[13px]">
                     {leaders.byUplift.map((x) => (<li key={x}>{x}</li>))}
-                    {leaders.byUplift.length === 0 ? <li className="list-none text-[var(--color-text-secondary)]">Sin datos</li> : null}
+                    {leaders.byUplift.length === 0 ? <li className="list-none text-[var(--color-text-secondary)]">{t("noData")}</li> : null}
                   </ul>
                 </ChartCard>
               </section>

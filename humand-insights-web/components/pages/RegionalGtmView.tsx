@@ -57,18 +57,18 @@ export function RegionalGtmView({ data }: Props) {
 
       <ChartCard title={t("pipelineBySegment")}>
         <p className="mb-2 text-[12px] text-[var(--color-text-secondary)]">
-          Cada celda: Revenue · Deals · Ticket Promedio.
+          {t("cellCaption")}
         </p>
         {pipelineGrid.rowLabels.length === 0 ? (
           <p className="text-[13px] text-[var(--color-text-secondary)]">
-            No hay deals con segmento y región asignados.
+            {t("noDealsGrid")}
           </p>
         ) : (
           <div className="overflow-x-auto">
             <Table>
               <Thead>
                 <Tr>
-                  <Th>Segmento</Th>
+                  <Th>{t("thSegment")}</Th>
                   {pipelineGrid.colLabels.map((region) => (
                     <Th key={region}>{region}</Th>
                   ))}
@@ -104,7 +104,7 @@ export function RegionalGtmView({ data }: Props) {
 
       <SectionHeader
         title={t("sectionC")}
-        description="Top 3 pains por región como % de las demos únicas en esa región — comparable entre mercados de distinto tamaño."
+        description={t("sectionCDesc")}
       />
       <ChartCard
         title={t("topPainsByRegion")}
@@ -134,7 +134,7 @@ export function RegionalGtmView({ data }: Props) {
         }}
       >
         {painRegionHeatPct.rowLabels.length === 0 ? (
-          <p className="text-[13px] text-[var(--color-text-secondary)]">Sin datos suficientes.</p>
+          <p className="text-[13px] text-[var(--color-text-secondary)]">{t("noDataSufficient")}</p>
         ) : (
           <HeatMap
             rowLabels={painRegionHeatPct.rowLabels}
@@ -146,8 +146,7 @@ export function RegionalGtmView({ data }: Props) {
         )}
       </ChartCard>
       <p className="text-[12px] text-[var(--color-text-secondary)]">
-        Los pains principales suelen ser consistentes entre regiones — las diferencias están en la
-        intensidad (%). Leer junto al volumen absoluto de demos de cada mercado.
+        {t("regionNote")}
       </p>
 
       <ChartCard title={t("modulesByRegion")}>
@@ -173,7 +172,7 @@ export function RegionalGtmView({ data }: Props) {
             value={country}
             onChange={(e) => setCountry(e.target.value)}
           >
-            <option value="">(Todos)</option>
+            <option value="">{t("filterAll")}</option>
             {competitorCountries.map((c) => (
               <option key={c} value={c}>
                 {c}
@@ -185,10 +184,10 @@ export function RegionalGtmView({ data }: Props) {
           <Table>
             <Thead>
               <Tr>
-                <Th>País</Th>
-                <Th>Competidor</Th>
-                <Th>Menciones</Th>
-                <Th>Relación Principal</Th>
+                <Th>{t("thCountry")}</Th>
+                <Th>{t("thCompetitor")}</Th>
+                <Th>{t("thMentions")}</Th>
+                <Th>{t("thMainRelation")}</Th>
               </Tr>
             </Thead>
             <Tbody>

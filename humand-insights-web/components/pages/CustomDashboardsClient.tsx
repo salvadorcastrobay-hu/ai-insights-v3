@@ -46,22 +46,22 @@ type Dashboard = {
   updated_at?: string;
 };
 
-const CHART_TYPES: Array<{ value: ChartType; label: string }> = [
-  { value: "bar", label: "Barras" },
-  { value: "stacked-bar", label: "Barras apiladas" },
-  { value: "line", label: "Línea" },
-  { value: "area", label: "Área" },
-  { value: "pie", label: "Torta" },
-  { value: "scatter", label: "Dispersión" },
-  { value: "histogram", label: "Histograma" },
+const CHART_TYPE_KEYS: Array<{ value: ChartType; key: string }> = [
+  { value: "bar", key: "chartTypeBar" },
+  { value: "stacked-bar", key: "chartTypeStackedBar" },
+  { value: "line", key: "chartTypeLine" },
+  { value: "area", key: "chartTypeArea" },
+  { value: "pie", key: "chartTypePie" },
+  { value: "scatter", key: "chartTypeScatter" },
+  { value: "histogram", key: "chartTypeHistogram" },
 ];
 
-const AGG_TYPES: Array<{ value: AggType; label: string }> = [
-  { value: "count", label: "Conteo" },
-  { value: "distinct", label: "Distinct deals" },
-  { value: "sum", label: "Suma" },
-  { value: "mean", label: "Promedio" },
-  { value: "median", label: "Mediana" },
+const AGG_TYPE_KEYS: Array<{ value: AggType; key: string }> = [
+  { value: "count", key: "aggCount" },
+  { value: "distinct", key: "aggDistinct" },
+  { value: "sum", key: "aggSum" },
+  { value: "mean", key: "aggMean" },
+  { value: "median", key: "aggMedian" },
 ];
 
 const NUMERIC_FIELDS: Array<keyof InsightRow> = ["amount", "confidence"];
@@ -252,9 +252,12 @@ export function CustomDashboardsClient({ rows }: { rows: InsightRow[] }) {
   const t = useTranslations("customDashboards");
   const { filteredRows } = useFilteredRows(rows);
 
+  const CHART_TYPES = CHART_TYPE_KEYS.map(({ value, key }) => ({ value, label: t(key) }));
+  const AGG_TYPES = AGG_TYPE_KEYS.map(({ value, key }) => ({ value, label: t(key) }));
+
   const [dashboards, setDashboards] = useState<Dashboard[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [name, setName] = useState("Mi Dashboard");
+  const [name, setName] = useState(t("defaultName"));
   const [isShared, setIsShared] = useState(false);
   const [charts, setCharts] = useState<ChartConfig[]>([newChart()]);
   const [editingChartId, setEditingChartId] = useState<string | null>(null);
@@ -280,7 +283,7 @@ export function CustomDashboardsClient({ rows }: { rows: InsightRow[] }) {
 
   const newDashboard = useCallback(() => {
     setSelectedId(null);
-    setName("Mi Dashboard");
+    setName(t("defaultName"));
     setIsShared(false);
     setCharts([newChart()]);
     setEditingChartId(null);
@@ -309,7 +312,7 @@ export function CustomDashboardsClient({ rows }: { rows: InsightRow[] }) {
   }
 
   async function deleteDashboard(id: string) {
-    if (!confirm("¿Borrar este dashboard?")) return;
+    if (!confirm(t("confirmDelete"))) return;
     const response = await fetch("/api/dashboards", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
@@ -339,13 +342,13 @@ export function CustomDashboardsClient({ rows }: { rows: InsightRow[] }) {
       />
 
       <div className="grid gap-3 lg:grid-cols-[260px_1fr]">
-        <ChartCard title="Mis Dashboards">
+        <ChartCard title={t("myDashboards")}>
           <Button type="button" onClick={newDashboard} className="mb-3 flex w-full items-center justify-center gap-1">
-            <Plus className="h-3.5 w-3.5" /> Nuevo
+            <Plus className="h-3.5 w-3.5" /> {t("newBtn")}
           </Button>
           <div className="space-y-1.5">
             {dashboards.length === 0 ? (
-              <p className="text-[12px] text-[var(--color-text-secondary)]">Aún no tenés dashboards.</p>
+              <p className="text-[12px] text-[var(--color-text-secondary)]">{t("noDashboards")}</p>
             ) : (
               dashboards.map((d) => (
                 <div
@@ -364,8 +367,8 @@ export function CustomDashboardsClient({ rows }: { rows: InsightRow[] }) {
                     type="button"
                     onClick={() => deleteDashboard(d.id)}
                     className="opacity-0 transition-opacity group-hover:opacity-100"
-                    aria-label="Borrar"
-                    title="Borrar"
+                    aria-label={t("deleteBtn")}
+                    title={t("deleteBtn")}
                   >
                     <Trash2 className="h-3.5 w-3.5 text-red-500" />
                   </button>
@@ -390,10 +393,10 @@ export function CustomDashboardsClient({ rows }: { rows: InsightRow[] }) {
               )}
               <label className="ml-auto flex items-center gap-1.5 text-[12px] text-[var(--color-text-secondary)]">
                 <input type="checkbox" checked={isShared} onChange={(e) => setIsShared(e.target.checked)} />
-                Compartido con el equipo
+                {t("sharedLabel")}
               </label>
               <Button type="button" onClick={saveDashboard} className="flex items-center gap-1">
-                <Save className="h-3.5 w-3.5" /> {selectedId ? "Guardar cambios" : "Guardar"}
+                <Save className="h-3.5 w-3.5" /> {selectedId ? t("saveChanges") : t("saveBtn")}
               </Button>
             </div>
           </ChartCard>
@@ -412,16 +415,16 @@ export function CustomDashboardsClient({ rows }: { rows: InsightRow[] }) {
                   onClick={() => setEditingChartId(editingChartId === chart.id ? null : chart.id)}
                   className="text-[11px] font-medium text-[var(--color-brand-500)] hover:underline"
                 >
-                  {editingChartId === chart.id ? "Cerrar editor" : "Editar"}
+                  {editingChartId === chart.id ? t("closeEditor") : t("editBtn")}
                 </button>
-                <button type="button" onClick={() => deleteChart(chart.id)} aria-label="Borrar gráfico" title="Borrar gráfico">
+                <button type="button" onClick={() => deleteChart(chart.id)} aria-label={t("deleteChart")} title={t("deleteChart")}>
                   <X className="h-4 w-4 text-[var(--color-text-secondary)] hover:text-red-500" />
                 </button>
               </div>
 
               {editingChartId === chart.id ? (
                 <div className="mb-3 grid gap-2 rounded-[var(--radius-s)] border border-[var(--color-neutral-100)] bg-[var(--color-bg-page)] p-3 md:grid-cols-3 lg:grid-cols-6">
-                  <FieldLabel label="Tipo">
+                  <FieldLabel label={t("fieldType")}>
                     <select
                       className="w-full rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] p-1.5"
                       value={chart.type}
@@ -431,7 +434,7 @@ export function CustomDashboardsClient({ rows }: { rows: InsightRow[] }) {
                     </select>
                   </FieldLabel>
 
-                  <FieldLabel label="Eje X / categoría">
+                  <FieldLabel label={t("fieldXAxis")}>
                     <select
                       className="w-full rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] p-1.5"
                       value={String(chart.xField)}
@@ -441,7 +444,7 @@ export function CustomDashboardsClient({ rows }: { rows: InsightRow[] }) {
                     </select>
                   </FieldLabel>
 
-                  <FieldLabel label="Métrica">
+                  <FieldLabel label={t("fieldMetric")}>
                     <select
                       className="w-full rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] p-1.5"
                       value={chart.yAgg}
@@ -452,7 +455,7 @@ export function CustomDashboardsClient({ rows }: { rows: InsightRow[] }) {
                   </FieldLabel>
 
                   {(chart.yAgg === "sum" || chart.yAgg === "mean" || chart.yAgg === "median" || chart.type === "histogram") ? (
-                    <FieldLabel label="Campo numérico">
+                    <FieldLabel label={t("fieldNumeric")}>
                       <select
                         className="w-full rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] p-1.5"
                         value={String(chart.yField ?? "amount")}
@@ -463,13 +466,13 @@ export function CustomDashboardsClient({ rows }: { rows: InsightRow[] }) {
                     </FieldLabel>
                   ) : null}
 
-                  <FieldLabel label="Color (opcional)">
+                  <FieldLabel label={t("fieldColor")}>
                     <select
                       className="w-full rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] p-1.5"
                       value={chart.colorBy ? String(chart.colorBy) : ""}
                       onChange={(e) => updateChart(chart.id, { colorBy: e.target.value ? (e.target.value as keyof InsightRow) : undefined })}
                     >
-                      <option value="">(ninguno)</option>
+                      <option value="">{t("optNone")}</option>
                       {Object.entries(FIELD_LABELS).filter(([k]) => k !== String(chart.xField)).map(([k, v]) => (
                         <option key={k} value={k}>{v}</option>
                       ))}
@@ -487,14 +490,14 @@ export function CustomDashboardsClient({ rows }: { rows: InsightRow[] }) {
                     />
                   </FieldLabel>
 
-                  <FieldLabel label="Datos">
+                  <FieldLabel label={t("fieldData")}>
                     <select
                       className="w-full rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] p-1.5"
                       value={chart.source}
                       onChange={(e) => updateChart(chart.id, { source: e.target.value as Source })}
                     >
-                      <option value="filtered">Filtrados (filtros globales)</option>
-                      <option value="all">Todo el dataset</option>
+                      <option value="filtered">{t("optFiltered")}</option>
+                      <option value="all">{t("optAll")}</option>
                     </select>
                   </FieldLabel>
                 </div>
@@ -505,7 +508,7 @@ export function CustomDashboardsClient({ rows }: { rows: InsightRow[] }) {
           ))}
 
           <Button type="button" onClick={addChart} className="flex w-full items-center justify-center gap-1 bg-white !text-[var(--color-text-default)] border border-[var(--color-neutral-200)] hover:!bg-[var(--color-neutral-100)]">
-            <Plus className="h-3.5 w-3.5" /> Agregar gráfico al dashboard
+            <Plus className="h-3.5 w-3.5" /> {t("addChart")}
           </Button>
         </div>
       </div>
