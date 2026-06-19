@@ -12,12 +12,14 @@ import { ConfidenceBadge } from "@/components/ui/ConfidenceBadge";
 import { Input } from "@/components/ui/input";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@/components/ui/table";
 import { useTranslations } from "next-intl";
+import { useTaxonomyLabel } from "@/lib/taxonomy-labels";
 import type { PainsDetailData } from "@/lib/data/pains-detail-data";
 
 type Props = { data: PainsDetailData; filteredRows: import("@/lib/supabase/types").InsightRow[] };
 
 export function PainsDetailView({ data, filteredRows }: Props) {
   const t = useTranslations("pains");
+  const tl = useTaxonomyLabel();
   const {
     kpis,
     byModule,
@@ -84,7 +86,7 @@ export function PainsDetailView({ data, filteredRows }: Props) {
             Deals únicos donde se detectó al menos un pain vinculado a este módulo. Ayuda a
             priorizar foco por módulo de producto.
           </p>
-          <HorizontalBarChart data={byModule} height={360} />
+          <HorizontalBarChart data={byModule.map((d) => ({ ...d, name: tl(d.name) }))} height={360} />
         </ChartCard>
         <ChartCard title={t("themeByStatus")}>
           <p className="mb-2 text-[12px] text-[var(--color-text-secondary)]">
@@ -242,9 +244,9 @@ export function PainsDetailView({ data, filteredRows }: Props) {
             <Tbody>
               {tableRows.map((row) => (
                 <Tr key={row.id}>
-                  <Td>{row.insight_subtype_display}</Td>
+                  <Td>{tl(row.insight_subtype_display)}</Td>
                   <Td>{row.pain_theme}</Td>
-                  <Td>{row.module_display}</Td>
+                  <Td>{tl(row.module_display ?? "")}</Td>
                   <Td>{row.segment}</Td>
                   <Td>{row.company_name}</Td>
                   <Td><ConfidenceBadge value={row.confidence} /></Td>

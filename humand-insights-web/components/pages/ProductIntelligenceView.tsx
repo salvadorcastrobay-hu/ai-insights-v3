@@ -10,6 +10,7 @@ import { SectionHeader } from "@/components/layout/SectionHeader";
 import { EmptyState, PageTitle } from "@/components/pages/common";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@/components/ui/table";
 import { useTranslations } from "next-intl";
+import { useTaxonomyLabel } from "@/lib/taxonomy-labels";
 import { formatCurrency } from "@/lib/data/computations";
 import type { ProductIntelligenceData } from "@/lib/data/product-intelligence-data";
 
@@ -52,6 +53,7 @@ function SelectBox({
 
 export function ProductIntelligenceView({ data, filteredRows }: Props) {
   const t = useTranslations("productIntelligence");
+  const tl = useTaxonomyLabel();
   const {
     topPains,
     painThemeBreakdown,
@@ -101,7 +103,7 @@ export function ProductIntelligenceView({ data, filteredRows }: Props) {
           }}
         >
           <HorizontalBarChart
-            data={topPains.map((r) => ({ name: r.name, value: r.value, pct: r.pct }))}
+            data={topPains.map((r) => ({ name: tl(r.name), value: r.value, pct: r.pct }))}
             label={(value) => {
               const row = topPains.find((item) => item.value === value);
               return row ? `${value} (${row.pct.toFixed(1)}%)` : String(value);
@@ -127,7 +129,7 @@ export function ProductIntelligenceView({ data, filteredRows }: Props) {
                   {theme.subtypes.length > 0 ? (
                     <HorizontalBarChart
                       data={theme.subtypes.map((s) => ({
-                        name: s.name,
+                        name: tl(s.name),
                         value: s.value,
                         pct: s.pctOfTheme,
                       }))}
@@ -149,7 +151,7 @@ export function ProductIntelligenceView({ data, filteredRows }: Props) {
 
         <ChartCard title={t("painBySegment")}>
           <HeatMap
-            rowLabels={painSegmentHeat.rowLabels}
+            rowLabels={painSegmentHeat.rowLabels.map(tl)}
             colLabels={painSegmentHeat.colLabels}
             values={painSegmentHeat.values}
           />
@@ -177,7 +179,7 @@ export function ProductIntelligenceView({ data, filteredRows }: Props) {
         <ChartCard title={t("moduleBySegment")}>
           {moduleSegmentStack.stackKeys.length > 0 ? (
             <StackedBarChart
-              data={moduleSegmentStack.data}
+              data={moduleSegmentStack.data.map((r) => ({ ...r, name: tl(String(r.name)) }))}
               yKey="name"
               stackKeys={moduleSegmentStack.stackKeys}
               yAxisWidth={220}

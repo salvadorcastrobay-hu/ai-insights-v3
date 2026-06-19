@@ -217,8 +217,8 @@ export function DrillDownSheet() {
             </div>
           ) : data ? (
             <>
-              {tab === "sub" ? <SubBreakdown rows={data.subBreakdown} tl={tl} /> : null}
-              {tab === "quotes" ? <QuotesList quotes={data.quotes} tl={tl} /> : null}
+              {tab === "sub" ? <SubBreakdown rows={data.subBreakdown} tl={tl} emptyMsg={t("noSubtypes")} /> : null}
+              {tab === "quotes" ? <QuotesList quotes={data.quotes} tl={tl} emptyMsg={t("noVerbatims")} /> : null}
               {tab === "split" ? (
                 <div className="space-y-3 p-4">
                   <MiniBars title={t("bySegment")} rows={data.segmentSplit} />
@@ -286,11 +286,11 @@ function TabBtn({
   );
 }
 
-function SubBreakdown({ rows, tl }: { rows: SubRow[]; tl: (s: string) => string }) {
+function SubBreakdown({ rows, tl, emptyMsg }: { rows: SubRow[]; tl: (s: string) => string; emptyMsg: string }) {
   if (!rows.length) {
     return (
       <div className="m-4 rounded-[var(--radius-m)] border border-dashed border-[var(--color-neutral-200)] bg-white p-6 text-center text-[12px] text-[var(--color-text-secondary)]">
-        Sin subtipos asociados.
+        {emptyMsg}
       </div>
     );
   }
@@ -323,11 +323,11 @@ function SubBreakdown({ rows, tl }: { rows: SubRow[]; tl: (s: string) => string 
   );
 }
 
-function QuotesList({ quotes, tl }: { quotes: QuoteRow[]; tl: (s: string) => string }) {
+function QuotesList({ quotes, tl, emptyMsg }: { quotes: QuoteRow[]; tl: (s: string) => string; emptyMsg: string }) {
   if (!quotes.length) {
     return (
       <div className="m-4 rounded-[var(--radius-m)] border border-dashed border-[var(--color-neutral-200)] bg-white p-6 text-center text-[12px] text-[var(--color-text-secondary)]">
-        No hay verbatims disponibles.
+        {emptyMsg}
       </div>
     );
   }
