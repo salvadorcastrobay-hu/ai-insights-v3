@@ -561,7 +561,7 @@ def advisor_translate(body: AdvisorTranslateBody, owner: str = Depends(verify_jw
             recommendation=translated,
             pipeline=pipeline,
             insights=insights,
-            snapshot_kind="translation",
+            snapshot_kind="recommendation",
         )
         insert_campaign_advisor_message(
             body.conversation_id,
@@ -735,7 +735,7 @@ def _persist_advisor_initial_state(
             recommendation=recommendation,
             pipeline=pipeline,
             insights=insights,
-            snapshot_kind="initial",
+            snapshot_kind="recommendation",
         )
     except Exception as exc:
         warnings.append(f"Unable to persist advisor recommendation: {exc}")
