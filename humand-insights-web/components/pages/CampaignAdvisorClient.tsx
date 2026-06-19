@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, Languages, Link as LinkIcon, Lock, Plus, SlidersHorizontal, X } from "lucide-react";
+import { Lock, SlidersHorizontal, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ChatInterface } from "@/components/chat/ChatInterface";
 import { UsageRing } from "@/components/usage/UsageRing";
@@ -10,7 +10,6 @@ import type {
   AdvisorMetadata,
   ChatMessageModel,
   ConversationItem,
-  ExternalSourceRecord,
   MarketingRecommendation,
 } from "@/components/chat/types";
 import { MultiSelectCombobox } from "@/components/layout/MultiSelectCombobox";
@@ -38,7 +37,6 @@ type AdvisorGenerateResponse = {
   insights?: Record<string, unknown> | null;
   metadata?: AdvisorMetadata;
   warnings?: string[];
-  external_sources?: ExternalSourceRecord[];
 };
 
 type AdvisorFollowupResponse = {
@@ -140,11 +138,6 @@ export function CampaignAdvisorClient({ filterBar }: { filterBar?: ReactNode } =
   const [error, setError] = useState<string | null>(null);
   const [globalFilters] = useGlobalFilters();
   const [local, setLocal] = useState<AdvisorLocal>({ deal_stage: [] });
-  const [targetLanguage, setTargetLanguage] = useState("");
-  const [externalUrls, setExternalUrls] = useState<string[]>([]);
-  const [externalUrlDraft, setExternalUrlDraft] = useState("");
-  const [externalSourcesResult, setExternalSourcesResult] = useState<ExternalSourceRecord[]>([]);
-  const [showSources, setShowSources] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [hasRecommendation, setHasRecommendation] = useState(false);
   const [model, setModel] = useState<string>(DEFAULT_CHAT_MODEL);
@@ -180,13 +173,6 @@ export function CampaignAdvisorClient({ filterBar }: { filterBar?: ReactNode } =
       const data = (await res.json()) as LoadedAdvisorConversation;
       setMessages(messagesFromLoaded(data));
       setHasRecommendation(Boolean(data.recommendation));
-      const snap = (data.snapshot ?? {}) as Record<string, unknown>;
-      const inferred = (snap.inferred_filters ?? {}) as Record<string, unknown>;
-      const sources = Array.isArray(inferred.external_sources)
-        ? (inferred.external_sources as ExternalSourceRecord[])
-        : [];
-      setExternalSourcesResult(sources);
-      setExternalUrls(sources.map((s) => s.url).filter(Boolean));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error al cargar conversacion");
     }
@@ -198,9 +184,6 @@ export function CampaignAdvisorClient({ filterBar }: { filterBar?: ReactNode } =
     setInput("");
     setError(null);
     setHasRecommendation(false);
-    setExternalUrls([]);
-    setExternalSourcesResult([]);
-    setExternalUrlDraft("");
   }, []);
 
   const cancel = useCallback(() => {
@@ -240,7 +223,6 @@ export function CampaignAdvisorClient({ filterBar }: { filterBar?: ReactNode } =
             question,
             conversation_id: activeId,
             filters: toRequestFilters(globalFilters, local),
-            external_sources: externalUrls,
             model,
           }),
           signal: controller.signal,
@@ -263,7 +245,6 @@ export function CampaignAdvisorClient({ filterBar }: { filterBar?: ReactNode } =
         };
         setMessages((prev) => [...prev, assistantMsg]);
         setHasRecommendation(true);
-        if (data.external_sources) setExternalSourcesResult(data.external_sources);
         if (data.conversation_id && data.conversation_id !== activeId) {
           setActiveId(data.conversation_id);
           refreshConversations();
@@ -280,7 +261,6 @@ export function CampaignAdvisorClient({ filterBar }: { filterBar?: ReactNode } =
         body: JSON.stringify({
           conversation_id: activeId,
           question,
-          target_language: targetLanguage || "",
           chat_history: chatHistoryForFollowup,
           model,
         }),
@@ -308,14 +288,12 @@ export function CampaignAdvisorClient({ filterBar }: { filterBar?: ReactNode } =
   }, [
     activeId,
     chatHistoryForFollowup,
-    externalUrls,
     globalFilters,
     local,
     hasRecommendation,
     input,
     isSubmitting,
     refreshConversations,
-    targetLanguage,
     model,
   ]);
 
@@ -358,8 +336,8 @@ export function CampaignAdvisorClient({ filterBar }: { filterBar?: ReactNode } =
     [activeId, refreshConversations],
   );
 
-  const translate = useCallback(async () => {
-    if (!activeId || !targetLanguage.trim() || isSubmitting) return;
+  const translate = useCallback(async (language: string) => {
+    if (!activeId || !language.trim() || isSubmitting) return;
     setIsSubmitting(true);
     setError(null);
     try {
@@ -368,7 +346,7 @@ export function CampaignAdvisorClient({ filterBar }: { filterBar?: ReactNode } =
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           conversation_id: activeId,
-          target_language: targetLanguage.trim(),
+          target_language: language.trim(),
         }),
       });
       if (!res.ok) {
@@ -381,7 +359,7 @@ export function CampaignAdvisorClient({ filterBar }: { filterBar?: ReactNode } =
         role: "assistant",
         content:
           data.recommendation?.segment_summary ??
-          `Recommendation translated to ${targetLanguage}.`,
+          `Recommendation translated to ${language}.`,
         mode: "advisor_recommendation",
         recommendation: data.recommendation,
         metadata: data.metadata,
@@ -395,43 +373,7 @@ export function CampaignAdvisorClient({ filterBar }: { filterBar?: ReactNode } =
     } finally {
       setIsSubmitting(false);
     }
-  }, [activeId, isSubmitting, targetLanguage]);
-
-  const inputBase =
-    "h-9 rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] bg-white px-3 text-[13px] text-[var(--color-text-default)] outline-none transition-colors focus:border-[var(--color-brand-400)] disabled:cursor-not-allowed disabled:bg-[var(--color-neutral-100)]";
-  const labelBase =
-    "flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wide text-[var(--color-text-secondary)]";
-
-  const addExternalUrl = () => {
-    const raw = externalUrlDraft.trim();
-    if (!raw) return;
-    let normalized = raw;
-    if (!/^https?:\/\//i.test(normalized)) normalized = `https://${normalized}`;
-    try {
-      const u = new URL(normalized);
-      if (!u.hostname) throw new Error("hostname");
-    } catch {
-      setError(`URL inválida: ${raw}`);
-      return;
-    }
-    if (externalUrls.includes(normalized)) {
-      setExternalUrlDraft("");
-      return;
-    }
-    if (externalUrls.length >= 5) {
-      setError(t("maxUrls"));
-      return;
-    }
-    setExternalUrls((prev) => [...prev, normalized]);
-    setExternalUrlDraft("");
-  };
-
-  const removeExternalUrl = (url: string) => {
-    setExternalUrls((prev) => prev.filter((u) => u !== url));
-    setExternalSourcesResult((prev) => prev.filter((r) => r.url !== url));
-  };
-
-  const sourcesErrors = externalSourcesResult.filter((r) => r.error);
+  }, [activeId, isSubmitting]);
 
   // Solo mostramos un mini-warning cuando los filtros están lockeados.
   // Los filtros y Etapa viven en un popover triggereado desde el chatbar.
@@ -487,160 +429,6 @@ export function CampaignAdvisorClient({ filterBar }: { filterBar?: ReactNode } =
     </div>
   );
 
-  // Mini-select de idiomas + botón translate (lado derecho del chatbar).
-  const LANG_OPTIONS: Array<{ value: string; label: string }> = [
-    { value: "", label: t("originalLang") },
-    { value: "en-US", label: "English (en-US)" },
-    { value: "pt-BR", label: "Português (pt-BR)" },
-  ];
-  const languageAccessory = (
-    <div className="flex items-center gap-1.5">
-      <span className="hidden text-[10px] font-medium uppercase tracking-wide text-[var(--color-text-secondary)] sm:inline">Idiomas:</span>
-      <select
-        value={targetLanguage}
-        onChange={(e) => setTargetLanguage(e.target.value)}
-        disabled={!hasRecommendation || isSubmitting}
-        className="h-8 rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] bg-white px-2 text-[11px] font-medium text-[var(--color-text-default)] outline-none transition-colors focus:border-[var(--color-brand-400)] disabled:cursor-not-allowed disabled:bg-[var(--color-neutral-100)] disabled:text-[var(--color-text-secondary)]"
-        title={hasRecommendation ? t("translateTitle") : t("translateNeedsRec")}
-      >
-        {LANG_OPTIONS.map((o) => (
-          <option key={o.value} value={o.value}>{o.label}</option>
-        ))}
-      </select>
-      <button
-        type="button"
-        onClick={translate}
-        disabled={!activeId || !targetLanguage.trim() || isSubmitting || !hasRecommendation}
-        title="Traducir"
-        className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-s)] bg-[var(--color-brand-500)] text-white transition hover:bg-[var(--color-brand-400)] disabled:cursor-not-allowed disabled:bg-[var(--color-neutral-200)] disabled:text-[var(--color-text-secondary)]"
-      >
-        <Languages size={12} strokeWidth={2.5} />
-      </button>
-      <UsageRing />
-    </div>
-  );
-
-  // Compact paperclip popover that lives inside the chat input row.
-  const externalSourcesAccessory = (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={() => setShowSources((v) => !v)}
-        disabled={hasRecommendation && externalUrls.length === 0}
-        title={
-          hasRecommendation
-            ? t("externalSourcesBlocked")
-            : t("externalSources")
-        }
-        className="relative flex h-8 w-8 items-center justify-center rounded-full text-[var(--color-text-secondary)] transition hover:bg-[var(--color-neutral-100)] hover:text-[var(--color-brand-500)] disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        <LinkIcon size={15} strokeWidth={2} />
-        {externalUrls.length > 0 ? (
-          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--color-brand-500)] px-1 text-[9px] font-bold text-white">
-            {externalUrls.length}
-          </span>
-        ) : null}
-        {sourcesErrors.length > 0 ? (
-          <span className="absolute -right-0.5 -bottom-0.5 flex h-3 w-3 items-center justify-center rounded-full bg-red-500 text-white">
-            <AlertCircle size={9} />
-          </span>
-        ) : null}
-      </button>
-
-      {showSources ? (
-        <div className="absolute bottom-10 left-0 z-30 w-[420px] max-w-[80vw] rounded-[var(--radius-m)] border border-[var(--color-neutral-200)] bg-white p-3 shadow-[var(--shadow-8dp)]">
-          <div className="mb-2 flex items-center gap-2">
-            <LinkIcon size={13} className="text-[var(--color-brand-500)]" />
-            <span className="text-[12px] font-semibold text-[var(--color-text-default)]">{t("externalSources")}</span>
-            <span className="ml-auto text-[10px] text-[var(--color-text-secondary)]">
-              {externalUrls.length}/5
-            </span>
-            <button
-              type="button"
-              onClick={() => setShowSources(false)}
-              className="rounded-full p-0.5 text-[var(--color-text-secondary)] hover:bg-[var(--color-neutral-100)]"
-              aria-label="Cerrar"
-            >
-              <X size={12} />
-            </button>
-          </div>
-          <div className="mb-2 flex items-center gap-2">
-            <input
-              type="url"
-              value={externalUrlDraft}
-              onChange={(e) => setExternalUrlDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  addExternalUrl();
-                }
-              }}
-              placeholder="https://… (campaña, artículo, doc, nota)"
-              disabled={hasRecommendation}
-              className={`${inputBase} flex-1`}
-            />
-            <button
-              type="button"
-              onClick={addExternalUrl}
-              disabled={hasRecommendation || !externalUrlDraft.trim()}
-              className="flex h-9 items-center gap-1 rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] px-2.5 text-[12px] font-semibold text-[var(--color-text-default)] transition hover:bg-[var(--color-neutral-100)] disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Plus size={12} strokeWidth={2.5} />
-              Agregar
-            </button>
-          </div>
-          {externalUrls.length === 0 ? (
-            <p className="text-[10px] text-[var(--color-text-secondary)]">
-              Hasta 5 URLs · Humand fetchea cada una (~4k chars) y la pasa al advisor como contexto.
-            </p>
-          ) : (
-            <ul className="flex flex-col gap-1">
-              {externalUrls.map((url) => {
-                const match = externalSourcesResult.find((r) => r.url === url);
-                const hasError = Boolean(match?.error);
-                const hasExcerpt = Boolean(match?.excerpt);
-                return (
-                  <li
-                    key={url}
-                    className={`flex items-center gap-2 rounded-[var(--radius-s)] border px-2 py-1 text-[11px] ${
-                      hasError
-                        ? "border-red-200 bg-red-50 text-red-700"
-                        : "border-[var(--color-neutral-200)] bg-[var(--color-bg-page)] text-[var(--color-text-default)]"
-                    }`}
-                  >
-                    <LinkIcon size={11} className="shrink-0 opacity-60" />
-                    <span className="truncate" title={match?.error ?? match?.excerpt}>
-                      {url}
-                    </span>
-                    {hasExcerpt && !hasError ? (
-                      <span className="shrink-0 rounded-full bg-[var(--color-brand-50)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--color-brand-500)]">
-                        OK
-                      </span>
-                    ) : null}
-                    {hasError ? (
-                      <span className="shrink-0 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700">
-                        Error
-                      </span>
-                    ) : null}
-                    <button
-                      type="button"
-                      onClick={() => removeExternalUrl(url)}
-                      disabled={hasRecommendation}
-                      className="ml-auto rounded-full p-0.5 text-[var(--color-text-secondary)] transition hover:bg-[var(--color-neutral-200)] hover:text-[var(--color-text-default)] disabled:opacity-40"
-                      aria-label={t("removeUrl")}
-                    >
-                      <X size={11} />
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
-      ) : null}
-    </div>
-  );
-
   return (
     <ChatInterface
       title={t("title")}
@@ -666,14 +454,14 @@ export function CampaignAdvisorClient({ filterBar }: { filterBar?: ReactNode } =
       filterBar={advisorFilterBar}
       assistantLabel={t("assistantLabel")}
       onCancel={cancel}
-      inputAccessory={
-        <div className="flex items-center gap-2">
+      inputAccessory={filtersAccessory}
+      belowInput={
+        <div className="flex items-center gap-2.5">
           <ModelPicker value={model} onChange={setModel} disabled={isSubmitting} />
-          {filtersAccessory}
-          {externalSourcesAccessory}
+          <UsageRing />
         </div>
       }
-      inputTrailing={languageAccessory}
+      onTranslate={hasRecommendation && activeId ? translate : undefined}
       starterPrompts={[
         "¿Cómo atacamos Enterprise en HISPAM este Q?",
         "Mensaje que funciona mejor para Mid Market en LatAm",

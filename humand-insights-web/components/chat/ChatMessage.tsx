@@ -192,7 +192,31 @@ function AngleField({ label, value }: { label: string; value: string }) {
   );
 }
 
-function RecommendationView({ recommendation }: { recommendation: MarketingRecommendation }) {
+const TRANSLATE_LANGS = [
+  { value: "pt-BR", label: "PT" },
+  { value: "en-US", label: "EN" },
+  { value: "es-LATAM", label: "ES" },
+];
+
+function RecommendationView({
+  recommendation,
+  onTranslate,
+}: {
+  recommendation: MarketingRecommendation;
+  onTranslate?: (language: string) => Promise<void>;
+}) {
+  const [translating, setTranslating] = useState(false);
+
+  async function handleTranslate(lang: string) {
+    if (!onTranslate || translating) return;
+    setTranslating(true);
+    try {
+      await onTranslate(lang);
+    } finally {
+      setTranslating(false);
+    }
+  }
+
   return (
     <div className="space-y-3">
       <div className="rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] bg-[var(--color-brand-50)] px-3 py-2">
@@ -221,6 +245,23 @@ function RecommendationView({ recommendation }: { recommendation: MarketingRecom
           {recommendation.what_not_to_do.length > 0 ? (
             <ListCard title="What not to do" items={recommendation.what_not_to_do} tone="warn" />
           ) : null}
+        </div>
+      ) : null}
+
+      {onTranslate ? (
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] text-[var(--color-text-secondary)]">Traducir:</span>
+          {TRANSLATE_LANGS.map((l) => (
+            <button
+              key={l.value}
+              type="button"
+              disabled={translating}
+              onClick={() => handleTranslate(l.value)}
+              className="rounded-full border border-[var(--color-neutral-200)] px-2 py-0.5 text-[10px] font-medium text-[var(--color-text-secondary)] transition hover:border-[var(--color-brand-400)] hover:text-[var(--color-brand-500)] disabled:opacity-40"
+            >
+              {l.label}
+            </button>
+          ))}
         </div>
       ) : null}
     </div>
@@ -265,9 +306,11 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 export function ChatMessage({
   message,
   assistantLabel = "Assistant",
+  onTranslate,
 }: {
   message: ChatMessageModel;
   assistantLabel?: string;
+  onTranslate?: (language: string) => Promise<void>;
 }) {
   const isAssistant = message.role === "assistant";
   const [copied, setCopied] = useState(false);
@@ -378,7 +421,7 @@ export function ChatMessage({
 
       {message.recommendation ? (
         <div className="mt-5">
-          <RecommendationView recommendation={message.recommendation} />
+          <RecommendationView recommendation={message.recommendation} onTranslate={onTranslate} />
         </div>
       ) : null}
 
