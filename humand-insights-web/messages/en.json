@@ -293,6 +293,10 @@
     "byIndustry": "By industry",
     "byStage": "By deal stage",
     "verbatims": "Verbatims",
+    "cuts": "Cuts",
+    "loading": "Loading details…",
+    "noSubtypes": "No associated subtypes.",
+    "noVerbatims": "No verbatims available.",
     "labels": {
       "insight_subtype_display": "Subtype",
       "competitor_relationship_display": "Relationship",

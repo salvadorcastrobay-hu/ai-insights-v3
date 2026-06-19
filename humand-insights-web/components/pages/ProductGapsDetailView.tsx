@@ -14,6 +14,7 @@ import { ConfidenceBadge } from "@/components/ui/ConfidenceBadge";
 import { Input } from "@/components/ui/input";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@/components/ui/table";
 import { useTranslations } from "next-intl";
+import { useTaxonomyLabel } from "@/lib/taxonomy-labels";
 import type { ProductGapsDetailData } from "@/lib/data/product-gaps-detail-data";
 import type { InsightRow } from "@/lib/supabase/types";
 
@@ -27,6 +28,7 @@ const PRIORITY_COLORS: Record<string, string> = {
 
 export function ProductGapsDetailView({ data, filteredRows }: Props) {
   const t = useTranslations("productGaps");
+  const tl = useTaxonomyLabel();
   const { open: drill } = useDrillDown();
   const {
     kpis,
@@ -284,7 +286,7 @@ export function ProductGapsDetailView({ data, filteredRows }: Props) {
                 >
                   <Td>{row.company_name}</Td>
                   <Td>{row.feature_display}</Td>
-                  <Td>{row.module_display}</Td>
+                  <Td>{tl(row.module_display ?? "")}</Td>
                   <Td>{row.gap_priority_display}</Td>
                   <Td>{row.segment}</Td>
                   <Td>{row.country}</Td>

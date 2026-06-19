@@ -10,12 +10,14 @@ import { ConfidenceBadge } from "@/components/ui/ConfidenceBadge";
 import { Input } from "@/components/ui/input";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@/components/ui/table";
 import { useTranslations } from "next-intl";
+import { useTaxonomyLabel } from "@/lib/taxonomy-labels";
 import type { FaqDetailData } from "@/lib/data/faq-detail-data";
 
 type Props = { data: FaqDetailData; filteredRows: import("@/lib/supabase/types").InsightRow[] };
 
 export function FaqDetailView({ data, filteredRows }: Props) {
   const t = useTranslations("faq");
+  const tl = useTaxonomyLabel();
   const { kpis, topicCounts, topics, topQuestionsByTopic, faqTableRows } = data;
 
   const [topic, setTopic] = useState(topics[0] ?? "");
@@ -101,7 +103,7 @@ export function FaqDetailView({ data, filteredRows }: Props) {
             <Tbody>
               {tableRows.map((row) => (
                 <Tr key={row.id}>
-                  <Td>{row.insight_subtype_display}</Td>
+                  <Td>{tl(row.insight_subtype_display)}</Td>
                   <Td><ConfidenceBadge value={row.confidence} /></Td>
                   <Td>{row.summary}</Td>
                   <Td>{row.verbatim_quote}</Td>
