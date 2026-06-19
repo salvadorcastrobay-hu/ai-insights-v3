@@ -46,13 +46,12 @@ export function FaqDetailView({ data, filteredRows }: Props) {
         <MetricCard
           label={t("perDemo")}
           value={kpis.questionsPerDemo}
-          caption="promedio · si baja con el tiempo, el pre-demo está funcionando"
+          caption={t("perDemoCaption")}
         />
       </section>
 
       <p className="text-[12px] text-[var(--color-text-secondary)]">
-        Un número alto de preguntas puede indicar que el prospect no encontró respuestas en
-        materiales previos. Usá el ranking de topics para priorizar contenido de enablement.
+        {t("highVolumeDesc")}
       </p>
 
       <section className="grid gap-3 lg:grid-cols-2">
@@ -69,14 +68,13 @@ export function FaqDetailView({ data, filteredRows }: Props) {
           }}
         >
           <p className="mb-2 text-[12px] text-[var(--color-text-secondary)]">
-            Los topics con mayor volumen son los candidatos prioritarios para construir Battle
-            Cards. Cada AE debería tener una respuesta preparada para esos topics.
+            {t("highVolumeTopicDesc")}
           </p>
           <HorizontalBarChart data={topicCounts.map((d) => ({ ...d, name: tl(d.name) }))} height={380} />
         </ChartCard>
         <ChartCard title={t("topByTopic")}>
           <p className="mb-2 text-[12px] text-[var(--color-text-secondary)]">
-            Estas 5 preguntas son la base para la Battle Card del topic seleccionado.
+            {t("topByTopicDesc")}
           </p>
           <select className="mb-2 rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] p-2" value={topic} onChange={(e) => setTopic(e.target.value)}>
             {topics.map((option) => (<option key={option} value={option}>{tl(option)}</option>))}
@@ -87,19 +85,18 @@ export function FaqDetailView({ data, filteredRows }: Props) {
 
       <ChartCard title={t("detail")}>
         <p className="mb-2 text-[12px] text-[var(--color-text-secondary)]">
-          Filtrá por topic o busca palabras clave para revisar ejemplos reales antes de preparar
-          respuestas estándar.
+          {t("filterByTopicDesc")}
         </p>
         <div className="mb-3 grid gap-2 md:grid-cols-2">
           <select className="rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] p-2" value={topic} onChange={(e) => setTopic(e.target.value)}>
-            <option value="">Todos los topics</option>
+            <option value="">{t("allTopics")}</option>
             {topics.map((option) => (<option key={option} value={option}>{tl(option)}</option>))}
           </select>
           <Input placeholder={t("searchFaq")} value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         <div className="max-h-[420px] overflow-auto">
           <Table>
-            <Thead><Tr><Th>Topic</Th><Th>Conf.</Th><Th>Pregunta</Th><Th>Cita textual</Th></Tr></Thead>
+            <Thead><Tr><Th>{t("thTopicCol")}</Th><Th>{t("thConfCol")}</Th><Th>{t("thQuestionCol")}</Th><Th>{t("thQuoteCol")}</Th></Tr></Thead>
             <Tbody>
               {tableRows.map((row) => (
                 <Tr key={row.id}>

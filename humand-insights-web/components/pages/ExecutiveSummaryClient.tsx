@@ -22,6 +22,7 @@ import {
 import { painsWithPct, uniqueDealsRevenue } from "@/lib/data/computations";
 import { useFilteredRows } from "@/lib/data/use-filtered-rows";
 import type { InsightRow } from "@/lib/supabase/types";
+import { useTranslations } from "next-intl";
 
 type Props = {
   rows: InsightRow[];
@@ -29,6 +30,7 @@ type Props = {
 };
 
 export function ExecutiveSummaryClient({ rows, totalTranscripts }: Props) {
+  const t = useTranslations("executiveSummary");
   const { filteredRows } = useFilteredRows(rows);
 
   const totalCalls = distinctCount(filteredRows, "transcript_id");
@@ -72,39 +74,39 @@ export function ExecutiveSummaryClient({ rows, totalTranscripts }: Props) {
 
   return (
     <div className="space-y-6">
-      <PageTitle title="Executive Summary" />
+      <PageTitle title={t("title")} />
 
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-        <MetricCard label="Insights por Call" value={insightsPerCall} delta="Positivo" />
-        <MetricCard label="Transcripts" value={totalCalls.toLocaleString()} />
-        <MetricCard label="Deals con Match" value={dealsMatched.toLocaleString()} />
-        <MetricCard label="Revenue Total" value={new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(revenue)} />
-        <MetricCard label="Calls con Insights" value={`${callsWithInsights}%`} />
+        <MetricCard label={t("insightsPerCallLabel")} value={insightsPerCall} delta="Positivo" />
+        <MetricCard label={t("transcriptsLabel")} value={totalCalls.toLocaleString()} />
+        <MetricCard label={t("dealsMatchedLabel")} value={dealsMatched.toLocaleString()} />
+        <MetricCard label={t("revenueTotalLabel")} value={new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(revenue)} />
+        <MetricCard label={t("callsWithInsightsLabel")} value={`${callsWithInsights}%`} />
       </section>
 
-      <SectionHeader title="Composición de la muestra" />
+      <SectionHeader title={t("compositionTitle")} />
       <section className="grid gap-3 lg:grid-cols-2">
-        <ChartCard title="Industria TOP 15">
+        <ChartCard title={t("byIndustryChart")}>
           <HorizontalBarChart data={byIndustry} height={360} />
         </ChartCard>
-        <ChartCard title="Segmento">
+        <ChartCard title={t("bySegmentChart")}>
           <HorizontalBarChart data={bySegment} height={360} />
         </ChartCard>
         <div className="lg:col-span-2">
-          <ChartCard title="País TOP 15">
+          <ChartCard title={t("byCountryChart")}>
             <HorizontalBarChart data={byCountry} height={380} />
           </ChartCard>
         </div>
       </section>
 
-      <SectionHeader title="Resumen de señales detectadas" />
-      <ChartCard title="Insights por tipo">
+      <SectionHeader title={t("signalSummaryTitle")} />
+      <ChartCard title={t("insightsByTypeChart")}>
         <HorizontalBarChart data={insightTypes} multicolor height={460} />
       </ChartCard>
 
-      <SectionHeader title="¿Con qué problemas llegan los clientes?" />
+      <SectionHeader title={t("painsTitle")} />
       <section className="grid gap-3 lg:grid-cols-2">
-        <ChartCard title="Top 10 pains">
+        <ChartCard title={t("topPainsChart")}>
           <HorizontalBarChart
             data={topPains.map((row) => ({ name: row.name, value: row.value }))}
             label={(value) => {
@@ -114,10 +116,10 @@ export function ExecutiveSummaryClient({ rows, totalTranscripts }: Props) {
             height={420}
           />
         </ChartCard>
-        <ChartCard title="Top themes">
+        <ChartCard title={t("topThemesChart")}>
           <CategoryPieChart
             data={painThemeBreakdowns.map((item) => ({
-              name: item.name || "Sin theme",
+              name: item.name || t("sinTheme"),
               value: item.data.reduce((acc, curr) => acc + curr.value, 0),
             }))}
           />
@@ -126,47 +128,47 @@ export function ExecutiveSummaryClient({ rows, totalTranscripts }: Props) {
 
       <section className="grid gap-3 lg:grid-cols-2">
         {painThemeBreakdowns.map((theme) => (
-          <ChartCard key={theme.name} title={`${theme.name || "Sin theme"}`}>
+          <ChartCard key={theme.name} title={`${theme.name || t("sinTheme")}`}>
             <HorizontalBarChart data={theme.data} height={260} />
           </ChartCard>
         ))}
       </section>
 
       <section className="grid gap-3 lg:grid-cols-2">
-        <ChartCard title="Pain × Segmento Heatmap">
+        <ChartCard title={t("painSegmentHeatmapChart")}>
           <HeatMap rowLabels={painHeatMap.rowLabels} colLabels={painHeatMap.colLabels} values={painHeatMap.values} height={Math.max(500, painHeatMap.rowLabels.length * 38)} />
         </ChartCard>
-        <ChartCard title="Pain × Module">
+        <ChartCard title={t("painModuleChart")}>
           <HorizontalBarChart data={painByModule} height={500} />
         </ChartCard>
       </section>
 
-      <SectionHeader title="¿Qué módulos buscan más?" />
+      <SectionHeader title={t("modulesChartTitle")} />
       <ChartCard>
         <HorizontalBarChart data={moduleDemand} height={420} />
       </ChartCard>
 
-      <SectionHeader title="Feature Gaps" />
+      <SectionHeader title={t("featureGapsTitle")} />
       <section className="grid gap-3 lg:grid-cols-2">
-        <ChartCard title="Top by Frequency">
+        <ChartCard title={t("topByFrequencyChart")}>
           <HorizontalBarChart data={gapsByFreq} height={360} />
         </ChartCard>
-        <ChartCard title="Top by Revenue">
+        <ChartCard title={t("topByRevenueChart")}>
           <HorizontalBarChart data={gapRevenue} height={360} />
         </ChartCard>
       </section>
 
-      <SectionHeader title="¿Qué competidores se mencionan más?" />
-      <ChartCard title="Competitor × Relationship">
+      <SectionHeader title={t("competitorsChartTitle")} />
+      <ChartCard title={t("competitorRelChart")}>
         <StackedBarChart data={compStack.data} yKey="name" stackKeys={compStack.stackKeys} colorMap={COMPETITOR_REL_COLORS} height={460} />
       </ChartCard>
 
-      <SectionHeader title="Fricciones recurrentes" />
+      <SectionHeader title={t("frictionsTitle")} />
       <section className="grid gap-3 lg:grid-cols-2">
-        <ChartCard title="Top 10 fricciones">
+        <ChartCard title={t("topFrictionsChart")}>
           <HorizontalBarChart data={frictionTop} height={360} />
         </ChartCard>
-        <ChartCard title="Fricciones × Revenue proxy">
+        <ChartCard title={t("frictionsRevenueChart")}>
           <HorizontalBarChart data={frictionRevenue} height={360} />
         </ChartCard>
       </section>
@@ -178,12 +180,12 @@ export function ExecutiveSummaryClient({ rows, totalTranscripts }: Props) {
         ))}
       </section>
 
-      <SectionHeader title="FAQs" />
+      <SectionHeader title={t("faqsTitle")} />
       <section className="grid gap-3 lg:grid-cols-2">
-        <ChartCard title="Top FAQs">
+        <ChartCard title={t("topFaqsChart")}>
           <HorizontalBarChart data={faqTop} height={360} />
         </ChartCard>
-        <ChartCard title="Top FAQs × Modules">
+        <ChartCard title={t("topFaqsModulesChart")}>
           <HeatMap rowLabels={faqHeatMap.rowLabels} colLabels={faqHeatMap.colLabels} values={faqHeatMap.values} height={420} />
         </ChartCard>
       </section>
@@ -195,13 +197,13 @@ export function ExecutiveSummaryClient({ rows, totalTranscripts }: Props) {
         ))}
       </section>
 
-      <SectionHeader title="Tendencia Mensual" />
+      <SectionHeader title={t("trendTitle")} />
       {trend.length > 0 ? (
         <ChartCard>
           <TrendLineChart data={trend} seriesKeys={trendKeys} />
         </ChartCard>
       ) : (
-        <EmptyState>No hay datos suficientes para tendencia mensual.</EmptyState>
+        <EmptyState>{t("noTrendData")}</EmptyState>
       )}
     </div>
   );

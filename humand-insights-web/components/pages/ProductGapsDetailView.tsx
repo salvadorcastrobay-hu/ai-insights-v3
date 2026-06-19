@@ -94,7 +94,7 @@ export function ProductGapsDetailView({ data, filteredRows }: Props) {
         <MetricCard
           label={t("totalDetections")}
           value={kpis.total}
-          caption={`en ${kpis.distinctDeals} demos · ${kpis.perDemo} gaps por demo`}
+          caption={t("kpisCaption", { deals: kpis.distinctDeals, perDemo: kpis.perDemo })}
         />
         <MetricCard
           label={t("inTaxonomy")}
@@ -139,17 +139,17 @@ export function ProductGapsDetailView({ data, filteredRows }: Props) {
 
       <SectionHeader
         title={t("priorityTitle")}
-        description="Revenue en Riesgo = suma del amount de los deals únicos que mencionaron este tipo de gap."
+        description={t("priorityRevenueDesc")}
       />
       <ChartCard>
         <Table>
           <Thead>
             <Tr>
-              <Th>Prioridad</Th>
-              <Th>Detecciones</Th>
-              <Th>% del Total</Th>
-              <Th>Revenue en Riesgo</Th>
-              <Th>Qué significa</Th>
+              <Th>{t("thPriority")}</Th>
+              <Th>{t("thDetections")}</Th>
+              <Th>{t("thPctTotal")}</Th>
+              <Th>{t("thRevenueAtRisk")}</Th>
+              <Th>{t("thMeaning")}</Th>
             </Tr>
           </Thead>
           <Tbody>
@@ -168,18 +168,17 @@ export function ProductGapsDetailView({ data, filteredRows }: Props) {
           </Tbody>
         </Table>
         <p className="mt-2 text-[12px] text-[var(--color-text-secondary)]">
-          Los Dealbreakers son el número más accionable de esta página. Representan features cuya
-          ausencia fue razón de no avanzar.
+          {t("dealbreakersNote")}
         </p>
       </ChartCard>
 
       <SectionHeader
         title={t("segmentPriorityTitle")}
-        description="Distribución relativa de las prioridades dentro de cada segmento. Lectura normalizada por volumen de gaps."
+        description={t("segmentPriorityDesc")}
       />
       <ChartCard>
         {segmentPriorityChart.length === 0 ? (
-          <p className="text-[13px] text-[var(--color-text-secondary)]">Sin datos suficientes.</p>
+          <p className="text-[13px] text-[var(--color-text-secondary)]">{t("noDataSuficient")}</p>
         ) : (
           <StackedBarChart
             data={segmentPriorityChart}
@@ -194,11 +193,11 @@ export function ProductGapsDetailView({ data, filteredRows }: Props) {
 
       <SectionHeader
         title={t("featureSegmentTitle")}
-        description="Porcentaje de deals del segmento que mencionaron cada feature gap. Entre paréntesis, los deals absolutos."
+        description={t("featureSegmentDesc")}
       />
       <ChartCard>
         {featureSegmentHeatmap.rowLabels.length === 0 ? (
-          <p className="text-[13px] text-[var(--color-text-secondary)]">Sin datos suficientes.</p>
+          <p className="text-[13px] text-[var(--color-text-secondary)]">{t("noDataSuficient")}</p>
         ) : (
           <HeatMap
             rowLabels={featureSegmentHeatmap.rowLabels}
@@ -212,11 +211,11 @@ export function ProductGapsDetailView({ data, filteredRows }: Props) {
 
       <SectionHeader
         title={t("moduleStatusTitle")}
-        description={`El ${existingModulePct}% de los feature gaps son en módulos que YA EXISTEN en Humand. El problema es de profundidad funcional, no de cobertura.`}
+        description={t("moduleStatusDesc", { pct: existingModulePct })}
       />
       <ChartCard>
         {moduleStatus.length === 0 ? (
-          <p className="text-[13px] text-[var(--color-text-secondary)]">Sin datos de module_status.</p>
+          <p className="text-[13px] text-[var(--color-text-secondary)]">{t("noModuleStatus")}</p>
         ) : (
           <HorizontalBarChart
             data={moduleStatus.map((r) => ({ name: `${r.name} (${r.pct}%)`, value: r.value }))}
@@ -237,7 +236,7 @@ export function ProductGapsDetailView({ data, filteredRows }: Props) {
             value={priority}
             onChange={(e) => setPriority(e.target.value)}
           >
-            <option value="">Todas las prioridades</option>
+            <option value="">{t("allPriorities")}</option>
             {priorityOptions.map((option) => (
               <option key={option} value={option}>
                 {priorityLabelByKey[option] ?? option}
@@ -249,7 +248,7 @@ export function ProductGapsDetailView({ data, filteredRows }: Props) {
             value={module}
             onChange={(e) => setModule(e.target.value)}
           >
-            <option value="">Todos los módulos</option>
+            <option value="">{t("allModules")}</option>
             {moduleOptions.map((option) => (
               <option key={option} value={option}>
                 {option}
@@ -266,16 +265,16 @@ export function ProductGapsDetailView({ data, filteredRows }: Props) {
           <Table>
             <Thead>
               <Tr>
-                <Th>Empresa</Th>
-                <Th>Feature</Th>
-                <Th>Módulo</Th>
-                <Th>Prioridad</Th>
-                <Th>Segmento</Th>
-                <Th>País</Th>
-                <Th>Etapa</Th>
-                <Th>AE</Th>
-                <Th>Conf.</Th>
-                <Th>Resumen</Th>
+                <Th>{t("thCompany")}</Th>
+                <Th>{t("thFeature")}</Th>
+                <Th>{t("thModule")}</Th>
+                <Th>{t("thPriority")}</Th>
+                <Th>{t("thSegment")}</Th>
+                <Th>{t("thCountry")}</Th>
+                <Th>{t("thStage")}</Th>
+                <Th>{t("thAE")}</Th>
+                <Th>{t("thConf")}</Th>
+                <Th>{t("thSummary")}</Th>
               </Tr>
             </Thead>
             <Tbody>

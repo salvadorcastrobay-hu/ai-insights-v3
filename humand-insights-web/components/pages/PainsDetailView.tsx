@@ -65,8 +65,7 @@ export function PainsDetailView({ data, filteredRows }: Props) {
       </section>
 
       <p className="text-[12px] text-[var(--color-text-secondary)]">
-        El total de pains refleja todos los registros históricos del recorte actual. El Executive
-        Summary puede mostrar un número menor si aplica filtros de período por defecto.
+        {t("historicalNote")}
       </p>
 
       <section className="space-y-3">
@@ -83,15 +82,13 @@ export function PainsDetailView({ data, filteredRows }: Props) {
           }}
         >
           <p className="mb-2 text-[12px] text-[var(--color-text-secondary)]">
-            Deals únicos donde se detectó al menos un pain vinculado a este módulo. Ayuda a
-            priorizar foco por módulo de producto.
+            {t("byModuleCaption")}
           </p>
           <HorizontalBarChart data={byModule.map((d) => ({ ...d, name: tl(d.name) }))} height={360} />
         </ChartCard>
         <ChartCard title={t("themeByStatus")}>
           <p className="mb-2 text-[12px] text-[var(--color-text-secondary)]">
-            El porcentaje de pains en módulos existentes revela si el problema es de roadmap o de
-            propuesta de valor y UX dentro de los módulos actuales.
+            {t("themeStatusCaption")}
           </p>
           <HeatMap rowLabels={themeStatusHeat.rowLabels} colLabels={themeStatusHeat.colLabels} values={themeStatusHeat.values} height={Math.max(480, themeStatusHeat.rowLabels.length * 46 + 140)} />
         </ChartCard>
@@ -102,33 +99,31 @@ export function PainsDetailView({ data, filteredRows }: Props) {
         <section className="space-y-3">
           <PageTitle
             title={t("dealStatus")}
-            subtitle="¿En qué phase del funnel están hoy los deals donde se detectó al menos un pain?"
+            subtitle={t("dealStatusSubtitle")}
           />
 
           <div className="grid gap-3 md:grid-cols-3">
             <MetricCard
               label={t("presale")}
               value={phaseSummary.pre_sale}
-              caption={`${pct(phaseSummary.pre_sale)} del total · Deals activos (lead → final negotiation)`}
+              caption={t("presaleCaption", { pct: pct(phaseSummary.pre_sale) })}
             />
             <MetricCard
               label={t("closed")}
               value={phaseSummary.closed}
-              caption={`${pct(phaseSummary.closed)} del total · Won, lost o postponed`}
+              caption={t("closedCaption", { pct: pct(phaseSummary.closed) })}
             />
             <MetricCard
               label={t("postsale")}
               value={phaseSummary.post_sale}
-              caption={`${pct(phaseSummary.post_sale)} del total · Onboarding churned, red list, churned`}
+              caption={t("postsaleCaption", { pct: pct(phaseSummary.post_sale) })}
             />
           </div>
 
           {topPainsByPhase.length > 0 ? (
             <ChartCard title={t("byPhase")}>
               <p className="mb-2 text-[12px] text-[var(--color-text-secondary)]">
-                Top {topPainsByPhase.length} pains por volumen total. Cada barra muestra cuántos
-                deals únicos lo mencionaron, desglosado por phase del funnel. Útil para detectar
-                si un pain es objeción de venta, crónico (sigue post-deal), o de adopción.
+                {t("topPainsByPhaseCaption", { n: topPainsByPhase.length })}
               </p>
               <StackedBarChart
                 data={topPainsByPhase.map((r) => ({
@@ -150,8 +145,7 @@ export function PainsDetailView({ data, filteredRows }: Props) {
           ) : null}
 
           <p className="text-[12px] text-[var(--color-text-secondary)]">
-            Phase derivada del <code>deal_stage</code> en HubSpot. Solo cuenta deals únicos con
-            al menos un pain detectado.
+            {t("phaseNote")}
           </p>
         </section>
       ) : null}
@@ -161,12 +155,12 @@ export function PainsDetailView({ data, filteredRows }: Props) {
         <section className="space-y-3">
           <PageTitle
             title={t("byOutcome")}
-            subtitle="¿Qué pains se asocian a deals ganados vs perdidos? (mínimo 5 deals cerrados)"
+            subtitle={t("byOutcomeSubtitle")}
           />
 
           <ChartCard title={t("winLostRate")}>
             <p className="mb-3 text-[12px] text-[var(--color-text-secondary)]">
-              Para cada pain, % de deals con ese pain que terminaron en Won vs Lost.
+              {t("outcomeCaption")}
               <span className="ml-2 inline-block rounded bg-green-100 px-1.5 text-green-800">🟢 Win-rate &gt; 60%</span>
               <span className="ml-1 inline-block rounded bg-amber-100 px-1.5 text-amber-800">⚠ Lost-rate &gt; 55%</span>
               <span className="ml-1 inline-block rounded bg-red-100 px-1.5 text-red-800">🔴 Lost-rate &gt; 70%</span>
@@ -175,12 +169,12 @@ export function PainsDetailView({ data, filteredRows }: Props) {
               <Table>
                 <Thead>
                   <Tr>
-                    <Th>Pain</Th>
-                    <Th>Won</Th>
-                    <Th>Lost</Th>
-                    <Th>Cerrados</Th>
-                    <Th>Win-rate</Th>
-                    <Th>Lost-rate</Th>
+                    <Th>{t("thPain")}</Th>
+                    <Th>{t("thWon")}</Th>
+                    <Th>{t("thLost")}</Th>
+                    <Th>{t("thClosed")}</Th>
+                    <Th>{t("thWinRate")}</Th>
+                    <Th>{t("thLostRate")}</Th>
                   </Tr>
                 </Thead>
                 <Tbody>
@@ -231,14 +225,14 @@ export function PainsDetailView({ data, filteredRows }: Props) {
           <Table>
             <Thead>
               <Tr>
-                <Th>Pain</Th>
-                <Th>Theme</Th>
-                <Th>Module</Th>
-                <Th>Segment</Th>
-                <Th>Company</Th>
-                <Th>Conf.</Th>
-                <Th>Summary</Th>
-                <Th>Quote</Th>
+                <Th>{t("thPain")}</Th>
+                <Th>{t("thTheme")}</Th>
+                <Th>{t("thModule")}</Th>
+                <Th>{t("thSegment")}</Th>
+                <Th>{t("thCompany")}</Th>
+                <Th>{t("thConf")}</Th>
+                <Th>{t("thSummary")}</Th>
+                <Th>{t("thQuote")}</Th>
               </Tr>
             </Thead>
             <Tbody>

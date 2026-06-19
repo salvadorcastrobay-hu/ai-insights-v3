@@ -1,6 +1,7 @@
 "use client";
 
 import { Check, ChevronDown, ChevronRight, Download, Eraser, Loader2, SlidersHorizontal, X } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useState } from "react";
 
 import { MultiSelectCombobox } from "@/components/layout/MultiSelectCombobox";
@@ -35,18 +36,21 @@ const ARRAY_FILTER_KEYS: FilterMultiKey[] = [
   "sources",
 ];
 
-const FILTER_LABELS: Record<FilterMultiKey, string> = {
-  types: "Tipo",
-  regions: "Region",
-  segments: "Segmento",
-  countries: "Pais",
-  industries: "Industria",
-  owners: "AE",
-  modules: "Modulo",
-  categories: "Categoria HR",
-  channels: "Canal",
-  sources: "Fuente",
-};
+function useFilterLabels(): Record<FilterMultiKey, string> {
+  const t = useTranslations("globalFilter");
+  return {
+    types: t("labelType"),
+    regions: t("labelRegion"),
+    segments: t("labelSegment"),
+    countries: t("labelCountry"),
+    industries: t("labelIndustry"),
+    owners: t("labelAE"),
+    modules: t("labelModule"),
+    categories: t("labelCategory"),
+    channels: t("labelChannel"),
+    sources: t("labelSource"),
+  };
+}
 
 function buildCsvExportHref(filters: Filters): string {
   const params = new URLSearchParams();
@@ -115,13 +119,15 @@ function ActiveChips({
   filters: Filters;
   setFilters: (next: Partial<Filters>) => void;
 }) {
+  const t = useTranslations("globalFilter");
+  const filterLabels = useFilterLabels();
   const chips: { label: string; onRemove: () => void }[] = [];
 
   for (const key of ARRAY_FILTER_KEYS) {
     const values = filters[key];
     for (const v of values) {
       chips.push({
-        label: `${FILTER_LABELS[key]}: ${v}`,
+        label: `${filterLabels[key]}: ${v}`,
         onRemove: () =>
           setFilters({
             [key]: values.filter((x) => x !== v),
@@ -131,13 +137,13 @@ function ActiveChips({
   }
   if (filters.date_start) {
     chips.push({
-      label: `Desde: ${filters.date_start}`,
+      label: t("chipFrom", { date: filters.date_start }),
       onRemove: () => setFilters({ date_start: null }),
     });
   }
   if (filters.date_end) {
     chips.push({
-      label: `Hasta: ${filters.date_end}`,
+      label: t("chipTo", { date: filters.date_end }),
       onRemove: () => setFilters({ date_end: null }),
     });
   }
@@ -156,7 +162,7 @@ function ActiveChips({
             type="button"
             onClick={chip.onRemove}
             className="rounded-full p-0.5 hover:bg-[var(--color-brand-100)]"
-            aria-label="Quitar"
+            aria-label={t("removeChip")}
           >
             <X size={10} />
           </button>
@@ -176,6 +182,9 @@ export function FilterControls({
   options: FilterOptions;
   compact?: boolean;
 }) {
+  const t = useTranslations("globalFilter");
+  const filterLabels = useFilterLabels();
+
   // Cascada: si hay región(es) seleccionada(s), País solo muestra los países
   // de esas regiones. Si la región no tiene países conocidos, no acotamos.
   const countryOptions = useMemo(() => {
@@ -188,7 +197,7 @@ export function FilterControls({
 
   const fields: FilterFieldConfig[] = ARRAY_FILTER_KEYS.map((key) => ({
     key,
-    label: FILTER_LABELS[key],
+    label: filterLabels[key],
     options: key === "countries" ? countryOptions : options[key] ?? [],
   }));
 
@@ -218,14 +227,14 @@ export function FilterControls({
         ) : null,
       )}
       <DateInput
-        label="Desde"
+        label={t("dateFrom")}
         value={filters.date_start}
         min={options.date_min}
         max={options.date_max}
         onChange={(next) => setFilters({ date_start: next })}
       />
       <DateInput
-        label="Hasta"
+        label={t("dateTo")}
         value={filters.date_end}
         min={options.date_min}
         max={options.date_max}
@@ -237,14 +246,14 @@ export function FilterControls({
       />
       <BoolToggle
         active={!!filters.clients}
-        label="Solo clientes"
+        label={t("onlyClients")}
         title="Solo deals que se convirtieron en cliente (Closed Won)."
         onChange={(on) => setFilters({ clients: on ? true : null })}
       />
       {/* Validadas: default ON (null/true = ON). Apagar setea validated=false. */}
       <BoolToggle
         active={filters.validated !== false}
-        label="Solo demos validadas"
+        label={t("onlyValidated")}
         title="Solo demos validadas (first_meeting_status = Validated). Activo por default."
         onChange={(on) => setFilters({ validated: on ? null : false })}
       />
@@ -296,6 +305,7 @@ function ConfidenceToggle({
   value: number | null;
   onChange: (next: number | null) => void;
 }) {
+  const t = useTranslations("globalFilter");
   const active = value != null && value > 0;
   return (
     <label
@@ -305,7 +315,7 @@ function ConfidenceToggle({
           ? "border-[var(--color-brand-400)] bg-[var(--color-brand-50)] text-[var(--color-brand-500)]"
           : "border-[var(--color-neutral-200)] bg-[var(--color-bg-card)] text-[var(--color-text-secondary)] hover:border-[var(--color-neutral-300)]",
       )}
-      title="Excluí insights con confidence < 0.7. Filas sin confidence se mantienen."
+      title={t("highConfidenceTitle")}
     >
       <input
         type="checkbox"
@@ -313,7 +323,7 @@ function ConfidenceToggle({
         checked={active}
         onChange={(e) => onChange(e.target.checked ? 0.7 : null)}
       />
-      <span className="font-medium">Solo alta confianza (≥0.7)</span>
+      <span className="font-medium">{t("highConfidence")}</span>
     </label>
   );
 }
@@ -336,6 +346,7 @@ export function GlobalFilterBar({
   options?: FilterOptions;
   className?: string;
 }) {
+  const t = useTranslations("globalFilter");
   const [filters, setFilters, isPending] = useGlobalFilters();
   const computedOptions = useMemo(() => options ?? computeFilterOptions(rows ?? []), [options, rows]);
   const mergedFilters = { ...EMPTY_FILTERS, ...filters } satisfies Filters;
@@ -378,7 +389,7 @@ export function GlobalFilterBar({
           <span className="flex h-6 w-6 items-center justify-center rounded-[var(--radius-s)] bg-[var(--color-brand-50)] text-[var(--color-brand-500)] transition group-hover:bg-[var(--color-brand-100)]">
             <SlidersHorizontal size={13} strokeWidth={2.5} />
           </span>
-          <span>Filtros</span>
+          <span>{t("filtersBtn")}</span>
           {active > 0 ? (
             <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[var(--color-brand-500)] px-1.5 text-[10px] font-bold text-white">
               {active}
@@ -395,7 +406,7 @@ export function GlobalFilterBar({
             className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[var(--color-brand-50)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-brand-500)]"
           >
             <Loader2 size={12} className="animate-spin" />
-            Actualizando…
+            {t("updatingStatus")}
           </span>
         ) : null}
 
@@ -410,8 +421,8 @@ export function GlobalFilterBar({
             <button
               type="button"
               onClick={clearAll}
-              title="Limpiar todos los filtros"
-              aria-label="Limpiar filtros"
+              title={t("clearFiltersTitle")}
+              aria-label={t("clearFiltersLabel")}
               className="flex h-7 w-7 items-center justify-center rounded-[var(--radius-s)] text-[var(--color-text-secondary)] transition hover:bg-[var(--color-neutral-100)] hover:text-[var(--color-text-default)]"
             >
               <Eraser size={12} />
@@ -419,8 +430,8 @@ export function GlobalFilterBar({
           ) : null}
           <a
             href={csvExportHref}
-            title="Descargar CSV con filtros actuales"
-            aria-label="Descargar CSV"
+            title={t("downloadCsvTitle")}
+            aria-label={t("downloadCsvLabel")}
             className="flex h-7 w-7 items-center justify-center rounded-[var(--radius-s)] text-[var(--color-text-secondary)] transition hover:bg-[var(--color-neutral-100)] hover:text-[var(--color-text-default)]"
           >
             <Download size={12} />
@@ -448,7 +459,7 @@ export function GlobalFilterBar({
                 onClick={() => setDraft({ ...EMPTY_FILTERS, ...mergedFilters })}
                 className="rounded-[var(--radius-s)] px-3 py-1.5 text-[12px] font-medium text-[var(--color-text-secondary)] transition hover:bg-[var(--color-neutral-100)]"
               >
-                Descartar cambios
+                {t("discardChanges")}
               </button>
             ) : null}
             <button
@@ -463,7 +474,7 @@ export function GlobalFilterBar({
               )}
             >
               {isPending ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} strokeWidth={2.5} />}
-              {dirty ? "Aplicar filtros" : "Aplicado"}
+              {dirty ? t("applyFilters") : t("applied")}
             </button>
           </div>
         </div>

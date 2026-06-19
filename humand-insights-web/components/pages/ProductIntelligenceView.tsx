@@ -245,11 +245,11 @@ export function ProductIntelligenceView({ data, filteredRows }: Props) {
           <Table>
             <Thead>
               <Tr>
-                <Th>Prioridad</Th>
-                <Th>Descripción</Th>
-                <Th>Features</Th>
+                <Th>{t("thPriority")}</Th>
+                <Th>{t("thDescription")}</Th>
+                <Th>{t("thFeatures")}</Th>
                 <Th>Revenue</Th>
-                <Th>Avg/Deal</Th>
+                <Th>{t("thAvgDeal")}</Th>
               </Tr>
             </Thead>
             <Tbody>
@@ -272,7 +272,7 @@ export function ProductIntelligenceView({ data, filteredRows }: Props) {
           </Table>
         </ChartCard>
         {gapsCount === 0 ? (
-          <EmptyState>No hay product gaps para el filtro actual.</EmptyState>
+          <EmptyState>{t("noGaps")}</EmptyState>
         ) : null}
       </div>
 
@@ -295,14 +295,14 @@ export function ProductIntelligenceView({ data, filteredRows }: Props) {
               <Table>
                 <Thead>
                   <Tr>
-                    <Th>Compañía</Th>
-                    <Th>Industria</Th>
-                    <Th>Segmento</Th>
-                    <Th>País</Th>
-                    <Th>Módulo</Th>
-                    <Th>Resumen</Th>
-                    <Th>Quote</Th>
-                    <Th>Confianza</Th>
+                    <Th>{t("thCompany")}</Th>
+                    <Th>{t("thIndustry")}</Th>
+                    <Th>{t("thSegment")}</Th>
+                    <Th>{t("thCountry")}</Th>
+                    <Th>{t("thModule")}</Th>
+                    <Th>{t("thSummary")}</Th>
+                    <Th>{t("thQuote")}</Th>
+                    <Th>{t("thConfidence")}</Th>
                   </Tr>
                 </Thead>
                 <Tbody>
@@ -344,16 +344,16 @@ export function ProductIntelligenceView({ data, filteredRows }: Props) {
               <Table>
                 <Thead>
                   <Tr>
-                    <Th>Compañía</Th>
-                    <Th>Industria</Th>
-                    <Th>Segmento</Th>
-                    <Th>País</Th>
-                    <Th>Owner</Th>
-                    <Th>Módulo</Th>
-                    <Th>Prioridad</Th>
-                    <Th>Monto</Th>
-                    <Th>Resumen</Th>
-                    <Th>Quote</Th>
+                    <Th>{t("thCompany")}</Th>
+                    <Th>{t("thIndustry")}</Th>
+                    <Th>{t("thSegment")}</Th>
+                    <Th>{t("thCountry")}</Th>
+                    <Th>{t("thOwner")}</Th>
+                    <Th>{t("thModule")}</Th>
+                    <Th>{t("thPriority")}</Th>
+                    <Th>{t("thAmount")}</Th>
+                    <Th>{t("thSummary")}</Th>
+                    <Th>{t("thQuote")}</Th>
                   </Tr>
                 </Thead>
                 <Tbody>
