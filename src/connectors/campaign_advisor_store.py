@@ -265,8 +265,6 @@ def load_conversation(owner, conversation_id: str) -> dict | None:
         snapshot_query = snapshot_query.in_("owner", owners)
     snapshot_response = snapshot_query.order("created_at", desc=True).limit(1).execute()
     snapshots = snapshot_response.data or []
-    if not snapshots:
-        return None
 
     message_query = _client().table(MESSAGES_TABLE).select("*").eq("conversation_id", conversation_id)
     if len(owners) == 1:
@@ -277,12 +275,12 @@ def load_conversation(owner, conversation_id: str) -> dict | None:
     messages = message_response.data or []
 
     conversation = conversations[0]
-    snapshot = snapshots[0]
+    snapshot = snapshots[0] if snapshots else None
     return {
         "conversation": conversation,
         "snapshot": snapshot,
         "messages": messages,
-        "recommendation": deserialize_recommendation(snapshot.get("recommendation")),
-        "pipeline": deserialize_pipeline(snapshot.get("pipeline")),
-        "insights": deserialize_insights(snapshot.get("insights")),
+        "recommendation": deserialize_recommendation(snapshot.get("recommendation")) if snapshot else None,
+        "pipeline": deserialize_pipeline(snapshot.get("pipeline")) if snapshot else None,
+        "insights": deserialize_insights(snapshot.get("insights")) if snapshot else None,
     }
