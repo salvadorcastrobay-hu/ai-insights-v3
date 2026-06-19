@@ -47,9 +47,9 @@ export function OverviewView({ data, coveragePct, validated }: Props) {
       <section className="rounded-[var(--radius-l)] border border-[var(--color-brand-200)] bg-gradient-to-b from-[var(--color-brand-50)] to-[var(--color-bg-card)] p-5">
         <div className="mb-3.5 flex items-center gap-2 text-[15px] font-semibold text-[var(--color-text-default)]">
           <Sparkles size={16} className="text-[var(--color-brand-500)]" />
-          Qué pasó esta semana
+          {t("recap.title")}
           <span className="rounded-full border border-[var(--color-brand-100)] bg-[var(--color-bg-card)] px-2 py-0.5 text-[11px] font-normal text-[var(--color-text-secondary)]">
-            últimos {recap.windowDays} días · vs. promedio de las últimas {recap.baselineWeeks} semanas
+            {t("recap.window", { days: recap.windowDays, weeks: recap.baselineWeeks })}
           </span>
         </div>
 
@@ -61,19 +61,19 @@ export function OverviewView({ data, coveragePct, validated }: Props) {
               <DeltaBadge deltaPct={recap.activity.deltaPct} />
             </div>
             <div className="text-[12px] text-[var(--color-text-secondary)]">
-              Demos · prom {fmt(recap.activity.avgWeeklyDemos)}/sem
+              {t("recap.demosLabel", { avg: fmt(recap.activity.avgWeeklyDemos) })}
             </div>
           </div>
           <div>
             <div className="text-[30px] font-semibold leading-none">{fmt(recap.activity.dealsThisWeek)}</div>
             <div className="text-[12px] text-[var(--color-text-secondary)]">
-              Deals
+              {t("recap.dealsLabel")}
               {/* Con el filtro de validadas activo, "validados (100%)" es redundante. */}
               {!validated ? (
                 <>
                   {" · "}
                   <span className="font-semibold text-emerald-700">
-                    {fmt(recap.activity.validatedDealsThisWeek)} validados
+                    {t("recap.validated", { n: fmt(recap.activity.validatedDealsThisWeek) })}
                   </span>
                   {recap.activity.dealsThisWeek > 0
                     ? ` (${Math.round((recap.activity.validatedDealsThisWeek / recap.activity.dealsThisWeek) * 100)}%)`
@@ -82,7 +82,7 @@ export function OverviewView({ data, coveragePct, validated }: Props) {
               ) : null}
               {" · "}
               <span className="font-semibold text-[var(--color-brand-500)]">
-                {fmt(recap.activity.inboundDealsThisWeek)} inbound
+                {fmt(recap.activity.inboundDealsThisWeek)} {t("recap.inbound")}
               </span>
             </div>
           </div>
@@ -90,42 +90,42 @@ export function OverviewView({ data, coveragePct, validated }: Props) {
 
         {/* Pains (pains) que cambiaron en importancia */}
         <div className="mb-1 text-[12px] font-semibold text-[var(--color-text-default)]">
-          Pains que mencionan los prospectos
+          {t("recap.painsTitle")}
           <span className="ml-1.5 font-normal text-[var(--color-text-secondary)]">
-            — % de demos que los mencionan, esta semana vs. promedio
+            {t("recap.painsSubtitle")}
           </span>
         </div>
         <div className="space-y-1.5 text-[13px]">
           <ShareLine
-            label="📈 En alza"
+            label={t("recap.rising")}
             tone="up"
             items={recap.gained.map((m) => `${m.name}: ${m.baselinePct}% → ${m.thisWeekPct}% (+${m.deltaPts} pts)`)}
-            empty="nada se destacó"
+            empty={t("recap.nothingRose")}
           />
           <ShareLine
-            label="📉 En baja"
+            label={t("recap.falling")}
             tone="down"
             items={recap.lost.map((m) => `${m.name}: ${m.baselinePct}% → ${m.thisWeekPct}% (${m.deltaPts} pts)`)}
-            empty="nada cayó"
+            empty={t("recap.nothingFell")}
           />
         </div>
 
         {/* Competidores: más mencionados + en alza */}
         <div className="mt-3 mb-1 text-[12px] font-semibold text-[var(--color-text-default)]">
-          Competidores mencionados en las demos
+          {t("recap.competitorsTitle")}
         </div>
         <div className="space-y-1.5 text-[13px]">
           <ShareLine
-            label="🏆 Más mencionados"
+            label={t("recap.topCompetitors")}
             tone="new"
             items={recap.competitorTop.map((c) => `${c.name} (${c.value})`)}
-            empty="sin menciones"
+            empty={t("recap.noMentions")}
           />
           <ShareLine
-            label="📈 En alza"
+            label={t("recap.rising")}
             tone="up"
             items={recap.competitorRisers.map((m) => `${m.name}: ${m.baselinePct}% → ${m.thisWeekPct}% (+${m.deltaPts} pts)`)}
-            empty="ninguno creció"
+            empty={t("recap.noneRose")}
           />
         </div>
 
@@ -133,7 +133,7 @@ export function OverviewView({ data, coveragePct, validated }: Props) {
         {recap.snapshotPains.length > 0 ? (
           <div className="mt-3 border-t border-[var(--color-brand-100)] pt-3">
             <div className="mb-1.5 text-[12px] font-semibold text-[var(--color-text-secondary)]">
-              🔝 Pains más hablados esta semana (% de demos)
+              {t("recap.snapshotTitle")}
             </div>
             <div className="flex flex-wrap gap-x-2 gap-y-1.5 text-[13px]">
               {recap.snapshotPains.map((p) => (
@@ -166,10 +166,10 @@ export function OverviewView({ data, coveragePct, validated }: Props) {
       {/* Top 5 pains + FAQs */}
       <section className="grid gap-4 lg:grid-cols-2">
         <ChartCard title={t("mainPains")}>
-          <p className="mb-2 text-[12px] text-[var(--color-text-secondary)]">% de demos donde se mencionó</p>
+          <p className="mb-2 text-[12px] text-[var(--color-text-secondary)]">{t("mainPainsCaption")}</p>
           <div className="space-y-2.5">
             {topPains.length === 0 ? (
-              <p className="text-[13px] text-[var(--color-text-secondary)]">Sin datos.</p>
+              <p className="text-[13px] text-[var(--color-text-secondary)]">{t("noData")}</p>
             ) : (
               topPains.map((p) => (
                 <div key={p.name} className="grid grid-cols-[1fr_auto] items-center gap-3">
@@ -190,7 +190,7 @@ export function OverviewView({ data, coveragePct, validated }: Props) {
         </ChartCard>
 
         <ChartCard title={t("faqs")}>
-          <p className="mb-2 text-[12px] text-[var(--color-text-secondary)]">por cantidad de demos</p>
+          <p className="mb-2 text-[12px] text-[var(--color-text-secondary)]">{t("faqsCaption")}</p>
           <TopList rows={topFaqs} />
         </ChartCard>
       </section>
@@ -199,17 +199,15 @@ export function OverviewView({ data, coveragePct, validated }: Props) {
       {wonLostPains.length > 0 ? (
         <ChartCard title={t("winRateByPain")}>
           <p className="mb-3 text-[12px] text-[var(--color-text-secondary)]">
-            De los deals <b>cerrados</b> donde apareció cada pain, qué % ganamos.
-            Comparado con el win-rate general (<b>{winRateBaseline}%</b>):
-            por encima 🟢 = ese dolor acompaña deals que cerramos · por debajo 🔴 = ojo.
+            {t("winRateDesc", { baseline: winRateBaseline })}
           </p>
           <Table>
             <Thead>
               <Tr>
-                <Th>Pain</Th>
-                <Th>Deals cerrados</Th>
-                <Th>Win-rate</Th>
-                <Th>vs. general</Th>
+                <Th>{t("winRateColPain")}</Th>
+                <Th>{t("winRateColClosed")}</Th>
+                <Th>{t("winRateColWinRate")}</Th>
+                <Th>{t("winRateColVsGeneral")}</Th>
               </Tr>
             </Thead>
             <Tbody>
