@@ -11,11 +11,13 @@ import { PageTitle } from "@/components/pages/common";
 import { ConfidenceBadge } from "@/components/ui/ConfidenceBadge";
 import { Input } from "@/components/ui/input";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@/components/ui/table";
+import { useTranslations } from "next-intl";
 import type { PainsDetailData } from "@/lib/data/pains-detail-data";
 
 type Props = { data: PainsDetailData; filteredRows: import("@/lib/supabase/types").InsightRow[] };
 
 export function PainsDetailView({ data, filteredRows }: Props) {
+  const t = useTranslations("pains");
   const {
     kpis,
     byModule,
@@ -52,12 +54,12 @@ export function PainsDetailView({ data, filteredRows }: Props) {
 
   return (
     <div className="space-y-6">
-      <PageTitle title="Pains — Detalle" subtitle="Detalle de pains con distribución por módulo y estado." />
+      <PageTitle title={t("title")} subtitle={t("subtitle")} />
 
       <section className="grid gap-3 md:grid-cols-3">
-        <MetricCard label="Total Pains" value={kpis.total} caption={`${kpis.total > 0 ? "total detectados" : "sin datos"}`} />
-        <MetricCard label="Generales" value={kpis.generales} caption={`${pctGeneral}% del total · sin módulo asociado`} />
-        <MetricCard label="Vinculados a Módulo" value={kpis.vinculados} caption={`${pctLinked}% del total · señal accionable`} />
+        <MetricCard label={t("total")} value={kpis.total} caption={kpis.total > 0 ? t("totalCaption") : "—"} />
+        <MetricCard label={t("generals")} value={kpis.generales} caption={t("generalsCaption", { pct: pctGeneral })} />
+        <MetricCard label={t("linked")} value={kpis.vinculados} caption={t("linkedCaption", { pct: pctLinked })} />
       </section>
 
       <p className="text-[12px] text-[var(--color-text-secondary)]">
@@ -67,7 +69,7 @@ export function PainsDetailView({ data, filteredRows }: Props) {
 
       <section className="space-y-3">
         <ChartCard
-          title="¿En qué módulos se concentran más problemas?"
+          title={t("byModule")}
           rawRows={filteredRows}
           ask={{
             chartTitle: "Pains por módulo",
@@ -84,7 +86,7 @@ export function PainsDetailView({ data, filteredRows }: Props) {
           </p>
           <HorizontalBarChart data={byModule} height={360} />
         </ChartCard>
-        <ChartCard title="Pains: Theme × Status del Módulo">
+        <ChartCard title={t("themeByStatus")}>
           <p className="mb-2 text-[12px] text-[var(--color-text-secondary)]">
             El porcentaje de pains en módulos existentes revela si el problema es de roadmap o de
             propuesta de valor y UX dentro de los módulos actuales.
@@ -97,7 +99,7 @@ export function PainsDetailView({ data, filteredRows }: Props) {
       {phaseTotal > 0 ? (
         <section className="space-y-3">
           <PageTitle
-            title="Estado actual de los deals con pain"
+            title={t("dealStatus")}
             subtitle="¿En qué phase del funnel están hoy los deals donde se detectó al menos un pain?"
           />
 
@@ -120,7 +122,7 @@ export function PainsDetailView({ data, filteredRows }: Props) {
           </div>
 
           {topPainsByPhase.length > 0 ? (
-            <ChartCard title="Top pains, distribución por phase">
+            <ChartCard title={t("byPhase")}>
               <p className="mb-2 text-[12px] text-[var(--color-text-secondary)]">
                 Top {topPainsByPhase.length} pains por volumen total. Cada barra muestra cuántos
                 deals únicos lo mencionaron, desglosado por phase del funnel. Útil para detectar
@@ -156,11 +158,11 @@ export function PainsDetailView({ data, filteredRows }: Props) {
       {painsByOutcome.length > 0 ? (
         <section className="space-y-3">
           <PageTitle
-            title="Pains × Outcome"
+            title={t("byOutcome")}
             subtitle="¿Qué pains se asocian a deals ganados vs perdidos? (mínimo 5 deals cerrados)"
           />
 
-          <ChartCard title="Win-rate y lost-rate por pain">
+          <ChartCard title={t("winLostRate")}>
             <p className="mb-3 text-[12px] text-[var(--color-text-secondary)]">
               Para cada pain, % de deals con ese pain que terminaron en Won vs Lost.
               <span className="ml-2 inline-block rounded bg-green-100 px-1.5 text-green-800">🟢 Win-rate &gt; 60%</span>
@@ -206,7 +208,7 @@ export function PainsDetailView({ data, filteredRows }: Props) {
         </section>
       ) : null}
 
-      <ChartCard title="Detalle por pain">
+      <ChartCard title={t("detail")}>
         <div className="mb-3 grid gap-2 md:grid-cols-3">
           <select className="rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] p-2" value={theme} onChange={(e) => setTheme(e.target.value)}>
             <option value="">Todos los themes</option>
@@ -220,7 +222,7 @@ export function PainsDetailView({ data, filteredRows }: Props) {
               <option key={option} value={option}>{option}</option>
             ))}
           </select>
-          <Input placeholder="Buscar pain..." value={search} onChange={(e) => setSearch(e.target.value)} />
+          <Input placeholder={t("searchPain")} value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
 
         <div className="max-h-[420px] overflow-auto">

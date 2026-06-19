@@ -90,6 +90,7 @@ class SegmentInsights:
     top_modules: list[dict] = field(default_factory=list)
     competitors: list[dict] = field(default_factory=list)
     top_gaps: list[dict] = field(default_factory=list)
+    competitor_ads: list[dict] = field(default_factory=list)
     sample_size: int = 0
     insight_volume: dict = field(default_factory=dict)
 
@@ -319,6 +320,65 @@ def _get_insight_volume(cur, where: str, params: list) -> dict:
     return {r["insight_type"]: int(r["n"]) for r in cur.fetchall()}
 
 
+def _get_competitor_ads(cur, segment_pain_labels: list[str], n: int = 5) -> list[dict]:
+    """
+    Retorna ads de competidores cuyos ángulos atacan los mismos pains del segmento.
+
+    Para cada competidor devuelve:
+      - competitor, source, ads_analyzed
+      - angles: lista de ángulos que intersectan con segment_pain_labels
+        (label, description, weight, related_pains, example_copies)
+    Ordenado por suma de weight de los ángulos matching, limitado a n competidores.
+    """
+    if not segment_pain_labels:
+        return []
+
+    # Normalizar a minúsculas para matching case-insensitive.
+    pain_set = [p.lower() for p in segment_pain_labels]
+
+    sql = """
+        SELECT
+            cai.competitor,
+            cai.source,
+            (cai.payload->>'ads_analyzed')::int AS ads_analyzed,
+            jsonb_agg(
+                jsonb_build_object(
+                    'label',         angle->>'label',
+                    'description',   angle->>'description',
+                    'weight',        (angle->>'weight')::float,
+                    'related_pains', angle->'related_pains',
+                    'example_copies', angle->'example_copies'
+                )
+                ORDER BY (angle->>'weight')::float DESC
+            ) AS angles,
+            SUM((angle->>'weight')::float) AS total_weight
+        FROM competitor_ad_insights cai,
+             jsonb_array_elements(cai.payload->'angles') AS angle
+        WHERE EXISTS (
+            SELECT 1
+            FROM jsonb_array_elements_text(angle->'related_pains') AS rp
+            WHERE LOWER(rp) = ANY(%s)
+        )
+        GROUP BY cai.competitor, cai.source, cai.payload->>'ads_analyzed'
+        ORDER BY total_weight DESC
+        LIMIT %s
+    """
+    cur.execute(sql, [pain_set, n])
+    rows = []
+    for r in cur.fetchall():
+        angles = r.get("angles") or []
+        if isinstance(angles, str):
+            import json
+            angles = json.loads(angles)
+        rows.append({
+            "competitor": r["competitor"],
+            "source": r["source"],
+            "ads_analyzed": r["ads_analyzed"] or 0,
+            "angles": angles,
+        })
+    return rows
+
+
 # ---------------------------------------------------------------------------
 # Función pública
 # ---------------------------------------------------------------------------
@@ -366,6 +426,8 @@ def get_segment_insights(
             top_modules = safe("top_modules", lambda: _get_top_modules(cur, where, params, n_modules), [])
             competitors = safe("competitors", lambda: _get_competitors(cur, where, params), [])
             top_gaps = safe("top_gaps", lambda: _get_top_gaps(cur, where, params, n_gaps), [])
+            pain_labels = [p.get("subtype_display", "") for p in top_pains if p.get("subtype_display")]
+            competitor_ads = safe("competitor_ads", lambda: _get_competitor_ads(cur, pain_labels), [])
 
         return SegmentInsights(
             top_pains=top_pains,
@@ -373,6 +435,7 @@ def get_segment_insights(
             top_modules=top_modules,
             competitors=competitors,
             top_gaps=top_gaps,
+            competitor_ads=competitor_ads,
             sample_size=sample_size,
             insight_volume=insight_volume,
         )

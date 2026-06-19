@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 
 import { useUsage, type UsageSummary, type UsageWindow } from "@/lib/use-usage";
 
@@ -26,6 +27,7 @@ function colorForPct(pct: number): string {
 }
 
 export function UsageRing({ visibleForOwners, autoRefreshMs = 90000 }: Props) {
+  const t = useTranslations("usage");
   const { data, loading, error } = useUsage(autoRefreshMs);
   const [open, setOpen] = useState(false);
 
@@ -91,7 +93,7 @@ export function UsageRing({ visibleForOwners, autoRefreshMs = 90000 }: Props) {
         <div className="absolute right-0 bottom-[calc(100%+8px)] z-50 w-72 rounded-[var(--radius-m)] border border-[var(--color-neutral-200)] bg-white p-3 shadow-[var(--shadow-4dp)]">
           <div className="flex items-center justify-between">
             <span className="text-[12px] font-semibold text-[var(--color-text-default)]">
-              Uso (USD)
+              {t("title")}
             </span>
             <span className="text-[11px] text-[var(--color-text-secondary)]">
               {data.enforcement_enabled ? "Cap activo" : "Sin enforcement"}
@@ -100,9 +102,9 @@ export function UsageRing({ visibleForOwners, autoRefreshMs = 90000 }: Props) {
           <p className="mb-2 mt-1 text-[11px] text-[var(--color-text-secondary)]">
             {data.owner}
           </p>
-          <UsageBar label="Hoy"          window={data.daily} />
-          <UsageBar label="Esta semana"  window={data.weekly} />
-          <UsageBar label="Este mes"     window={data.monthly} />
+          <UsageBar label={t("today")}      window={data.daily} />
+          <UsageBar label={t("thisWeek")}   window={data.weekly} />
+          <UsageBar label={t("thisMonth")}  window={data.monthly} />
         </div>
       ) : null}
     </div>

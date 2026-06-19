@@ -1,6 +1,7 @@
 "use client";
 
 import { CHAT_MODELS } from "@/lib/chat-models";
+import { useTranslations } from "next-intl";
 
 // Selector de modelo (básico/intermedio/avanzado) reutilizable en los chats.
 export function ModelPicker({
@@ -12,6 +13,7 @@ export function ModelPicker({
   onChange: (v: string) => void;
   disabled?: boolean;
 }) {
+  const t = useTranslations("models");
   return (
     <div className="flex items-center gap-1.5">
       <span className="text-[11px] text-[var(--color-text-secondary)]">Modelo</span>
@@ -24,7 +26,7 @@ export function ModelPicker({
       >
         {CHAT_MODELS.map((m) => (
           <option key={m.id} value={m.id}>
-            {m.label}
+            {t(m.tier)}
           </option>
         ))}
       </select>

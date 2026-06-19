@@ -2,6 +2,7 @@
 
 import { ChevronDown, ExternalLink, Loader2, RefreshCw, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useMemo, useState, type ReactNode } from "react";
 
 import { ChartCard } from "@/components/charts/ChartCard";
@@ -40,27 +41,6 @@ type Synthesis = {
   by_persona?: Tally[];
 };
 
-const GOAL_LABELS: Record<string, string> = {
-  lead_gen: "Lead-gen",
-  demo: "Demo",
-  descarga: "Descarga",
-  contenido: "Contenido",
-  trafico: "Tráfico",
-  otro: "Otro",
-};
-const CONTENT_LABELS: Record<string, string> = {
-  caso_exito: "Caso de éxito",
-  webinar: "Webinar",
-  evento: "Evento",
-  demo_producto: "Demo de producto",
-  guia_descargable: "Guía descargable",
-  calculadora: "Calculadora",
-  blog_articulo: "Blog/artículo",
-  lanzamiento_feature: "Lanzamiento",
-  generico: "Genérico",
-};
-const goalLabel = (k: string) => GOAL_LABELS[k] ?? k;
-const contentLabel = (k: string) => CONTENT_LABELS[k] ?? k;
 
 type Props = {
   ads: StoredAd[];
@@ -135,8 +115,23 @@ function dedupeCampaigns(ads: StoredAd[]): Campaign[] {
 
 export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, readError }: Props) {
   const router = useRouter();
+  const t = useTranslations("competitorAds");
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+
+  const GOAL_LABELS: Record<string, string> = {
+    lead_gen: t("goal.lead_gen"), demo: t("goal.demo"), descarga: t("goal.descarga"),
+    contenido: t("goal.contenido"), trafico: t("goal.trafico"), otro: t("goal.otro"),
+  };
+  const CONTENT_LABELS: Record<string, string> = {
+    caso_exito: t("contentType.caso_exito"), webinar: t("contentType.webinar"),
+    evento: t("contentType.evento"), demo_producto: t("contentType.demo_producto"),
+    guia_descargable: t("contentType.guia_descargable"), calculadora: t("contentType.calculadora"),
+    blog_articulo: t("contentType.blog_articulo"), lanzamiento_feature: t("contentType.lanzamiento_feature"),
+    generico: t("contentType.generico"),
+  };
+  const goalLabel = (k: string) => GOAL_LABELS[k] ?? k;
+  const contentLabel = (k: string) => CONTENT_LABELS[k] ?? k;
 
   const groups = useMemo<Group[]>(() => {
     const byComp = new Map<string, StoredAd[]>();
@@ -200,8 +195,8 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, read
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <PageTitle
-          title="Ads de Competidores"
-          subtitle="Qué están comunicando los competidores en sus avisos (Meta Ad Library). Análisis on-demand."
+          title={t("title")}
+          subtitle={t("subtitle")}
         />
         <div className="flex flex-col items-end gap-1">
           {canRefresh ? (
@@ -217,7 +212,7 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, read
               )}
             >
               {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-              {loading ? "Actualizando…" : "Actualizar"}
+              {loading ? t("refreshing") : t("refresh")}
             </button>
           ) : null}
           <span className="text-[11px] text-[var(--color-text-secondary)]">
@@ -242,9 +237,7 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, read
         <ChartCard>
           <p className="text-[13px] text-[var(--color-text-secondary)]">
             Todavía no hay datos.{" "}
-            {canRefresh
-              ? "Tocá “Actualizar” para traer y analizar los avisos de los competidores."
-              : "Pedile a un admin que corra el primer refresh."}
+            {canRefresh ? t("noAdsAdmin") : t("noAdsUser")}
           </p>
         </ChartCard>
       ) : (
@@ -326,13 +319,6 @@ function formatCounts(campaigns: Campaign[]): { key: string; label: string; coun
   ].filter((x) => x.count > 0);
 }
 
-function filterLabel(f: AdFilter): string {
-  if (f.kind === "goal") return goalLabel(f.value);
-  if (f.kind === "content_type") return contentLabel(f.value);
-  if (f.kind === "format") return f.value === "video" ? "Video" : "Estático";
-  return f.value;
-}
-
 // Chip clickeable (para filtrar). active = filtro aplicado.
 function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
   return (
@@ -362,9 +348,29 @@ function campaignHasContent(c: Campaign, cls: PerAd | null): boolean {
 
 // Sección por competidor: mantiene el estado de filtro y filtra la grilla.
 function CompetitorSection({ g }: { g: Group }) {
+  const t = useTranslations("competitorAds");
   const [filter, setFilter] = useState<AdFilter | null>(null);
   const pick = (kind: AdFilter["kind"], value: string) =>
     setFilter((f) => (f && f.kind === kind && f.value === value ? null : { kind, value }));
+  const GOAL_LABELS: Record<string, string> = {
+    lead_gen: t("goal.lead_gen"), demo: t("goal.demo"), descarga: t("goal.descarga"),
+    contenido: t("goal.contenido"), trafico: t("goal.trafico"), otro: t("goal.otro"),
+  };
+  const CONTENT_LABELS: Record<string, string> = {
+    caso_exito: t("contentType.caso_exito"), webinar: t("contentType.webinar"),
+    evento: t("contentType.evento"), demo_producto: t("contentType.demo_producto"),
+    guia_descargable: t("contentType.guia_descargable"), calculadora: t("contentType.calculadora"),
+    blog_articulo: t("contentType.blog_articulo"), lanzamiento_feature: t("contentType.lanzamiento_feature"),
+    generico: t("contentType.generico"),
+  };
+  const goalLabel = (k: string) => GOAL_LABELS[k] ?? k;
+  const contentLabel = (k: string) => CONTENT_LABELS[k] ?? k;
+  const filterLabel = (f: AdFilter): string => {
+    if (f.kind === "goal") return goalLabel(f.value);
+    if (f.kind === "content_type") return contentLabel(f.value);
+    if (f.kind === "format") return f.value === "video" ? t("video") : t("static");
+    return f.value;
+  };
 
   // Base: solo campañas con creativo o texto (oculta las vacías).
   const visible = g.campaigns.filter((c) => campaignHasContent(c, g.classByKey.get(campaignKey(c.lead)) ?? null));
@@ -376,9 +382,9 @@ function CompetitorSection({ g }: { g: Group }) {
   return (
     <ChartCard title={g.competitor}>
       <p className="mb-3 text-[12px] text-[var(--color-text-secondary)]">
-        <span className="font-semibold text-emerald-700">{g.active} avisos activos</span> · {visible.length}{" "}
-        campañas · {g.total} variantes
-        {ts.oldest ? <> · más antigua desde {fmtDate(ts.oldest)}</> : null}
+        <span className="font-semibold text-emerald-700">{g.active} {t("active").toLowerCase()}</span> · {visible.length}{" "}
+        {t("campaigns")} · {g.total} variantes
+        {ts.oldest ? <> · {t("oldestCampaign")} {t("since")} {fmtDate(ts.oldest)}</> : null}
         {ts.new30 ? <> · {ts.new30} nuevas (30d)</> : null}
       </p>
 
@@ -389,14 +395,14 @@ function CompetitorSection({ g }: { g: Group }) {
         <div className="mt-3 flex items-center gap-2 text-[12px]">
           <span className="text-[var(--color-text-secondary)]">
             Filtro: <span className="font-semibold text-[var(--color-text-default)]">{filterLabel(filter)}</span> ·{" "}
-            {filtered.length} campañas
+            {filtered.length} {t("campaigns")}
           </span>
           <button
             type="button"
             onClick={() => setFilter(null)}
             className="rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] px-2 py-0.5 text-[11px] font-medium hover:bg-[var(--color-neutral-100)]"
           >
-            Limpiar
+            ✕
           </button>
         </div>
       ) : null}
@@ -408,14 +414,12 @@ function CompetitorSection({ g }: { g: Group }) {
 
 // Grid de avisos con desplegable: muestra un preview y "Ver todos los anuncios".
 function CampaignGrid({ campaigns, classByKey }: { campaigns: Campaign[]; classByKey: Map<string, PerAd> }) {
+  const t = useTranslations("competitorAds");
   const [expanded, setExpanded] = useState(false);
   const PREVIEW = 6;
   const visible = expanded ? campaigns : campaigns.slice(0, PREVIEW);
   return (
     <>
-      <p className="mb-2 mt-4 text-[12px] font-semibold text-[var(--color-text-default)]">
-        Avisos (por campaña)
-      </p>
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {visible.map((c) => (
           <AdCard key={campaignKey(c.lead)} c={c} cls={classByKey.get(campaignKey(c.lead)) ?? null} />
@@ -428,7 +432,7 @@ function CampaignGrid({ campaigns, classByKey }: { campaigns: Campaign[]; classB
           className="mt-3 inline-flex items-center gap-1.5 rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] px-3 py-1.5 text-[12px] font-medium text-[var(--color-text-default)] transition hover:bg-[var(--color-neutral-100)]"
         >
           <ChevronDown size={14} className={cn("transition-transform", expanded && "rotate-180")} />
-          {expanded ? "Ver menos" : `Ver todos los anuncios (${campaigns.length})`}
+          {expanded ? t("seeLess") : t("seeAll", { count: campaigns.length })}
         </button>
       ) : null}
     </>
@@ -436,13 +440,14 @@ function CampaignGrid({ campaigns, classByKey }: { campaigns: Campaign[]; classB
 }
 
 function SynthesisBlock({ s }: { s: Synthesis }) {
+  const t = useTranslations("competitorAds");
   return (
     <div className="rounded-[var(--radius-m)] border border-[var(--color-brand-200)] bg-gradient-to-b from-[var(--color-brand-50)] to-[var(--color-bg-card)] p-4">
       <div className="mb-2 flex items-center gap-2 text-[13px] font-semibold text-[var(--color-text-default)]">
         <Sparkles size={14} className="text-[var(--color-brand-500)]" />
-        Qué está comunicando
+        {t("whatCommunicating")}
         {s.ads_analyzed ? (
-          <span className="font-normal text-[var(--color-text-secondary)]">· {s.ads_analyzed} campañas analizadas</span>
+          <span className="font-normal text-[var(--color-text-secondary)]">· {t("analyzedCampaigns", { n: s.ads_analyzed })}</span>
         ) : null}
       </div>
       {s.summary ? <p className="mb-3 text-[13px] leading-snug">{s.summary}</p> : null}
@@ -454,8 +459,8 @@ function SynthesisBlock({ s }: { s: Synthesis }) {
               <span className="font-semibold">{a.label}</span>
               {typeof a.weight === "number" ? (
                 <span className="text-[11px] text-[var(--color-text-secondary)]">
-                  {a.weight} campañas
-                  {a.oldest_start ? <> · más antiguo {fmtDate(a.oldest_start)}</> : null}
+                  {a.weight} {t("campaigns")}
+                  {a.oldest_start ? <> · {t("oldestCampaign")} {fmtDate(a.oldest_start)}</> : null}
                 </span>
               ) : null}
             </div>
@@ -468,7 +473,7 @@ function SynthesisBlock({ s }: { s: Synthesis }) {
                   <span
                     key={p}
                     className="rounded-full bg-rose-50 px-1.5 py-0.5 text-[10px] font-medium text-rose-600"
-                    title="Pain de nuestra taxonomía al que apunta"
+                    title={t("painTooltip")}
                   >
                     🎯 {p}
                   </span>
@@ -477,7 +482,7 @@ function SynthesisBlock({ s }: { s: Synthesis }) {
             ) : null}
             {a.example_copies?.length ? (
               <p className="mt-1 text-[11px] italic text-[var(--color-text-secondary)]">
-                “{a.example_copies[0]}”
+                "{a.example_copies[0]}"
               </p>
             ) : null}
           </div>
@@ -486,7 +491,7 @@ function SynthesisBlock({ s }: { s: Synthesis }) {
 
       {s.offer_types?.length ? (
         <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[11px]">
-          <span className="text-[var(--color-text-secondary)]">Ofertas:</span>
+          <span className="text-[var(--color-text-secondary)]">{t("offers")}</span>
           {s.offer_types.map((o) => (
             <span key={o} className="rounded-full border border-[var(--color-neutral-200)] px-1.5 py-0.5">
               {o}
@@ -512,6 +517,20 @@ function QuestionsBlock({
   filter: AdFilter | null;
   onPick: (kind: AdFilter["kind"], value: string) => void;
 }) {
+  const t = useTranslations("competitorAds");
+  const GOAL_LABELS: Record<string, string> = {
+    lead_gen: t("goal.lead_gen"), demo: t("goal.demo"), descarga: t("goal.descarga"),
+    contenido: t("goal.contenido"), trafico: t("goal.trafico"), otro: t("goal.otro"),
+  };
+  const CONTENT_LABELS: Record<string, string> = {
+    caso_exito: t("contentType.caso_exito"), webinar: t("contentType.webinar"),
+    evento: t("contentType.evento"), demo_producto: t("contentType.demo_producto"),
+    guia_descargable: t("contentType.guia_descargable"), calculadora: t("contentType.calculadora"),
+    blog_articulo: t("contentType.blog_articulo"), lanzamiento_feature: t("contentType.lanzamiento_feature"),
+    generico: t("contentType.generico"),
+  };
+  const goalLabel = (k: string) => GOAL_LABELS[k] ?? k;
+  const contentLabel = (k: string) => CONTENT_LABELS[k] ?? k;
   const byGoal = s.by_goal ?? [];
   const byContent = (s.by_content_type ?? []).filter((t) => t.key !== "generico" || (s.by_content_type ?? []).length === 1);
   const byModule = (s.by_module ?? []).slice(0, 10);
@@ -539,7 +558,7 @@ function QuestionsBlock({
     <div className="mt-3 grid gap-3 rounded-[var(--radius-m)] border border-[var(--color-neutral-200)] bg-[var(--color-bg-card)] p-4 md:grid-cols-3">
       <div>
         <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">
-          Por objetivo (CTA)
+          {t("byGoalCta")}
         </p>
         <div className="flex flex-wrap gap-1">
           {byGoal.length ? (
@@ -560,7 +579,7 @@ function QuestionsBlock({
 
       <div>
         <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">
-          Tipos de contenido
+          {t("contentTypes")}
         </p>
         <div className="flex flex-wrap gap-1">
           {byContent.length ? (
@@ -581,7 +600,7 @@ function QuestionsBlock({
 
       <div>
         <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">
-          Por módulo
+          {t("byModule")}
         </p>
         <div className="flex flex-wrap gap-1">
           {byModule.length ? (
@@ -602,7 +621,7 @@ function QuestionsBlock({
 
       <div>
         <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">
-          Por persona
+          {t("byPersona")}
         </p>
         <div className="flex flex-wrap gap-1">
           {byPersona.length ? (
@@ -623,7 +642,7 @@ function QuestionsBlock({
 
       <div>
         <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">
-          Formato
+          {t("format")}
         </p>
         <div className="flex flex-wrap gap-1">
           {formats.length ? (
@@ -644,7 +663,7 @@ function QuestionsBlock({
 
       <div>
         <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">
-          Antigüedad (activas)
+          {t("ageBuckets")}
         </p>
         <div className="flex flex-wrap gap-1">
           {ageBuckets.length ? (
@@ -665,15 +684,15 @@ function QuestionsBlock({
 
       <div>
         <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">
-          Más longevos (probables ganadores)
+          {t("veterans")}
         </p>
         <div className="space-y-0.5">
           {veterans.length ? (
             veterans.map((c) => (
               <p key={campaignKey(c.lead)} className="truncate text-[11px] text-[var(--color-text-default)]">
-                <span className="text-[var(--color-text-secondary)]">desde {fmtDate(c.lead.ad_start_date)}</span>
+                <span className="text-[var(--color-text-secondary)]">{t("since")} {fmtDate(c.lead.ad_start_date)}</span>
                 {" · "}
-                {c.lead.title || c.lead.body_text?.slice(0, 40) || "(sin título)"}
+                {c.lead.title || c.lead.body_text?.slice(0, 40) || t("noTitle")}
               </p>
             ))
           ) : (
@@ -686,6 +705,20 @@ function QuestionsBlock({
 }
 
 function AdCard({ c, cls }: { c: Campaign; cls: PerAd | null }) {
+  const t = useTranslations("competitorAds");
+  const GOAL_LABELS: Record<string, string> = {
+    lead_gen: t("goal.lead_gen"), demo: t("goal.demo"), descarga: t("goal.descarga"),
+    contenido: t("goal.contenido"), trafico: t("goal.trafico"), otro: t("goal.otro"),
+  };
+  const CONTENT_LABELS: Record<string, string> = {
+    caso_exito: t("contentType.caso_exito"), webinar: t("contentType.webinar"),
+    evento: t("contentType.evento"), demo_producto: t("contentType.demo_producto"),
+    guia_descargable: t("contentType.guia_descargable"), calculadora: t("contentType.calculadora"),
+    blog_articulo: t("contentType.blog_articulo"), lanzamiento_feature: t("contentType.lanzamiento_feature"),
+    generico: t("contentType.generico"),
+  };
+  const goalLabel = (k: string) => GOAL_LABELS[k] ?? k;
+  const contentLabel = (k: string) => CONTENT_LABELS[k] ?? k;
   const ad = c.lead;
   const thumb = ad.media?.images?.[0] ?? null;
   const video = ad.media?.videos?.[0] ?? null;
@@ -699,10 +732,10 @@ function AdCard({ c, cls }: { c: Campaign; cls: PerAd | null }) {
             ad.is_active ? "bg-emerald-50 text-emerald-700" : "bg-[var(--color-neutral-100)] text-[var(--color-text-secondary)]",
           )}
         >
-          {ad.is_active ? "Activo" : "Inactivo"}
+          {ad.is_active ? t("active") : t("inactive")}
         </span>
         <span className="text-[var(--color-text-secondary)]">
-          {c.variants > 1 ? `${c.variants} variantes · ` : ""}desde {fmtDate(ad.ad_start_date)}
+          {c.variants > 1 ? `${c.variants} variantes · ` : ""}{t("since")} {fmtDate(ad.ad_start_date)}
         </span>
       </div>
 
@@ -747,7 +780,7 @@ function AdCard({ c, cls }: { c: Campaign; cls: PerAd | null }) {
           {cls.persona ? (
             <span
               className="rounded-full bg-[var(--color-neutral-100)] px-1.5 py-0.5 text-[10px] font-medium"
-              title="A quién le habla el aviso"
+              title={t("personaTooltip")}
             >
               👤 {cls.persona}
             </span>
@@ -756,7 +789,7 @@ function AdCard({ c, cls }: { c: Campaign; cls: PerAd | null }) {
             <span
               key={m}
               className="rounded-full bg-[var(--color-neutral-100)] px-1.5 py-0.5 text-[10px] text-[var(--color-text-secondary)]"
-              title="Módulo de producto mencionado"
+              title={t("moduleTooltip")}
             >
               {m}
             </span>
@@ -765,7 +798,7 @@ function AdCard({ c, cls }: { c: Campaign; cls: PerAd | null }) {
             <span
               key={p}
               className="rounded-full bg-rose-50 px-1.5 py-0.5 text-[10px] font-medium text-rose-600"
-              title="Pain de nuestra taxonomía al que apunta"
+              title={t("painTooltip")}
             >
               🎯 {p}
             </span>
@@ -776,16 +809,16 @@ function AdCard({ c, cls }: { c: Campaign; cls: PerAd | null }) {
       {cls?.creative_text ? (
         <p
           className="text-[11px] leading-snug text-[var(--color-text-secondary)]"
-          title="Texto/voz del creativo (OCR en imagen, transcripción en video)"
+          title={t("creativeTooltip")}
         >
-          🖼️ <span className="italic">“{cls.creative_text}”</span>
+          🖼️ <span className="italic">"{cls.creative_text}"</span>
         </p>
       ) : null}
 
       {ad.body_text ? (
         <p className="line-clamp-5 text-[12px] leading-snug text-[var(--color-text-default)]">{ad.body_text}</p>
       ) : (
-        <p className="text-[12px] italic text-[var(--color-text-secondary)]">(sin copy)</p>
+        <p className="text-[12px] italic text-[var(--color-text-secondary)]">{t("noCopy")}</p>
       )}
 
       <div className="mt-auto flex flex-wrap items-center gap-1.5 text-[10px] text-[var(--color-text-secondary)]">
@@ -805,7 +838,7 @@ function AdCard({ c, cls }: { c: Campaign; cls: PerAd | null }) {
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1 text-[11px] font-medium text-[var(--color-brand-500)] hover:underline"
-          title="Abrir este aviso en la Meta Ad Library"
+          title={t("adLibraryLink")}
         >
           <ExternalLink size={11} /> Ad Library
         </a>
@@ -815,7 +848,7 @@ function AdCard({ c, cls }: { c: Campaign; cls: PerAd | null }) {
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 text-[11px] font-medium text-[var(--color-text-secondary)] hover:underline"
-            title="Landing del aviso"
+            title={t("landingLink")}
           >
             <ExternalLink size={11} /> destino
           </a>

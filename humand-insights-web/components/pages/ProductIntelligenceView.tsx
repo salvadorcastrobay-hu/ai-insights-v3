@@ -9,6 +9,7 @@ import { StackedBarChart } from "@/components/charts/StackedBar";
 import { SectionHeader } from "@/components/layout/SectionHeader";
 import { EmptyState, PageTitle } from "@/components/pages/common";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@/components/ui/table";
+import { useTranslations } from "next-intl";
 import { formatCurrency } from "@/lib/data/computations";
 import type { ProductIntelligenceData } from "@/lib/data/product-intelligence-data";
 
@@ -50,6 +51,7 @@ function SelectBox({
 }
 
 export function ProductIntelligenceView({ data, filteredRows }: Props) {
+  const t = useTranslations("productIntelligence");
   const {
     topPains,
     painThemeBreakdown,
@@ -77,22 +79,22 @@ export function ProductIntelligenceView({ data, filteredRows }: Props) {
   return (
     <div className="space-y-8">
       <PageTitle
-        title="Product Intelligence"
-        subtitle="Pains, módulos buscados y gaps de producto en la primera demo."
+        title={t("title")}
+        subtitle={t("subtitle")}
       />
 
       <div className="space-y-4">
         <SectionHeader
-          title="¿Con qué problemas llegan los prospects?"
-          description="Top pains por demos únicas, con desglose por tema y por segmento."
+          title={t("problemsTitle")}
+          description={t("problemsDesc")}
         />
         <ChartCard
-          title="Top 15 Pains (demos únicas)"
+          title={t("topPainsTitle")}
           rawRows={filteredRows.filter((r) => r.insight_type === "pain")}
           ask={{
-            chartTitle: "Top 15 Pains",
+            chartTitle: t("topPainsChartTitle"),
             chartKind: "horizontal-bar",
-            description: "Top pains por demos únicas.",
+            description: t("topPainsDesc"),
             dimension: "insight_subtype_display",
             scopeType: "pain",
             rows: topPains.map((r) => ({ label: r.name, value: r.value, extra: { pct: `${r.pct.toFixed(1)}%` } })),
@@ -145,7 +147,7 @@ export function ProductIntelligenceView({ data, filteredRows }: Props) {
           </div>
         ) : null}
 
-        <ChartCard title="Pains × Segmento">
+        <ChartCard title={t("painBySegment")}>
           <HeatMap
             rowLabels={painSegmentHeat.rowLabels}
             colLabels={painSegmentHeat.colLabels}
@@ -153,7 +155,7 @@ export function ProductIntelligenceView({ data, filteredRows }: Props) {
           />
         </ChartCard>
 
-        <ChartCard title="Pains por Industria (stack por tema)">
+        <ChartCard title={t("painByIndustry")}>
           {painIndustryStack.stackKeys.length > 0 ? (
             <StackedBarChart
               data={painIndustryStack.data}
@@ -169,10 +171,10 @@ export function ProductIntelligenceView({ data, filteredRows }: Props) {
 
       <div className="space-y-4">
         <SectionHeader
-          title="¿Qué módulos y features buscan?"
-          description="Co-ocurrencia de módulos con segmentos y detalle de feature gaps."
+          title={t("modulesTitle")}
+          description={t("modulesDesc")}
         />
-        <ChartCard title="Módulos × Segmento (pains + gaps)">
+        <ChartCard title={t("moduleBySegment")}>
           {moduleSegmentStack.stackKeys.length > 0 ? (
             <StackedBarChart
               data={moduleSegmentStack.data}
@@ -186,12 +188,12 @@ export function ProductIntelligenceView({ data, filteredRows }: Props) {
         </ChartCard>
         <section className="grid gap-3 lg:grid-cols-2">
           <ChartCard
-            title="Top 20 Feature Gaps — Frecuencia"
+            title={t("topGapsFreq")}
             rawRows={filteredRows.filter((r) => r.insight_type === "product_gap")}
             ask={{
-              chartTitle: "Top 20 Feature Gaps — Frecuencia",
+              chartTitle: t("topGapsFreq"),
               chartKind: "horizontal-bar",
-              description: "Features faltantes más solicitadas por deals únicos.",
+              description: t("topGapsFreqDesc"),
               dimension: "feature_display",
               scopeType: "product_gap",
               rows: featureFreq.map((r) => ({ label: r.name, value: r.value })),
@@ -200,12 +202,12 @@ export function ProductIntelligenceView({ data, filteredRows }: Props) {
             <HorizontalBarChart data={featureFreq} yAxisWidth={240} />
           </ChartCard>
           <ChartCard
-            title="Top 10 Feature Gaps — Revenue en Riesgo"
+            title={t("topGapsRevenue")}
             rawRows={filteredRows.filter((r) => r.insight_type === "product_gap")}
             ask={{
-              chartTitle: "Top 10 Feature Gaps — Revenue en Riesgo",
+              chartTitle: t("topGapsRevenue"),
               chartKind: "horizontal-bar",
-              description: "Features ordenadas por revenue acumulado de los deals que las solicitan.",
+              description: t("topGapsRevenueDesc"),
               dimension: "feature_display",
               scopeType: "product_gap",
               rows: featureRevenue.map((r) => ({ label: r.name, value: r.value })),
@@ -218,7 +220,7 @@ export function ProductIntelligenceView({ data, filteredRows }: Props) {
             />
           </ChartCard>
         </section>
-        <ChartCard title="Feature Gaps × Segmento">
+        <ChartCard title={t("gapsBySegment")}>
           {featureSegmentStack.stackKeys.length > 0 ? (
             <StackedBarChart
               data={featureSegmentStack.data}
@@ -234,8 +236,8 @@ export function ProductIntelligenceView({ data, filteredRows }: Props) {
 
       <div className="space-y-4">
         <SectionHeader
-          title="Prioridad de gaps"
-          description="Clasificación de feature gaps por prioridad del prospect."
+          title={t("gapsPriority")}
+          description={t("gapsPriorityDesc")}
         />
         <ChartCard>
           <Table>
@@ -275,13 +277,13 @@ export function ProductIntelligenceView({ data, filteredRows }: Props) {
       {painOptions.length > 0 ? (
         <div className="space-y-4">
           <SectionHeader
-            title="Drill-down: Pains"
-            description="Selecciona un pain para ver los registros con mayor confianza."
+            title={t("drillPains")}
+            description={t("drillPainsDesc")}
           />
           <ChartCard>
             <div className="mb-3 grid gap-2 md:grid-cols-[320px_1fr]">
               <SelectBox
-                label="Pain"
+                label={t("painLabel")}
                 value={selectedPain}
                 options={painOptions}
                 onChange={setSelectedPain}
@@ -324,13 +326,13 @@ export function ProductIntelligenceView({ data, filteredRows }: Props) {
       {gapOptions.length > 0 ? (
         <div className="space-y-4">
           <SectionHeader
-            title="Drill-down: Feature Gaps"
-            description="Selecciona un feature para ver los deals afectados, ordenados por monto."
+            title={t("drillGaps")}
+            description={t("drillGapsDesc")}
           />
           <ChartCard>
             <div className="mb-3 grid gap-2 md:grid-cols-[320px_1fr]">
               <SelectBox
-                label="Feature"
+                label={t("featureLabel")}
                 value={selectedFeature}
                 options={gapOptions}
                 onChange={setSelectedFeature}
