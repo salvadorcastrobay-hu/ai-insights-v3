@@ -115,10 +115,10 @@ export function ProductIntelligenceView({ data, filteredRows }: Props) {
         {painThemeBreakdown.length > 0 ? (
           <div className="space-y-3">
             <h3 className="text-[14px] font-semibold text-[var(--color-text-default)]">
-              Desglose de los 2 principales temas de pain
+              {t("themeBreakdownTitle")}
             </h3>
             <Caption>
-              Para cada tema, se muestran sus subtipos más frecuentes y el % del tema.
+              {t("themeBreakdownDesc")}
             </Caption>
             <section className="grid gap-3 lg:grid-cols-2">
               {painThemeBreakdown.map((theme) => (
@@ -141,7 +141,7 @@ export function ProductIntelligenceView({ data, filteredRows }: Props) {
                       height={260}
                     />
                   ) : (
-                    <EmptyState>Sin subtipos para este tema.</EmptyState>
+                    <EmptyState>{t("noSubtypes")}</EmptyState>
                   )}
                 </ChartCard>
               ))}
@@ -166,7 +166,7 @@ export function ProductIntelligenceView({ data, filteredRows }: Props) {
               yAxisWidth={200}
             />
           ) : (
-            <EmptyState>Sin datos de pains por industria.</EmptyState>
+            <EmptyState>{t("noPainsByIndustry")}</EmptyState>
           )}
         </ChartCard>
       </div>
@@ -185,7 +185,7 @@ export function ProductIntelligenceView({ data, filteredRows }: Props) {
               yAxisWidth={220}
             />
           ) : (
-            <EmptyState>Sin datos de módulos por segmento.</EmptyState>
+            <EmptyState>{t("noModulesBySegment")}</EmptyState>
           )}
         </ChartCard>
         <section className="grid gap-3 lg:grid-cols-2">
@@ -231,7 +231,7 @@ export function ProductIntelligenceView({ data, filteredRows }: Props) {
               yAxisWidth={240}
             />
           ) : (
-            <EmptyState>Sin datos de features por segmento.</EmptyState>
+            <EmptyState>{t("noGapsBySegment")}</EmptyState>
           )}
         </ChartCard>
       </div>

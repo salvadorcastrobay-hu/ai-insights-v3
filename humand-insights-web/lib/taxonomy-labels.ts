@@ -239,6 +239,10 @@ const LABELS: Record<string, Translations> = {
   "Bienestar del empleado":   { pt: "Bem-estar do colaborador",     en: "Employee wellness" },
   "Entrevistas de salida":    { pt: "Entrevistas de saída",         en: "Exit interviews" },
   "Feedback anonimo":         { pt: "Feedback anônimo",             en: "Anonymous feedback" },
+  // ── Custom LLM-extracted values not in taxonomy.py ──
+  "Empleados inalcanzables": { pt: "Colaboradores inacessíveis",  en: "Unreachable employees" },
+  "Sin estandarizacion":     { pt: "Sem padronização",            en: "No standardization" },
+  "Sistemas obsoletos":      { pt: "Sistemas obsoletos",          en: "Outdated systems" },
 };
 
 /** Translate a taxonomy display label to the given locale. Falls back to the original if not found. */

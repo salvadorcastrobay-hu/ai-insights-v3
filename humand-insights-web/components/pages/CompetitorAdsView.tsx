@@ -9,6 +9,7 @@ import { ChartCard } from "@/components/charts/ChartCard";
 import { PageTitle } from "@/components/pages/common";
 import type { AdInsight, StoredAd } from "@/lib/competitor-ads/store";
 import { cn } from "@/lib/utils";
+import { useTaxonomyLabel } from "@/lib/taxonomy-labels";
 
 type Angle = {
   label: string;
@@ -706,6 +707,8 @@ function QuestionsBlock({
 
 function AdCard({ c, cls }: { c: Campaign; cls: PerAd | null }) {
   const t = useTranslations("competitorAds");
+  const tl = useTaxonomyLabel();
+  const [showTranscript, setShowTranscript] = useState(false);
   const GOAL_LABELS: Record<string, string> = {
     lead_gen: t("goal.lead_gen"), demo: t("goal.demo"), descarga: t("goal.descarga"),
     contenido: t("goal.contenido"), trafico: t("goal.trafico"), otro: t("goal.otro"),
@@ -800,26 +803,63 @@ function AdCard({ c, cls }: { c: Campaign; cls: PerAd | null }) {
               className="rounded-full bg-rose-50 px-1.5 py-0.5 text-[10px] font-medium text-rose-600"
               title={t("painTooltip")}
             >
-              🎯 {p}
+              🎯 {tl(p)}
             </span>
           ))}
         </div>
       ) : null}
 
-      {cls?.creative_text ? (
-        <p
-          className="text-[11px] leading-snug text-[var(--color-text-secondary)]"
-          title={t("creativeTooltip")}
-        >
-          🖼️ <span className="italic">"{cls.creative_text}"</span>
-        </p>
-      ) : null}
-
       {ad.body_text ? (
-        <p className="line-clamp-5 text-[12px] leading-snug text-[var(--color-text-default)]">{ad.body_text}</p>
+        <p className="whitespace-pre-wrap text-[12px] leading-snug text-[var(--color-text-default)]">{ad.body_text}</p>
       ) : (
         <p className="text-[12px] italic text-[var(--color-text-secondary)]">{t("noCopy")}</p>
       )}
+
+      {cls?.creative_text ? (
+        <>
+          <button
+            type="button"
+            onClick={() => setShowTranscript(true)}
+            className="self-start text-[11px] font-medium text-[var(--color-brand-500)] underline hover:text-[var(--color-brand-600)]"
+          >
+            {t("transcription")}
+          </button>
+          {showTranscript && (
+            <div
+              className="fixed inset-0 z-[100] flex items-center justify-center"
+              style={{ background: "rgba(0,0,0,0.25)" }}
+              onClick={() => setShowTranscript(false)}
+            >
+              <div
+                className="relative mx-4 w-full max-w-md rounded-[var(--radius-m)] bg-white p-5 shadow-[0_8px_32px_rgba(0,0,0,0.18)]"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="mb-3 flex items-center justify-between">
+                  <span className="text-[13px] font-semibold text-[var(--color-text-default)]">{t("transcription")}</span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => navigator.clipboard.writeText(cls.creative_text ?? "")}
+                      className="rounded p-1 text-[11px] text-[var(--color-text-secondary)] hover:bg-[var(--color-neutral-100)]"
+                      title={t("copyToClipboard")}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowTranscript(false)}
+                      className="rounded p-1 text-[var(--color-text-secondary)] hover:bg-[var(--color-neutral-100)]"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                    </button>
+                  </div>
+                </div>
+                <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-[var(--color-text-default)]">{cls.creative_text}</p>
+              </div>
+            </div>
+          )}
+        </>
+      ) : null}
 
       <div className="mt-auto flex flex-wrap items-center gap-1.5 text-[10px] text-[var(--color-text-secondary)]">
         {platforms.map((p) => (
