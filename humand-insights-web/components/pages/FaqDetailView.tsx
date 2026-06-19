@@ -72,14 +72,14 @@ export function FaqDetailView({ data, filteredRows }: Props) {
             Los topics con mayor volumen son los candidatos prioritarios para construir Battle
             Cards. Cada AE debería tener una respuesta preparada para esos topics.
           </p>
-          <HorizontalBarChart data={topicCounts} height={380} />
+          <HorizontalBarChart data={topicCounts.map((d) => ({ ...d, name: tl(d.name) }))} height={380} />
         </ChartCard>
         <ChartCard title={t("topByTopic")}>
           <p className="mb-2 text-[12px] text-[var(--color-text-secondary)]">
             Estas 5 preguntas son la base para la Battle Card del topic seleccionado.
           </p>
           <select className="mb-2 rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] p-2" value={topic} onChange={(e) => setTopic(e.target.value)}>
-            {topics.map((option) => (<option key={option} value={option}>{option}</option>))}
+            {topics.map((option) => (<option key={option} value={option}>{tl(option)}</option>))}
           </select>
           <HorizontalBarChart data={topQuestions} height={380} />
         </ChartCard>
@@ -93,7 +93,7 @@ export function FaqDetailView({ data, filteredRows }: Props) {
         <div className="mb-3 grid gap-2 md:grid-cols-2">
           <select className="rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] p-2" value={topic} onChange={(e) => setTopic(e.target.value)}>
             <option value="">Todos los topics</option>
-            {topics.map((option) => (<option key={option} value={option}>{option}</option>))}
+            {topics.map((option) => (<option key={option} value={option}>{tl(option)}</option>))}
           </select>
           <Input placeholder={t("searchFaq")} value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>

@@ -1,6 +1,6 @@
 import { MONITORED_COMPETITORS } from "@/lib/competitor-ads/config";
 import { fetchCompanyAds } from "@/lib/competitor-ads/scrapecreators";
-import { upsertAds, saveAdInsight } from "@/lib/competitor-ads/store";
+import { upsertAds, markInactiveAds, saveAdInsight } from "@/lib/competitor-ads/store";
 import { analyzeCompetitor, adsModel } from "@/lib/competitor-ads/analyze";
 import { isAdmin, type AppRole } from "@/lib/auth/roles";
 import { getAuthenticatedSession, getServerUserRoles } from "@/lib/supabase/server";
@@ -14,6 +14,7 @@ type Result = {
   source: string;
   fetched: number;
   upserted: number;
+  deactivated: number;
   analyzed: boolean;
   error?: string;
   analyzeError?: string;
@@ -53,7 +54,7 @@ export async function POST(): Promise<Response> {
 
   const results: Result[] = [];
   await pooled(MONITORED_COMPETITORS, 3, async (c) => {
-    const r: Result = { competitor: c.name, source: c.source, fetched: 0, upserted: 0, analyzed: false };
+    const r: Result = { competitor: c.name, source: c.source, fetched: 0, upserted: 0, deactivated: 0, analyzed: false };
     try {
       // Por ahora solo meta_ads tiene conector.
       if (c.source === "meta_ads") {
@@ -70,6 +71,11 @@ export async function POST(): Promise<Response> {
         });
         r.fetched = ads.length;
         r.upserted = await upsertAds(ads);
+        r.deactivated = await markInactiveAds(
+          c.name,
+          c.source,
+          new Set(ads.map((a) => a.ad_archive_id)),
+        );
       }
       // Análisis IA (no rompe el refresh si falla, pero el error se reporta).
       try {

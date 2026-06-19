@@ -299,6 +299,41 @@ export async function loadAdInsight(competitor: string, source: AdSource): Promi
   });
 }
 
+/**
+ * Marca como inactivos los ads de (competitor, source) que NO están en activeIds.
+ * Llamar después de upsertAds con los IDs frescos de la API.
+ * Devuelve el número de ads marcados inactivos.
+ */
+export async function markInactiveAds(
+  competitor: string,
+  source: AdSource,
+  activeIds: Set<string>,
+): Promise<number> {
+  const sb = getSupabase();
+  const { data, error } = await sb
+    .from("competitor_ads")
+    .select("ad_archive_id")
+    .eq("competitor", competitor)
+    .eq("source", source)
+    .eq("is_active", true);
+  if (error) throw new Error(error.message);
+
+  const toDeactivate = (data ?? [])
+    .map((r) => (r as { ad_archive_id: string }).ad_archive_id)
+    .filter((id) => !activeIds.has(id));
+
+  if (!toDeactivate.length) return 0;
+
+  const { error: upErr } = await sb
+    .from("competitor_ads")
+    .update({ is_active: false })
+    .in("ad_archive_id", toDeactivate)
+    .eq("source", source);
+  if (upErr) throw new Error(upErr.message);
+
+  return toDeactivate.length;
+}
+
 /** Persiste el análisis cacheado de UN aviso (creative_text + clasificación). */
 export async function saveAdAnalysis(
   adArchiveId: string,
