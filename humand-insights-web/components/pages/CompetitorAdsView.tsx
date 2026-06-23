@@ -8,6 +8,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { ChartCard } from "@/components/charts/ChartCard";
 import { PageTitle } from "@/components/pages/common";
 import type { AdInsight, StoredAd } from "@/lib/competitor-ads/store";
+import type { StoredPost, OrganicInsight, OrganicSynthesis } from "@/lib/competitor-ads/organic-store";
 import { cn } from "@/lib/utils";
 import { useTaxonomyLabel } from "@/lib/taxonomy-labels";
 
@@ -55,6 +56,8 @@ type Props = {
   refreshedAt: string | null;
   canRefresh: boolean;
   readError?: string | null;
+  organicPosts?: StoredPost[];
+  organicInsights?: OrganicInsight[];
 };
 
 function fmtDate(iso: string | null): string {
@@ -190,12 +193,12 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, readError }: Props) {
+export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, readError, organicPosts = [], organicInsights = [] }: Props) {
   const router = useRouter();
   const t = useTranslations("competitorAds");
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
-  const [view, setView] = useState<"inteligencia" | "creativos">("inteligencia");
+  const [view, setView] = useState<"inteligencia" | "organico" | "creativos">("inteligencia");
   const [selectedCompetitor, setSelectedCompetitor] = useState<string | null>(null);
   const [filter, setFilter] = useState<AdFilter | null>(null);
 
@@ -417,11 +420,11 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, read
 
             {/* Tab toggle */}
             <div className="flex overflow-hidden rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] bg-[var(--color-neutral-100)]">
-              {(["inteligencia", "creativos"] as const).map((tab) => (
+              {(["inteligencia", ...(canRefresh ? ["organico"] : []), "creativos"] as const).map((tab) => (
                 <button
                   key={tab}
                   type="button"
-                  onClick={() => { setView(tab); setFilter(null); }}
+                  onClick={() => { setView(tab as typeof view); setFilter(null); }}
                   className={cn(
                     "px-4 py-1.5 text-[12px] font-medium transition capitalize",
                     view === tab
@@ -429,7 +432,7 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, read
                       : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-default)]",
                   )}
                 >
-                  {tab === "inteligencia" ? "Inteligencia" : "Creativos"}
+                  {tab === "inteligencia" ? "Inteligencia" : tab === "organico" ? "Orgánico" : "Creativos"}
                 </button>
               ))}
             </div>
@@ -437,6 +440,12 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, read
 
           {view === "inteligencia" ? (
             <IntelligenceView groups={visibleGroups} />
+          ) : view === "organico" ? (
+            <OrganicView
+              posts={organicPosts}
+              insights={organicInsights}
+              selectedCompetitor={selectedCompetitor}
+            />
           ) : (
             <CreativosView
               campaigns={filteredCampaigns}
@@ -920,6 +929,273 @@ function AdCard({ c, cls, competitor }: { c: Campaign; cls: PerAd | null; compet
           </a>
         ) : null}
       </div>
+    </div>
+  );
+}
+
+// ─── Organic view ─────────────────────────────────────────────────────────────
+
+const DAY_ORDER = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+
+function OrganicView({
+  posts,
+  insights,
+  selectedCompetitor,
+}: {
+  posts: StoredPost[];
+  insights: OrganicInsight[];
+  selectedCompetitor: string | null;
+}) {
+  const locale = useLocale();
+  const i18nKey = LOCALE_TO_I18N[locale] ?? "es-AR";
+
+  const competitors = useMemo(() => {
+    const names = [...new Set(posts.map((p) => p.competitor))].sort();
+    return selectedCompetitor ? names.filter((n) => n === selectedCompetitor) : names;
+  }, [posts, selectedCompetitor]);
+
+  if (!competitors.length) {
+    return (
+      <div className="rounded-[var(--radius-m)] border border-[var(--color-neutral-200)] p-8 text-center">
+        <p className="text-[13px] text-[var(--color-text-secondary)]">
+          Sin datos orgánicos. Ejecutá POST /api/competitor-ads/organic-refresh para cargar posts.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={cn(
+        "grid gap-4",
+        competitors.length === 1 && "grid-cols-1",
+        competitors.length === 2 && "grid-cols-2",
+        competitors.length >= 3 && "md:grid-cols-3",
+      )}
+    >
+      {competitors.map((name) => {
+        const compPosts = posts.filter((p) => p.competitor === name);
+        const insight = insights.find((i) => i.competitor === name);
+        const synth: OrganicSynthesis | undefined = insight?.payload;
+        const tr = synth?.i18n?.[i18nKey];
+        const summary = tr?.summary ?? synth?.summary ?? null;
+        const pillars = tr?.content_pillars ?? synth?.content_pillars ?? [];
+        return (
+          <OrganicColumn
+            key={name}
+            name={name}
+            posts={compPosts}
+            synth={synth}
+            summary={summary}
+            pillars={pillars}
+            i18nKey={i18nKey}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function OrganicColumn({
+  name,
+  posts,
+  synth,
+  summary,
+  pillars,
+}: {
+  name: string;
+  posts: StoredPost[];
+  synth: OrganicSynthesis | undefined;
+  summary: string | null;
+  pillars: string[];
+  i18nKey: string;
+}) {
+  const freq = synth?.posting_frequency;
+  const fmtDist = synth?.format_distribution ?? {};
+  const topHashtags = synth?.hashtag_strategy?.top_hashtags ?? [];
+  const best = synth?.best_performing ?? [];
+  const byDay = synth?.posting_patterns?.by_day ?? {};
+  const byHour = synth?.posting_patterns?.by_hour ?? {};
+
+  const totalFmt = Object.values(fmtDist).reduce((a, b) => a + b, 0);
+
+  // Build day/hour sparkline data sorted by order
+  const dayData = DAY_ORDER.map((d) => ({ label: d, count: byDay[d] ?? 0 }));
+  const hourData = Array.from({ length: 24 }, (_, h) => {
+    const key = String(h).padStart(2, "0") + ":00";
+    return { label: String(h), count: byHour[key] ?? 0 };
+  });
+  const maxDay = Math.max(...dayData.map((d) => d.count), 1);
+  const maxHour = Math.max(...hourData.map((d) => d.count), 1);
+
+  return (
+    <div className="flex flex-col gap-4 rounded-[var(--radius-m)] border border-[var(--color-neutral-200)] bg-[var(--color-bg-card)] p-4 shadow-[var(--shadow-4dp)]">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-[16px] font-semibold text-[var(--color-text-default)]">{name}</h3>
+        <div className="flex items-center gap-1.5">
+          {freq ? (
+            <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-medium text-violet-700">
+              {freq.posts_per_week}× / semana
+            </span>
+          ) : null}
+          <span className="text-[11px] text-[var(--color-text-secondary)]">{posts.length} posts</span>
+        </div>
+      </div>
+
+      {/* Summary */}
+      {summary ? (
+        <p className="text-[12px] leading-snug text-[var(--color-text-secondary)]">{summary}</p>
+      ) : null}
+
+      {/* Content pillars */}
+      {pillars.length ? (
+        <div>
+          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">
+            Pilares de contenido
+          </p>
+          <ul className="space-y-1">
+            {pillars.map((p, i) => (
+              <li key={i} className="flex items-start gap-1.5 text-[12px] text-[var(--color-text-default)]">
+                <span className="mt-0.5 text-[10px] text-violet-400">▸</span>
+                {p}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {/* Format distribution */}
+      {totalFmt > 0 ? (
+        <div>
+          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">
+            Formatos
+          </p>
+          <div className="space-y-1">
+            {Object.entries(fmtDist)
+              .sort((a, b) => b[1] - a[1])
+              .map(([fmt, count]) => (
+                <div key={fmt} className="flex items-center gap-2">
+                  <div className="w-[56px] shrink-0 text-right text-[11px] text-[var(--color-text-secondary)] capitalize">
+                    {fmt}
+                  </div>
+                  <div className="flex-1 overflow-hidden rounded-full bg-[var(--color-neutral-100)]">
+                    <div
+                      className="h-2 rounded-full bg-violet-400"
+                      style={{ width: `${Math.round((count / totalFmt) * 100)}%` }}
+                    />
+                  </div>
+                  <div className="w-[28px] text-right text-[11px] text-[var(--color-text-secondary)]">
+                    {Math.round((count / totalFmt) * 100)}%
+                  </div>
+                </div>
+              ))}
+          </div>
+        </div>
+      ) : null}
+
+      {/* Posting patterns */}
+      {(dayData.some((d) => d.count > 0) || hourData.some((d) => d.count > 0)) ? (
+        <div>
+          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">
+            Cuándo postean
+          </p>
+          {/* By day */}
+          {dayData.some((d) => d.count > 0) ? (
+            <div className="mb-2">
+              <p className="mb-1 text-[10px] text-[var(--color-text-secondary)]">Día de semana</p>
+              <div className="flex items-end gap-0.5 h-8">
+                {dayData.map(({ label, count }) => (
+                  <div key={label} className="flex flex-1 flex-col items-center gap-0.5">
+                    <div
+                      className="w-full rounded-sm bg-violet-300"
+                      style={{ height: `${Math.round((count / maxDay) * 28)}px`, minHeight: count ? 2 : 0 }}
+                    />
+                    <span className="text-[9px] text-[var(--color-text-secondary)]">{label.slice(0, 2)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          {/* By hour */}
+          {hourData.some((d) => d.count > 0) ? (
+            <div>
+              <p className="mb-1 text-[10px] text-[var(--color-text-secondary)]">Hora del día (UTC)</p>
+              <div className="flex items-end gap-px h-6">
+                {hourData.map(({ label, count }) => (
+                  <div
+                    key={label}
+                    title={`${label}h: ${count} posts`}
+                    className="flex-1 rounded-sm bg-violet-300"
+                    style={{ height: `${Math.round((count / maxHour) * 20)}px`, minHeight: count ? 2 : 0 }}
+                  />
+                ))}
+              </div>
+              <div className="mt-0.5 flex justify-between text-[9px] text-[var(--color-text-secondary)]">
+                <span>0h</span><span>12h</span><span>23h</span>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/* Top hashtags */}
+      {topHashtags.length ? (
+        <div>
+          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">
+            Top hashtags
+          </p>
+          <div className="flex flex-wrap gap-1">
+            {topHashtags.map((h) => (
+              <span
+                key={h}
+                className="rounded-full bg-violet-50 px-2 py-0.5 text-[11px] text-violet-700"
+              >
+                #{h}
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {/* Best performing posts */}
+      {best.length ? (
+        <div>
+          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">
+            Posts destacados
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            {best.slice(0, 4).map((p) => {
+              const stored = posts.find((sp) => sp.post_id === p.post_id);
+              return (
+                <a
+                  key={p.post_id}
+                  href={stored?.post_url ?? `https://www.instagram.com/p/${p.post_id}/`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group flex flex-col gap-1 overflow-hidden rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] bg-[var(--color-neutral-50)] p-2 transition hover:border-violet-300"
+                >
+                  {stored?.display_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={stored.display_url}
+                      alt=""
+                      className="aspect-square w-full rounded-sm object-cover"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="aspect-square w-full rounded-sm bg-[var(--color-neutral-200)]" />
+                  )}
+                  <div className="flex gap-2 text-[10px] text-[var(--color-text-secondary)]">
+                    <span>❤️ {p.likes.toLocaleString()}</span>
+                    <span>💬 {p.comments}</span>
+                  </div>
+                </a>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

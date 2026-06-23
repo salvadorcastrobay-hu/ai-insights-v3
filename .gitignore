@@ -48,3 +48,4 @@ venv/
 !.claude/CLAUDE.md
 !.claude/skills/
 !.claude/skills/**
+.vercel
