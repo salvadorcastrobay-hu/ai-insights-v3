@@ -94,6 +94,12 @@ type PerAd = {
 // El ángulo guardado: sin ad_indices (interno) + la fecha del más antiguo.
 type AngleOut = Omit<z.infer<typeof AngleSchema>, "ad_indices"> & { oldest_start: string | null };
 
+export type SynthesisTranslation = {
+  summary: string;
+  angles: { label: string; description: string; example_copies: string[] }[];
+  offer_types: string[];
+};
+
 export type AdSynthesis = {
   summary: string;
   angles: AngleOut[];
@@ -104,6 +110,8 @@ export type AdSynthesis = {
   by_content_type: Tally[];
   by_module: Tally[];
   by_persona: Tally[];
+  /** Traducciones de los campos textuales (summary, angle labels/descriptions/copies). */
+  i18n?: Record<string, SynthesisTranslation>;
 };
 
 function tally(items: string[]): Tally[] {
@@ -516,6 +524,46 @@ async function synthesize(
   return object;
 }
 
+const TranslationSchema = z.object({
+  summary: z.string(),
+  angles: z.array(z.object({
+    label: z.string(),
+    description: z.string(),
+    example_copies: z.array(z.string()),
+  })),
+  offer_types: z.array(z.string()),
+});
+
+const TRANSLATE_INSTRUCTION: Record<string, string> = {
+  "pt-BR": "Translate the following competitive analysis into Brazilian Portuguese (pt-BR). Keep brand names, pain labels, and product module names as-is.",
+  "en-US": "Translate the following competitive analysis into English (en-US). Keep brand names, pain labels, and product module names as-is.",
+  "es-AR": "Translate the following competitive analysis into Rioplatense Spanish (es-AR). Keep brand names, pain labels, and product module names as-is.",
+};
+
+async function translateSynthesis(
+  synth: z.infer<typeof SynthesisSchema>,
+  targetLocale: string,
+): Promise<SynthesisTranslation | null> {
+  const instruction = TRANSLATE_INSTRUCTION[targetLocale];
+  if (!instruction) return null;
+  try {
+    const input = JSON.stringify({
+      summary: synth.summary,
+      angles: synth.angles.map((a) => ({ label: a.label, description: a.description, example_copies: a.example_copies })),
+      offer_types: synth.offer_types,
+    });
+    const { object } = await generateObject({
+      model: openai("gpt-4o-mini"),
+      schema: TranslationSchema,
+      system: instruction,
+      prompt: input,
+    });
+    return object;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Analiza los avisos de un competidor reusando el cache por aviso:
  *  - solo procesa (transcripción/OCR + clasificación) los avisos NUEVOS,
@@ -579,8 +627,10 @@ export async function analyzeCompetitor(
   let summary: string;
   let offer_types: string[];
   let angles: AngleOut[];
+  let i18n: AdSynthesis["i18n"] | undefined;
   if (changed) {
-    const synth = await synthesize(competitor, campaigns, painVocab, (c) => c.analysis?.creative_text ?? null, opts.language);
+    const primaryLang = opts.language ?? "es-AR";
+    const synth = await synthesize(competitor, campaigns, painVocab, (c) => c.analysis?.creative_text ?? null, primaryLang);
     summary = synth.summary;
     offer_types = synth.offer_types;
     // Fecha del aviso más antiguo de cada ángulo (a partir de sus ad_indices).
@@ -592,10 +642,23 @@ export async function analyzeCompetitor(
       const oldest_start = dates.length ? dates.reduce((m, d) => (d < m ? d : m)) : null;
       return { ...rest, oldest_start };
     });
+    // Traducir a los otros dos idiomas en paralelo.
+    const otherLocales = (["es-AR", "pt-BR", "en-US"] as const).filter((l) => l !== primaryLang);
+    const translations = await Promise.all(otherLocales.map((l) => translateSynthesis(synth, l)));
+    i18n = Object.fromEntries(
+      otherLocales.map((l, idx) => [l, translations[idx]]).filter(([, v]) => v !== null),
+    ) as AdSynthesis["i18n"];
+    // Guardar también el idioma principal en i18n para que el frontend pueda
+    // picar sin necesidad de conocer el idioma original.
+    i18n = {
+      ...i18n,
+      [primaryLang]: { summary, angles: angles.map((a) => ({ label: a.label, description: a.description, example_copies: a.example_copies })), offer_types },
+    };
   } else {
     summary = stored.summary;
     offer_types = stored.offer_types;
     angles = stored.angles;
+    i18n = stored.i18n;
   }
 
   return {
@@ -608,5 +671,6 @@ export async function analyzeCompetitor(
     by_content_type: tally(per_ad.map((p) => p.content_type)),
     by_module: tally(per_ad.flatMap((p) => p.modules)),
     by_persona: tally(per_ad.map((p) => p.persona).filter((p): p is string => Boolean(p))),
+    i18n,
   };
 }
