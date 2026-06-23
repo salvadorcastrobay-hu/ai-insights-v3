@@ -53,7 +53,7 @@ export async function POST(): Promise<Response> {
   }
 
   const results: Result[] = [];
-  await pooled(MONITORED_COMPETITORS, 3, async (c) => {
+  await pooled(MONITORED_COMPETITORS.filter((c) => !c.ownBrand), 3, async (c) => {
     const r: Result = { competitor: c.name, source: c.source, fetched: 0, upserted: 0, deactivated: 0, analyzed: false };
     try {
       // Por ahora solo meta_ads tiene conector.

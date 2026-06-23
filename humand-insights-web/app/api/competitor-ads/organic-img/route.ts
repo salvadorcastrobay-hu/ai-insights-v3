@@ -24,7 +24,7 @@ export async function GET(request: Request): Promise<Response> {
     return new Response("bad url", { status: 400 });
   }
 
-  if (!isAllowedHost(target.hostname)) {
+  if (target.protocol !== "https:" || !isAllowedHost(target.hostname)) {
     return new Response("host not allowed", { status: 403 });
   }
 

@@ -1,6 +1,13 @@
 import { MONITORED_COMPETITORS } from "@/lib/competitor-ads/config";
-import { fetchInstagramPosts, type RawInstagramPost } from "@/lib/competitor-ads/apify";
-import { upsertPosts, saveOrganicInsight, type OrganicPost } from "@/lib/competitor-ads/organic-store";
+import { fetchInstagramFeed, type RawInstagramPost } from "@/lib/competitor-ads/apify";
+import { archiveOrganicPostMedia } from "@/lib/competitor-ads/organic-media-archive";
+import {
+  insertMetricSnapshots,
+  upsertOrganicProfile,
+  upsertPosts,
+  saveOrganicInsight,
+  type OrganicPost,
+} from "@/lib/competitor-ads/organic-store";
 import { analyzeOrganic } from "@/lib/competitor-ads/organic-analyze";
 import { isAdmin, type AppRole } from "@/lib/auth/roles";
 import { getAuthenticatedSession, getServerUserRoles } from "@/lib/supabase/server";
@@ -19,8 +26,25 @@ function normalizeFormat(type: string | undefined | null): string | null {
   return t;
 }
 
+function collectMedia(raw: RawInstagramPost): { images: string[]; videos: string[] } {
+  const images: string[] = [];
+  const videos: string[] = [];
+  const add = (list: string[], value: string | null | undefined) => {
+    if (value && !list.includes(value)) list.push(value);
+  };
+  add(images, raw.displayUrl);
+  add(videos, raw.videoUrl);
+  for (const image of raw.images ?? []) add(images, image);
+  for (const child of raw.childPosts ?? []) {
+    add(images, child.displayUrl);
+    add(videos, child.videoUrl);
+  }
+  return { images, videos };
+}
+
 function mapPost(raw: RawInstagramPost, competitor: string): OrganicPost {
   const caption = raw.caption ?? null;
+  const media = collectMedia(raw);
   return {
     competitor,
     post_id: raw.shortCode ?? raw.id,
@@ -37,7 +61,8 @@ function mapPost(raw: RawInstagramPost, competitor: string): OrganicPost {
     video_views: raw.videoViewCount ?? null,
     is_pinned: Boolean(raw.isPinned),
     is_paid_partnership: Boolean(raw.isPaidPartnership),
-    display_url: raw.displayUrl ?? null,
+    display_url: media.images[0] ?? raw.displayUrl ?? null,
+    media,
     recent_comments: (raw.latestComments ?? [])
       .slice(0, 5)
       .map((c) => ({ text: c.text, timestamp: c.timestamp })),
@@ -55,7 +80,7 @@ type Result = {
   analyzeError?: string;
 };
 
-export async function POST(): Promise<Response> {
+export async function POST(request: Request): Promise<Response> {
   const session = await getAuthenticatedSession();
   if (!session) return new Response("Unauthorized", { status: 401 });
 
@@ -76,15 +101,38 @@ export async function POST(): Promise<Response> {
 
   const targets = MONITORED_COMPETITORS.filter((c) => c.instagramHandle);
   const results: Result[] = [];
+  const params = new URL(request.url).searchParams;
+  const maxItems = Math.min(100, Math.max(10, Number(params.get("maxItems") ?? "50")));
 
   for (const c of targets) {
     const handle = c.instagramHandle!;
     const r: Result = { competitor: c.name, handle, fetched: 0, upserted: 0, analyzed: false };
+    let profileFollowers: number | null = null;
     try {
-      const raw = await fetchInstagramPosts(handle, { maxItems: 50 });
-      r.fetched = raw.length;
-      const posts = raw.map((p) => mapPost(p, c.name));
+      const feed = await fetchInstagramFeed(handle, { maxItems });
+      r.fetched = feed.posts.length;
+      profileFollowers = feed.profile.followers_count;
+      await upsertOrganicProfile({
+        competitor: c.name,
+        handle: feed.profile.handle,
+        is_own_brand: Boolean(c.ownBrand),
+        profile_url: feed.profile.profile_url,
+        full_name: feed.profile.full_name,
+        biography: feed.profile.biography,
+        website: feed.profile.website,
+        followers_count: feed.profile.followers_count,
+        following_count: feed.profile.following_count,
+        posts_count: feed.profile.posts_count,
+        avatar_url: feed.profile.avatar_url,
+        raw: feed.profile.raw,
+      });
+      const posts = await Promise.all(
+        feed.posts.map((p) => archiveOrganicPostMedia(mapPost(p, c.name)).catch(() => mapPost(p, c.name))),
+      );
       r.upserted = await upsertPosts(posts);
+      await insertMetricSnapshots(posts, profileFollowers).catch((e) =>
+        console.warn(`[organic-refresh] snapshots ${c.name} fallaron:`, e),
+      );
     } catch (err) {
       r.error = err instanceof Error ? err.message : String(err);
       results.push(r);

@@ -24,7 +24,7 @@ export async function GET(request: Request): Promise<Response> {
   const force = new URL(request.url).searchParams.get("force") === "1";
 
   const results: Array<{ competitor: string; ok: boolean; analyzed?: number; error?: string }> = [];
-  for (const c of MONITORED_COMPETITORS) {
+  for (const c of MONITORED_COMPETITORS.filter((item) => !item.ownBrand)) {
     try {
       const synthesis = await analyzeCompetitor(c.name, c.source, { force });
       if (synthesis) {

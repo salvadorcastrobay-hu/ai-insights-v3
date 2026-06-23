@@ -26,7 +26,39 @@ export type RawInstagramPost = {
   hashtags: string[];
   mentions: string[];
   displayUrl: string | null;
+  videoUrl?: string | null;
+  images?: string[] | null;
+  childPosts?: Array<{ displayUrl?: string | null; videoUrl?: string | null; type?: string | null }> | null;
   latestComments: Array<{ text: string; timestamp: string }> | null;
+  ownerUsername?: string | null;
+  ownerFullName?: string | null;
+  ownerBiography?: string | null;
+  ownerExternalUrl?: string | null;
+  ownerFollowersCount?: number | null;
+  ownerFollowsCount?: number | null;
+  ownerPostsCount?: number | null;
+  ownerProfilePicUrl?: string | null;
+  username?: string | null;
+  fullName?: string | null;
+  biography?: string | null;
+  externalUrl?: string | null;
+  followersCount?: number | null;
+  followsCount?: number | null;
+  postsCount?: number | null;
+  profilePicUrl?: string | null;
+};
+
+export type RawInstagramProfile = {
+  handle: string;
+  profile_url: string | null;
+  full_name: string | null;
+  biography: string | null;
+  website: string | null;
+  followers_count: number | null;
+  following_count: number | null;
+  posts_count: number | null;
+  avatar_url: string | null;
+  raw: unknown;
 };
 
 function apiKey(): string {
@@ -56,7 +88,7 @@ async function startRun(handle: string, maxItems: number): Promise<string> {
       directUrls: [`https://www.instagram.com/${handle}/`],
       resultsType: "posts",
       resultsLimit: maxItems,
-      addParentData: false,
+      addParentData: true,
     }),
   });
   if (!res.ok) {
@@ -107,8 +139,42 @@ export async function fetchInstagramPosts(
   handle: string,
   opts: { maxItems?: number } = {},
 ): Promise<RawInstagramPost[]> {
+  const feed = await fetchInstagramFeed(handle, opts);
+  return feed.posts;
+}
+
+function num(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function str(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function profileFromFirstPost(handle: string, posts: RawInstagramPost[]): RawInstagramProfile {
+  const first = posts[0] as Record<string, unknown> | undefined;
+  const fallbackUrl = `https://www.instagram.com/${handle}/`;
+  return {
+    handle: str(first?.ownerUsername) ?? str(first?.username) ?? handle,
+    profile_url: fallbackUrl,
+    full_name: str(first?.ownerFullName) ?? str(first?.fullName),
+    biography: str(first?.ownerBiography) ?? str(first?.biography),
+    website: str(first?.ownerExternalUrl) ?? str(first?.externalUrl),
+    followers_count: num(first?.ownerFollowersCount) ?? num(first?.followersCount),
+    following_count: num(first?.ownerFollowsCount) ?? num(first?.followsCount),
+    posts_count: num(first?.ownerPostsCount) ?? num(first?.postsCount),
+    avatar_url: str(first?.ownerProfilePicUrl) ?? str(first?.profilePicUrl),
+    raw: first ?? null,
+  };
+}
+
+export async function fetchInstagramFeed(
+  handle: string,
+  opts: { maxItems?: number } = {},
+): Promise<{ profile: RawInstagramProfile; posts: RawInstagramPost[] }> {
   const maxItems = opts.maxItems ?? 50;
   const runId = await startRun(handle, maxItems);
   const datasetId = await pollRun(runId);
-  return fetchDataset(datasetId);
+  const posts = await fetchDataset(datasetId);
+  return { profile: profileFromFirstPost(handle, posts), posts };
 }

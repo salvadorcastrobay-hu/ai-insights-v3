@@ -8,7 +8,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { ChartCard } from "@/components/charts/ChartCard";
 import { PageTitle } from "@/components/pages/common";
 import type { AdInsight, StoredAd } from "@/lib/competitor-ads/store";
-import type { StoredPost, OrganicInsight, OrganicSynthesis } from "@/lib/competitor-ads/organic-store";
+import type { StoredPost, OrganicInsight, OrganicSynthesis, OrganicProfile } from "@/lib/competitor-ads/organic-store";
 import { cn } from "@/lib/utils";
 import { useTaxonomyLabel } from "@/lib/taxonomy-labels";
 
@@ -58,6 +58,7 @@ type Props = {
   readError?: string | null;
   organicPosts?: StoredPost[];
   organicInsights?: OrganicInsight[];
+  organicProfiles?: OrganicProfile[];
 };
 
 function fmtDate(iso: string | null): string {
@@ -193,11 +194,13 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, readError, organicPosts = [], organicInsights = [] }: Props) {
+export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, readError, organicPosts = [], organicInsights = [], organicProfiles = [] }: Props) {
   const router = useRouter();
   const t = useTranslations("competitorAds");
   const [loading, setLoading] = useState(false);
+  const [organicLoading, setOrganicLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [organicMsg, setOrganicMsg] = useState<string | null>(null);
   const [view, setView] = useState<"inteligencia" | "organico" | "creativos">("inteligencia");
   const [selectedCompetitor, setSelectedCompetitor] = useState<string | null>(null);
   const [filter, setFilter] = useState<AdFilter | null>(null);
@@ -335,6 +338,38 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, read
     }
   }
 
+  async function refreshOrganic() {
+    setOrganicLoading(true);
+    setOrganicMsg(null);
+    try {
+      const res = await fetch("/api/competitor-ads/organic-refresh", { method: "POST" });
+      const json = (await res.json()) as {
+        totalUpserted?: number;
+        error?: string;
+        results?: Array<{ competitor: string; fetched?: number; error?: string; analyzeError?: string; analyzed?: boolean }>;
+      };
+      if (!res.ok) {
+        setOrganicMsg(json.error ?? `Error ${res.status}`);
+      } else {
+        const results = json.results ?? [];
+        const fetchErr = results.find((r) => r.error)?.error;
+        const analyzeErr = results.find((r) => r.analyzeError)?.analyzeError;
+        const analyzedOk = results.filter((r) => r.analyzed).length;
+        const fetched = results.reduce((acc, item) => acc + (item.fetched ?? 0), 0);
+        const parts = [`Orgánico actualizado: ${json.totalUpserted ?? 0} posts (${fetched} leídos)`];
+        if (fetchErr) parts.push(`fetch falló: ${fetchErr}`);
+        if (analyzeErr) parts.push(`análisis falló: ${analyzeErr}`);
+        else parts.push(`análisis OK (${analyzedOk})`);
+        setOrganicMsg(parts.join(" · "));
+        router.refresh();
+      }
+    } catch (e) {
+      setOrganicMsg(e instanceof Error ? e.message : "Error al actualizar orgánico");
+    } finally {
+      setOrganicLoading(false);
+    }
+  }
+
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -342,20 +377,36 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, read
         <PageTitle title={t("title")} subtitle={t("subtitle")} />
         <div className="flex flex-col items-end gap-1">
           {canRefresh ? (
-            <button
-              type="button"
-              onClick={refresh}
-              disabled={loading}
-              className={cn(
-                "inline-flex items-center gap-1.5 rounded-[var(--radius-s)] px-3.5 py-2 text-[13px] font-semibold transition",
-                loading
-                  ? "cursor-not-allowed bg-[var(--color-neutral-100)] text-[var(--color-text-secondary)]"
-                  : "bg-[var(--color-brand-500)] text-white hover:opacity-90",
-              )}
-            >
-              {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-              {loading ? t("refreshing") : t("refresh")}
-            </button>
+            <div className="flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={refresh}
+                disabled={loading}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-[var(--radius-s)] px-3.5 py-2 text-[13px] font-semibold transition",
+                  loading
+                    ? "cursor-not-allowed bg-[var(--color-neutral-100)] text-[var(--color-text-secondary)]"
+                    : "bg-[var(--color-brand-500)] text-white hover:opacity-90",
+                )}
+              >
+                {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                {loading ? t("refreshing") : t("refresh")}
+              </button>
+              <button
+                type="button"
+                onClick={refreshOrganic}
+                disabled={organicLoading}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] px-3.5 py-2 text-[13px] font-semibold transition",
+                  organicLoading
+                    ? "cursor-not-allowed bg-[var(--color-neutral-100)] text-[var(--color-text-secondary)]"
+                    : "bg-white text-[var(--color-text-default)] hover:bg-[var(--color-neutral-100)]",
+                )}
+              >
+                {organicLoading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                {organicLoading ? "Refrescando orgánico" : "Refrescar orgánico"}
+              </button>
+            </div>
           ) : null}
           <span className="text-[11px] text-[var(--color-text-secondary)]">
             Último refresh: {fmtDateTime(refreshedAt)}
@@ -371,6 +422,11 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, read
       {msg ? (
         <div className="rounded-[var(--radius-s)] border border-[var(--color-brand-200)] bg-[var(--color-brand-50)] px-3 py-2 text-[12px] text-[var(--color-brand-500)]">
           {msg}
+        </div>
+      ) : null}
+      {organicMsg ? (
+        <div className="rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] bg-white px-3 py-2 text-[12px] text-[var(--color-text-default)]">
+          {organicMsg}
         </div>
       ) : null}
 
@@ -444,6 +500,7 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, read
             <OrganicView
               posts={organicPosts}
               insights={organicInsights}
+              profiles={organicProfiles}
               selectedCompetitor={selectedCompetitor}
             />
           ) : (
@@ -937,6 +994,51 @@ function AdCard({ c, cls, competitor }: { c: Campaign; cls: PerAd | null; compet
 
 const DAY_ORDER = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 
+type OrganicFilter = { kind: "format" | "pain" | "persona" | "module"; value: string };
+
+function organicEngagement(post: StoredPost): number {
+  return (post.likes_count ?? 0) + (post.comments_count ?? 0);
+}
+
+function postMatchesOrganicFilter(post: StoredPost, filter: OrganicFilter | null): boolean {
+  if (!filter) return true;
+  if (filter.kind === "format") return post.format === filter.value;
+  if (filter.kind === "pain") return (post.analysis?.related_pains ?? []).includes(filter.value);
+  if (filter.kind === "persona") return post.analysis?.persona === filter.value;
+  if (filter.kind === "module") return (post.analysis?.modules ?? []).includes(filter.value);
+  return true;
+}
+
+function topTallyValues(posts: StoredPost[], kind: OrganicFilter["kind"]): string[] {
+  const values =
+    kind === "format"
+      ? posts.map((p) => p.format).filter((v): v is string => Boolean(v))
+      : kind === "pain"
+        ? posts.flatMap((p) => p.analysis?.related_pains ?? [])
+        : kind === "persona"
+          ? posts.map((p) => p.analysis?.persona).filter((v): v is string => Boolean(v))
+          : posts.flatMap((p) => p.analysis?.modules ?? []);
+  const counts = new Map<string, number>();
+  for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
+  return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([value]) => value);
+}
+
+function profileFor(profiles: OrganicProfile[], competitor: string): OrganicProfile | null {
+  return profiles.find((p) => p.competitor === competitor) ?? null;
+}
+
+function avgEngagementRate(posts: StoredPost[], profile: OrganicProfile | null): number | null {
+  const followers = profile?.followers_count;
+  if (!followers || followers <= 0 || !posts.length) return null;
+  const avgEng = posts.reduce((sum, post) => sum + organicEngagement(post), 0) / posts.length;
+  return avgEng / followers;
+}
+
+function pct(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return "—";
+  return `${(value * 100).toFixed(value < 0.01 ? 2 : 1)}%`;
+}
+
 function organicImgSrc(url: string | null): string | null {
   if (!url) return null;
   try {
@@ -965,10 +1067,12 @@ function pillarContentType(pillar: string): string | null {
 function OrganicView({
   posts,
   insights,
+  profiles,
   selectedCompetitor,
 }: {
   posts: StoredPost[];
   insights: OrganicInsight[];
+  profiles: OrganicProfile[];
   selectedCompetitor: string | null;
 }) {
   const locale = useLocale();
@@ -990,32 +1094,94 @@ function OrganicView({
   }
 
   return (
-    <div
-      className={cn(
-        "grid gap-4",
-        competitors.length === 1 && "grid-cols-1",
-        competitors.length === 2 && "grid-cols-2",
-        competitors.length >= 3 && "md:grid-cols-3",
-      )}
-    >
-      {competitors.map((name) => {
-        const compPosts = posts.filter((p) => p.competitor === name);
-        const insight = insights.find((i) => i.competitor === name);
-        const synth: OrganicSynthesis | undefined = insight?.payload;
-        const tr = synth?.i18n?.[i18nKey];
-        const summary = tr?.summary ?? synth?.summary ?? null;
-        const pillars = tr?.content_pillars ?? synth?.content_pillars ?? [];
-        return (
-          <OrganicColumn
-            key={name}
-            name={name}
-            posts={compPosts}
-            synth={synth}
-            summary={summary}
-            pillars={pillars}
-          />
-        );
-      })}
+    <div className="space-y-4">
+      <OrganicBenchmark posts={posts} profiles={profiles} competitors={competitors} />
+      <div
+        className={cn(
+          "grid gap-4",
+          competitors.length === 1 && "grid-cols-1",
+          competitors.length === 2 && "grid-cols-2",
+          competitors.length >= 3 && "md:grid-cols-3",
+        )}
+      >
+        {competitors.map((name) => {
+          const compPosts = posts.filter((p) => p.competitor === name);
+          const insight = insights.find((i) => i.competitor === name);
+          const synth: OrganicSynthesis | undefined = insight?.payload;
+          const tr = synth?.i18n?.[i18nKey];
+          const summary = tr?.summary ?? synth?.summary ?? null;
+          const pillars = tr?.content_pillars ?? synth?.content_pillars ?? [];
+          return (
+            <OrganicColumn
+              key={name}
+              name={name}
+              posts={compPosts}
+              profile={profileFor(profiles, name)}
+              synth={synth}
+              summary={summary}
+              pillars={pillars}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function OrganicBenchmark({
+  posts,
+  profiles,
+  competitors,
+}: {
+  posts: StoredPost[];
+  profiles: OrganicProfile[];
+  competitors: string[];
+}) {
+  const own = profiles.find((p) => p.is_own_brand);
+  const visible = competitors.map((name) => {
+    const compPosts = posts.filter((p) => p.competitor === name);
+    const profile = profileFor(profiles, name);
+    return {
+      name,
+      own: Boolean(profile?.is_own_brand),
+      posts: compPosts.length,
+      followers: profile?.followers_count ?? null,
+      avgEr: avgEngagementRate(compPosts, profile),
+      topFormat: topTallyValues(compPosts, "format")[0] ?? "—",
+      topPain: topTallyValues(compPosts, "pain")[0] ?? "—",
+    };
+  });
+  if (!visible.length) return null;
+  return (
+    <div className="rounded-[var(--radius-m)] border border-[var(--color-neutral-200)] bg-[var(--color-bg-card)] p-4 shadow-[var(--shadow-4dp)]">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="text-[13px] font-semibold text-[var(--color-text-default)]">Baseline orgánico</p>
+          <p className="text-[11px] text-[var(--color-text-secondary)]">
+            {own ? `Humand se usa como marca propia (@${own.handle})` : "Sin baseline Humand cargado todavía"}
+          </p>
+        </div>
+        <span className="rounded-full bg-[var(--color-neutral-100)] px-2 py-0.5 text-[11px] text-[var(--color-text-secondary)]">
+          Solo visible para admin
+        </span>
+      </div>
+      <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+        {visible.map((row) => (
+          <div key={row.name} className="rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] p-3">
+            <div className="mb-1 flex items-center justify-between gap-2">
+              <span className="text-[13px] font-semibold text-[var(--color-text-default)]">{row.name}</span>
+              {row.own ? <span className="rounded-full bg-[var(--color-brand-50)] px-1.5 py-0.5 text-[10px] text-[var(--color-brand-500)]">own</span> : null}
+            </div>
+            <div className="grid grid-cols-2 gap-1 text-[11px] text-[var(--color-text-secondary)]">
+              <span>Posts</span><span className="text-right text-[var(--color-text-default)]">{row.posts}</span>
+              <span>Followers</span><span className="text-right text-[var(--color-text-default)]">{row.followers?.toLocaleString() ?? "—"}</span>
+              <span>ER prom.</span><span className="text-right text-[var(--color-text-default)]">{pct(row.avgEr)}</span>
+              <span>Formato</span><span className="truncate text-right text-[var(--color-text-default)]">{row.topFormat}</span>
+              <span>Pain top</span><span className="truncate text-right text-[var(--color-text-default)]">{row.topPain}</span>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -1052,12 +1218,14 @@ function OrganicPostThumb({ post }: { post: StoredPost }) {
 function OrganicColumn({
   name,
   posts,
+  profile,
   synth,
   summary,
   pillars,
 }: {
   name: string;
   posts: StoredPost[];
+  profile: OrganicProfile | null;
   synth: OrganicSynthesis | undefined;
   summary: string | null;
   pillars: string[];
@@ -1066,13 +1234,19 @@ function OrganicColumn({
   const [dayTooltip, setDayTooltip] = useState<string | null>(null);
   const [hourTooltip, setHourTooltip] = useState<string | null>(null);
   const [showAllPosts, setShowAllPosts] = useState(false);
+  const [organicFilter, setOrganicFilter] = useState<OrganicFilter | null>(null);
 
   const freq = synth?.posting_frequency;
   const fmtDist = synth?.format_distribution ?? {};
   const topHashtags = synth?.hashtag_strategy?.top_hashtags ?? [];
   const best = synth?.best_performing ?? [];
+  const bestEr = synth?.best_by_engagement_rate ?? [];
+  const momentum = synth?.top_momentum_posts ?? [];
+  const overlap = synth?.overlap_with_ads;
   const byDay = synth?.posting_patterns?.by_day ?? {};
   const byHour = synth?.posting_patterns?.by_hour ?? {};
+  const gaps = synth?.gaps_vs_humand ?? [];
+  const recommendations = synth?.recommendations ?? [];
 
   const totalFmt = Object.values(fmtDist).reduce((a, b) => a + b, 0);
   const dayData = DAY_ORDER.map((d) => ({ label: d, count: byDay[d] ?? 0 }));
@@ -1101,9 +1275,18 @@ function OrganicColumn({
   };
 
   const sortedPosts = useMemo(
-    () => [...posts].sort((a, b) => (b.likes_count ?? 0) + (b.comments_count ?? 0) - ((a.likes_count ?? 0) + (a.comments_count ?? 0))),
-    [posts],
+    () =>
+      [...posts]
+        .filter((post) => postMatchesOrganicFilter(post, organicFilter))
+        .sort((a, b) => organicEngagement(b) - organicEngagement(a)),
+    [posts, organicFilter],
   );
+  const filterChips: Array<{ kind: OrganicFilter["kind"]; label: string; values: string[] }> = [
+    { kind: "format", label: "Formato", values: topTallyValues(posts, "format") },
+    { kind: "pain", label: "Pain", values: topTallyValues(posts, "pain") },
+    { kind: "persona", label: "Persona", values: topTallyValues(posts, "persona") },
+    { kind: "module", label: "Módulo", values: topTallyValues(posts, "module") },
+  ].filter((group): group is { kind: OrganicFilter["kind"]; label: string; values: string[] } => group.values.length > 0);
 
   return (
     <div className="flex flex-col gap-4 rounded-[var(--radius-m)] border border-[var(--color-neutral-200)] bg-[var(--color-bg-card)] p-4 shadow-[var(--shadow-4dp)]">
@@ -1111,6 +1294,11 @@ function OrganicColumn({
       <div className="flex items-center justify-between gap-2">
         <h3 className="text-[16px] font-semibold text-[var(--color-text-default)]">{name}</h3>
         <div className="flex items-center gap-1.5">
+          {profile?.followers_count ? (
+            <span className="rounded-full bg-[var(--color-neutral-100)] px-2 py-0.5 text-[11px] text-[var(--color-text-secondary)]">
+              {profile.followers_count.toLocaleString()} followers
+            </span>
+          ) : null}
           {freq ? (
             <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-medium text-violet-700">
               {freq.posts_per_week}× / sem
@@ -1123,6 +1311,49 @@ function OrganicColumn({
       {/* Summary */}
       {summary ? (
         <p className="text-[12px] leading-snug text-[var(--color-text-secondary)]">{summary}</p>
+      ) : null}
+
+      {recommendations.length ? (
+        <div className="rounded-[var(--radius-s)] border border-[var(--color-brand-200)] bg-[var(--color-brand-50)] p-3">
+          <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-brand-500)]">
+            Qué podría responder Humand
+          </p>
+          <ul className="space-y-1 text-[12px] text-[var(--color-text-default)]">
+            {recommendations.slice(0, 3).map((item, idx) => <li key={idx}>• {item}</li>)}
+          </ul>
+        </div>
+      ) : null}
+
+      {filterChips.length ? (
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">Filtros</p>
+            {organicFilter ? (
+              <button
+                type="button"
+                onClick={() => setOrganicFilter(null)}
+                className="text-[11px] text-[var(--color-text-secondary)] underline hover:text-[var(--color-brand-500)]"
+              >
+                limpiar
+              </button>
+            ) : null}
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {filterChips.flatMap((group) =>
+              group.values.slice(0, group.kind === "format" ? 4 : 5).map((value) => (
+                <Chip
+                  key={`${group.kind}:${value}`}
+                  active={organicFilter?.kind === group.kind && organicFilter.value === value}
+                  onClick={() => setOrganicFilter((current) =>
+                    current?.kind === group.kind && current.value === value ? null : { kind: group.kind, value },
+                  )}
+                >
+                  {group.label}: {value}
+                </Chip>
+              )),
+            )}
+          </div>
+        </div>
       ) : null}
 
       {/* Content pillars — clickable */}
@@ -1176,6 +1407,29 @@ function OrganicColumn({
                 </div>
               ))}
           </div>
+        </div>
+      ) : null}
+
+      {(gaps.length || overlap?.pains_in_both?.length || overlap?.organic_only_pains?.length) ? (
+        <div className="rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] p-3">
+          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">
+            Orgánico × Ads / gaps
+          </p>
+          {overlap?.pains_in_both?.length ? (
+            <p className="text-[11px] text-[var(--color-text-default)]">
+              En ambos canales: {overlap.pains_in_both.slice(0, 4).join(", ")}
+            </p>
+          ) : null}
+          {overlap?.organic_only_pains?.length ? (
+            <p className="mt-1 text-[11px] text-[var(--color-text-secondary)]">
+              Solo orgánico: {overlap.organic_only_pains.slice(0, 4).join(", ")}
+            </p>
+          ) : null}
+          {gaps.length ? (
+            <ul className="mt-2 space-y-1 text-[11px] text-[var(--color-text-secondary)]">
+              {gaps.slice(0, 3).map((gap, idx) => <li key={idx}>• {gap}</li>)}
+            </ul>
+          ) : null}
         </div>
       ) : null}
 
@@ -1268,6 +1522,39 @@ function OrganicColumn({
         </div>
       ) : null}
 
+      {bestEr.length ? (
+        <div>
+          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">
+            Top engagement rate
+          </p>
+          <div className="space-y-1">
+            {bestEr.slice(0, 3).map((item) => (
+              <p key={item.post_id} className="text-[11px] text-[var(--color-text-secondary)]">
+                <span className="font-semibold text-[var(--color-text-default)]">{pct(item.engagement_rate)}</span>
+                {" · "}
+                {item.caption_snippet || item.post_id}
+              </p>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {momentum.length ? (
+        <div>
+          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">
+            Momentum
+          </p>
+          <div className="space-y-1">
+            {momentum.slice(0, 3).map((item) => (
+              <p key={item.post_id} className="text-[11px] text-[var(--color-text-secondary)]">
+                +{item.likes_growth} likes · +{item.comments_growth} comments · +{item.views_growth} views
+                {item.caption_snippet ? ` — ${item.caption_snippet}` : ""}
+              </p>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       {/* All posts grid */}
       {posts.length ? (
         <div>
@@ -1282,6 +1569,11 @@ function OrganicColumn({
           {showAllPosts ? (
             <div className="mt-2 grid grid-cols-3 gap-1.5">
               {sortedPosts.map((sp) => <OrganicPostThumb key={sp.post_id} post={sp} />)}
+              {!sortedPosts.length ? (
+                <p className="col-span-3 text-[11px] italic text-[var(--color-text-secondary)]">
+                  Sin posts para el filtro actual.
+                </p>
+              ) : null}
             </div>
           ) : null}
         </div>
