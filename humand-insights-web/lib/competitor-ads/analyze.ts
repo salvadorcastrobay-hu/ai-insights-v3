@@ -481,19 +481,28 @@ async function classifyAds(
 }
 
 /** Síntesis agregada (ángulos / resumen / ofertas) sobre TODAS las campañas. */
+const LANGUAGE_INSTRUCTION: Record<string, string> = {
+  "es-AR": "Respondé en español rioplatense.",
+  "es-LATAM": "Respondé en español latinoamericano.",
+  "pt-BR": "Responda em português do Brasil.",
+  "en-US": "Respond in English.",
+};
+
 async function synthesize(
   competitor: string,
   campaigns: StoredAd[],
   painVocab: string[],
   creativeOf: (c: StoredAd) => string | null,
+  language = "es-AR",
 ): Promise<z.infer<typeof SynthesisSchema>> {
+  const langInstruction = LANGUAGE_INSTRUCTION[language] ?? LANGUAGE_INSTRUCTION["es-AR"];
   const system = [
     "Sos un analista de inteligencia competitiva B2B (software de RRHH).",
     "Agrupá los avisos en 4-6 ÁNGULOS de mensaje (no listes anuncio por anuncio).",
     "Para cada ángulo: estimá su peso (cuántas campañas lo usan), listá en ad_indices los # de los avisos",
     "que lo usan, y mapeá a qué dolores apunta USANDO EXCLUSIVAMENTE la lista de pains provista (vacío si ninguno).",
     CREATIVE_NOTE,
-    "Las citas de ejemplo deben ser textuales. No inventes nada. Respondé en español rioplatense.",
+    `Las citas de ejemplo deben ser textuales. No inventes nada. ${langInstruction}`,
   ].join(" ");
   const prompt = [
     `COMPETIDOR: ${competitor}`,
@@ -515,7 +524,7 @@ async function synthesize(
 export async function analyzeCompetitor(
   competitor: string,
   source: AdSource,
-  opts: { force?: boolean } = {},
+  opts: { force?: boolean; language?: string } = {},
 ): Promise<AdSynthesis | null> {
   const all = await loadAdsForCompetitor(competitor, source);
   if (!all.length) return null;
@@ -571,7 +580,7 @@ export async function analyzeCompetitor(
   let offer_types: string[];
   let angles: AngleOut[];
   if (changed) {
-    const synth = await synthesize(competitor, campaigns, painVocab, (c) => c.analysis?.creative_text ?? null);
+    const synth = await synthesize(competitor, campaigns, painVocab, (c) => c.analysis?.creative_text ?? null, opts.language);
     summary = synth.summary;
     offer_types = synth.offer_types;
     // Fecha del aviso más antiguo de cada ángulo (a partir de sus ad_indices).

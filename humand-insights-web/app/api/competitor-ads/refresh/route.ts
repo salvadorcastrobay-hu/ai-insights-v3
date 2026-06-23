@@ -79,7 +79,7 @@ export async function POST(): Promise<Response> {
       }
       // Análisis IA (no rompe el refresh si falla, pero el error se reporta).
       try {
-        const synthesis = await analyzeCompetitor(c.name, c.source);
+        const synthesis = await analyzeCompetitor(c.name, c.source, { language: c.language });
         if (synthesis) {
           await saveAdInsight(c.name, c.source, synthesis, adsModel());
           r.analyzed = true;
