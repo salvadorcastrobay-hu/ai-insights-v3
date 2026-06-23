@@ -40,13 +40,23 @@ credentials:
       password: $2b$12$b73nohSTp1pGbx3T9nKLYua479dp1sYQ1rLqqSC5C4QofS2zB4..2
       roles:
       - user
+    fernanda.pianco:
+      email: fernanda.pianco@humand.co
+      failed_login_attempts: 0
+      first_name: Fernanda
+      last_name: Pianco
+      logged_in: false
+      password: $2b$12$nA90cWC0onOzKUYtcA9EkOLkhogtbhc9Xt7sXH07SvOK11U67gZpu
+      roles:
+      - campaign_advisor
+      - viewer
     guilherme.fernandes:
       email: guilherme.fernandes@humand.co
       failed_login_attempts: 0
       first_name: Guilherme
       last_name: Fernandes
       logged_in: false
-      password: $2b$12$vZ7lMFEAg6YgQNd595sxmucOwUmNf7dwRpwfoHYq4JldOTn/QzjVS
+      password: $2b$12$nA90cWC0onOzKUYtcA9EkOLkhogtbhc9Xt7sXH07SvOK11U67gZpu
       roles:
       - campaign_advisor
       - viewer
