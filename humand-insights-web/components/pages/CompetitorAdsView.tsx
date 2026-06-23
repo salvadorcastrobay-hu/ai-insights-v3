@@ -2,7 +2,7 @@
 
 import { ChevronDown, ExternalLink, Loader2, RefreshCw, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useMemo, useState, type ReactNode } from "react";
 
 import { ChartCard } from "@/components/charts/ChartCard";
@@ -30,6 +30,12 @@ type PerAd = {
   persona?: string | null;
   modules?: string[];
 };
+type SynthesisTranslation = {
+  summary: string;
+  angles: { label: string; description: string; example_copies: string[] }[];
+  offer_types: string[];
+};
+
 type Synthesis = {
   summary: string;
   angles: Angle[];
@@ -40,6 +46,7 @@ type Synthesis = {
   by_content_type?: Tally[];
   by_module?: Tally[];
   by_persona?: Tally[];
+  i18n?: Record<string, SynthesisTranslation>;
 };
 
 type Props = {
@@ -470,8 +477,27 @@ function IntelligenceView({ groups }: { groups: Group[] }) {
   );
 }
 
+// Mapea el locale de next-intl al key guardado en i18n
+const LOCALE_TO_I18N: Record<string, string> = {
+  es: "es-AR",
+  pt: "pt-BR",
+  en: "en-US",
+};
+
 function IntelligenceColumn({ g }: { g: Group }) {
+  const locale = useLocale();
   const ts = campaignTimeStats(g.campaigns);
+  const i18nKey = LOCALE_TO_I18N[locale] ?? "es-AR";
+  const tr = g.synthesis?.i18n?.[i18nKey];
+  // summary, angles labels/descriptions/copies del idioma activo (fallback al original)
+  const summary = tr?.summary ?? g.synthesis?.summary ?? null;
+  const offerTypes = tr?.offer_types ?? g.synthesis?.offer_types ?? [];
+  const angles = (g.synthesis?.angles ?? []).map((a, i) => ({
+    ...a,
+    label: tr?.angles[i]?.label ?? a.label,
+    description: tr?.angles[i]?.description ?? a.description,
+    example_copies: tr?.angles[i]?.example_copies ?? a.example_copies,
+  }));
   return (
     <div className="flex flex-col gap-4 rounded-[var(--radius-m)] border border-[var(--color-neutral-200)] bg-[var(--color-bg-card)] p-4 shadow-[var(--shadow-4dp)]">
       {/* Header */}
@@ -491,20 +517,16 @@ function IntelligenceColumn({ g }: { g: Group }) {
 
       {g.synthesis ? (
         <>
-          {/* Summary */}
-          {g.synthesis.summary ? (
-            <p className="text-[12px] leading-snug text-[var(--color-text-secondary)]">
-              {g.synthesis.summary}
-            </p>
+          {summary ? (
+            <p className="text-[12px] leading-snug text-[var(--color-text-secondary)]">{summary}</p>
           ) : null}
 
-          {/* Angles */}
-          {g.synthesis.angles?.length ? (
+          {angles.length ? (
             <div className="space-y-3">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">
                 Ángulos de mensaje
               </p>
-              {g.synthesis.angles.map((a, i) => (
+              {angles.map((a, i) => (
                 <div key={i} className="border-l-2 border-[var(--color-brand-200)] pl-3">
                   <div className="flex flex-wrap items-baseline gap-x-2">
                     <span className="text-[13px] font-semibold text-[var(--color-text-default)]">{a.label}</span>
@@ -516,9 +538,7 @@ function IntelligenceColumn({ g }: { g: Group }) {
                     ) : null}
                   </div>
                   {a.description ? (
-                    <p className="mt-0.5 text-[12px] leading-snug text-[var(--color-text-secondary)]">
-                      {a.description}
-                    </p>
+                    <p className="mt-0.5 text-[12px] leading-snug text-[var(--color-text-secondary)]">{a.description}</p>
                   ) : null}
                   {a.related_pains?.length ? (
                     <div className="mt-1.5 flex flex-wrap gap-1">
@@ -539,19 +559,15 @@ function IntelligenceColumn({ g }: { g: Group }) {
             </div>
           ) : null}
 
-          {/* Offer types */}
-          {g.synthesis.offer_types?.length ? (
+          {offerTypes.length ? (
             <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
               <span className="text-[var(--color-text-secondary)]">Offers:</span>
-              {g.synthesis.offer_types.map((o) => (
-                <span key={o} className="rounded-full border border-[var(--color-neutral-200)] px-1.5 py-0.5">
-                  {o}
-                </span>
+              {offerTypes.map((o) => (
+                <span key={o} className="rounded-full border border-[var(--color-neutral-200)] px-1.5 py-0.5">{o}</span>
               ))}
             </div>
           ) : null}
 
-          {/* Analyzed count */}
           {g.synthesis.ads_analyzed ? (
             <p className="mt-auto text-[11px] text-[var(--color-text-secondary)]">
               <Sparkles size={10} className="mr-0.5 inline text-[var(--color-brand-500)]" />
