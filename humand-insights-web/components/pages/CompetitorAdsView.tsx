@@ -937,6 +937,31 @@ function AdCard({ c, cls, competitor }: { c: Campaign; cls: PerAd | null; compet
 
 const DAY_ORDER = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 
+function organicImgSrc(url: string | null): string | null {
+  if (!url) return null;
+  try {
+    const host = new URL(url).hostname;
+    if (host.endsWith(".cdninstagram.com") || host === "cdninstagram.com") {
+      return `/api/competitor-ads/organic-img?u=${encodeURIComponent(url)}`;
+    }
+  } catch { /* noop */ }
+  return url;
+}
+
+// Keyword → content_type mapping to find posts matching a pillar
+function pillarContentType(pillar: string): string | null {
+  const l = pillar.toLowerCase();
+  if (/educac|tip|guía|aprendiz|mercado laboral|cumpli|lega/.test(l)) return "educativo";
+  if (/testimon|caso.*(éxito|exito)|resultado|cliente/.test(l)) return "caso_exito";
+  if (/comunidad|equipo|cultura|intern|gente|personas/.test(l)) return "comunidad";
+  if (/product|feature|softwar|plataform|herramien|actuali/.test(l)) return "producto";
+  if (/event|webinar|lanzam|feria|confer/.test(l)) return "evento";
+  if (/entret|humor|lifestyle|estilo de vida/.test(l)) return "entretenimiento";
+  if (/salud|bienestar|mental/.test(l)) return "comunidad";
+  if (/benefici|remuner|pago|sueldo/.test(l)) return "educativo";
+  return null;
+}
+
 function OrganicView({
   posts,
   insights,
@@ -988,11 +1013,39 @@ function OrganicView({
             synth={synth}
             summary={summary}
             pillars={pillars}
-            i18nKey={i18nKey}
           />
         );
       })}
     </div>
+  );
+}
+
+function OrganicPostThumb({ post }: { post: StoredPost }) {
+  const src = organicImgSrc(post.display_url);
+  const href = post.post_url ?? `https://www.instagram.com/p/${post.post_id}/`;
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="group flex flex-col gap-1 overflow-hidden rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] bg-[var(--color-neutral-50)] p-1.5 transition hover:border-violet-300"
+    >
+      {src ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt="" className="aspect-square w-full rounded-sm object-cover" loading="lazy" />
+      ) : (
+        <div className="flex aspect-square w-full items-center justify-center rounded-sm bg-[var(--color-neutral-200)] text-[18px]">
+          {post.format === "video" || post.format === "reel" ? "▶" : "🖼"}
+        </div>
+      )}
+      <div className="flex gap-1.5 text-[10px] text-[var(--color-text-secondary)]">
+        <span>❤️ {(post.likes_count ?? 0).toLocaleString()}</span>
+        <span>💬 {post.comments_count ?? 0}</span>
+      </div>
+      {post.caption ? (
+        <p className="line-clamp-2 text-[10px] text-[var(--color-text-secondary)]">{post.caption}</p>
+      ) : null}
+    </a>
   );
 }
 
@@ -1008,8 +1061,12 @@ function OrganicColumn({
   synth: OrganicSynthesis | undefined;
   summary: string | null;
   pillars: string[];
-  i18nKey: string;
 }) {
+  const [expandedPillar, setExpandedPillar] = useState<number | null>(null);
+  const [dayTooltip, setDayTooltip] = useState<string | null>(null);
+  const [hourTooltip, setHourTooltip] = useState<string | null>(null);
+  const [showAllPosts, setShowAllPosts] = useState(false);
+
   const freq = synth?.posting_frequency;
   const fmtDist = synth?.format_distribution ?? {};
   const topHashtags = synth?.hashtag_strategy?.top_hashtags ?? [];
@@ -1018,8 +1075,6 @@ function OrganicColumn({
   const byHour = synth?.posting_patterns?.by_hour ?? {};
 
   const totalFmt = Object.values(fmtDist).reduce((a, b) => a + b, 0);
-
-  // Build day/hour sparkline data sorted by order
   const dayData = DAY_ORDER.map((d) => ({ label: d, count: byDay[d] ?? 0 }));
   const hourData = Array.from({ length: 24 }, (_, h) => {
     const key = String(h).padStart(2, "0") + ":00";
@@ -1027,6 +1082,28 @@ function OrganicColumn({
   });
   const maxDay = Math.max(...dayData.map((d) => d.count), 1);
   const maxHour = Math.max(...hourData.map((d) => d.count), 1);
+
+  // Posts for an expanded pillar: match by content_type first, then by keyword in caption
+  const pillarPosts = (pillarIdx: number): StoredPost[] => {
+    const pillar = pillars[pillarIdx] ?? "";
+    const ct = pillarContentType(pillar);
+    let matched = ct ? posts.filter((p) => p.analysis?.content_type === ct) : [];
+    if (matched.length < 3) {
+      const words = pillar.toLowerCase().split(/\s+/).filter((w) => w.length > 4);
+      matched = posts.filter((p) =>
+        words.some((w) => p.caption?.toLowerCase().includes(w)),
+      );
+    }
+    // Sort by engagement, take 3
+    return [...matched]
+      .sort((a, b) => (b.likes_count ?? 0) + (b.comments_count ?? 0) - ((a.likes_count ?? 0) + (a.comments_count ?? 0)))
+      .slice(0, 3);
+  };
+
+  const sortedPosts = useMemo(
+    () => [...posts].sort((a, b) => (b.likes_count ?? 0) + (b.comments_count ?? 0) - ((a.likes_count ?? 0) + (a.comments_count ?? 0))),
+    [posts],
+  );
 
   return (
     <div className="flex flex-col gap-4 rounded-[var(--radius-m)] border border-[var(--color-neutral-200)] bg-[var(--color-bg-card)] p-4 shadow-[var(--shadow-4dp)]">
@@ -1036,7 +1113,7 @@ function OrganicColumn({
         <div className="flex items-center gap-1.5">
           {freq ? (
             <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-medium text-violet-700">
-              {freq.posts_per_week}× / semana
+              {freq.posts_per_week}× / sem
             </span>
           ) : null}
           <span className="text-[11px] text-[var(--color-text-secondary)]">{posts.length} posts</span>
@@ -1048,7 +1125,7 @@ function OrganicColumn({
         <p className="text-[12px] leading-snug text-[var(--color-text-secondary)]">{summary}</p>
       ) : null}
 
-      {/* Content pillars */}
+      {/* Content pillars — clickable */}
       {pillars.length ? (
         <div>
           <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">
@@ -1056,9 +1133,24 @@ function OrganicColumn({
           </p>
           <ul className="space-y-1">
             {pillars.map((p, i) => (
-              <li key={i} className="flex items-start gap-1.5 text-[12px] text-[var(--color-text-default)]">
-                <span className="mt-0.5 text-[10px] text-violet-400">▸</span>
-                {p}
+              <li key={i}>
+                <button
+                  type="button"
+                  onClick={() => setExpandedPillar(expandedPillar === i ? null : i)}
+                  className="flex w-full items-start gap-1.5 rounded-sm px-0.5 py-0.5 text-left text-[12px] text-[var(--color-text-default)] transition hover:bg-violet-50"
+                >
+                  <span className={cn("mt-0.5 text-[10px] transition-transform", expandedPillar === i ? "rotate-90 text-violet-500" : "text-violet-400")}>▸</span>
+                  {p}
+                </button>
+                {expandedPillar === i ? (
+                  <div className="mt-1.5 grid grid-cols-3 gap-1.5 pl-4">
+                    {pillarPosts(i).length ? (
+                      pillarPosts(i).map((sp) => <OrganicPostThumb key={sp.post_id} post={sp} />)
+                    ) : (
+                      <p className="col-span-3 text-[11px] italic text-[var(--color-text-secondary)]">Sin posts clasificados en este pilar.</p>
+                    )}
+                  </div>
+                ) : null}
               </li>
             ))}
           </ul>
@@ -1076,18 +1168,11 @@ function OrganicColumn({
               .sort((a, b) => b[1] - a[1])
               .map(([fmt, count]) => (
                 <div key={fmt} className="flex items-center gap-2">
-                  <div className="w-[56px] shrink-0 text-right text-[11px] text-[var(--color-text-secondary)] capitalize">
-                    {fmt}
-                  </div>
+                  <div className="w-[56px] shrink-0 text-right text-[11px] text-[var(--color-text-secondary)] capitalize">{fmt}</div>
                   <div className="flex-1 overflow-hidden rounded-full bg-[var(--color-neutral-100)]">
-                    <div
-                      className="h-2 rounded-full bg-violet-400"
-                      style={{ width: `${Math.round((count / totalFmt) * 100)}%` }}
-                    />
+                    <div className="h-2 rounded-full bg-violet-400" style={{ width: `${Math.round((count / totalFmt) * 100)}%` }} />
                   </div>
-                  <div className="w-[28px] text-right text-[11px] text-[var(--color-text-secondary)]">
-                    {Math.round((count / totalFmt) * 100)}%
-                  </div>
+                  <div className="w-[28px] text-right text-[11px] text-[var(--color-text-secondary)]">{Math.round((count / totalFmt) * 100)}%</div>
                 </div>
               ))}
           </div>
@@ -1100,16 +1185,24 @@ function OrganicColumn({
           <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">
             Cuándo postean
           </p>
-          {/* By day */}
+          {/* By day — 1.5× taller, hover tooltip */}
           {dayData.some((d) => d.count > 0) ? (
             <div className="mb-2">
-              <p className="mb-1 text-[10px] text-[var(--color-text-secondary)]">Día de semana</p>
-              <div className="flex items-end gap-0.5 h-8">
+              <div className="mb-1 flex items-center justify-between">
+                <p className="text-[10px] text-[var(--color-text-secondary)]">Día de semana</p>
+                {dayTooltip ? <span className="text-[10px] font-medium text-violet-600">{dayTooltip}</span> : null}
+              </div>
+              <div className="flex items-end gap-0.5" style={{ height: 42 }}>
                 {dayData.map(({ label, count }) => (
-                  <div key={label} className="flex flex-1 flex-col items-center gap-0.5">
+                  <div
+                    key={label}
+                    className="flex flex-1 flex-col items-center gap-0.5"
+                    onMouseEnter={() => setDayTooltip(`${label}: ${count} post${count !== 1 ? "s" : ""}`)}
+                    onMouseLeave={() => setDayTooltip(null)}
+                  >
                     <div
-                      className="w-full rounded-sm bg-violet-300"
-                      style={{ height: `${Math.round((count / maxDay) * 28)}px`, minHeight: count ? 2 : 0 }}
+                      className={cn("w-full rounded-sm transition-colors", count > 0 ? "bg-violet-400 hover:bg-violet-500" : "bg-[var(--color-neutral-100)]")}
+                      style={{ height: `${Math.round((count / maxDay) * 34)}px`, minHeight: count ? 2 : 0 }}
                     />
                     <span className="text-[9px] text-[var(--color-text-secondary)]">{label.slice(0, 2)}</span>
                   </div>
@@ -1117,17 +1210,21 @@ function OrganicColumn({
               </div>
             </div>
           ) : null}
-          {/* By hour */}
+          {/* By hour — 1.5× taller, hover tooltip */}
           {hourData.some((d) => d.count > 0) ? (
             <div>
-              <p className="mb-1 text-[10px] text-[var(--color-text-secondary)]">Hora del día (UTC)</p>
-              <div className="flex items-end gap-px h-6">
+              <div className="mb-1 flex items-center justify-between">
+                <p className="text-[10px] text-[var(--color-text-secondary)]">Hora del día (UTC)</p>
+                {hourTooltip ? <span className="text-[10px] font-medium text-violet-600">{hourTooltip}</span> : null}
+              </div>
+              <div className="flex items-end gap-px" style={{ height: 30 }}>
                 {hourData.map(({ label, count }) => (
                   <div
                     key={label}
-                    title={`${label}h: ${count} posts`}
-                    className="flex-1 rounded-sm bg-violet-300"
-                    style={{ height: `${Math.round((count / maxHour) * 20)}px`, minHeight: count ? 2 : 0 }}
+                    className={cn("flex-1 rounded-sm transition-colors", count > 0 ? "bg-violet-400 hover:bg-violet-500" : "bg-[var(--color-neutral-100)]")}
+                    style={{ height: `${Math.round((count / maxHour) * 24)}px`, minHeight: count ? 2 : 0 }}
+                    onMouseEnter={() => setHourTooltip(`${label}:00 UTC — ${count} post${count !== 1 ? "s" : ""}`)}
+                    onMouseLeave={() => setHourTooltip(null)}
                   />
                 ))}
               </div>
@@ -1147,10 +1244,7 @@ function OrganicColumn({
           </p>
           <div className="flex flex-wrap gap-1">
             {topHashtags.map((h) => (
-              <span
-                key={h}
-                className="rounded-full bg-violet-50 px-2 py-0.5 text-[11px] text-violet-700"
-              >
+              <span key={h} className="rounded-full bg-violet-50 px-2 py-0.5 text-[11px] text-violet-700">
                 #{h}
               </span>
             ))}
@@ -1165,35 +1259,31 @@ function OrganicColumn({
             Posts destacados
           </p>
           <div className="grid grid-cols-2 gap-2">
-            {best.slice(0, 4).map((p) => {
-              const stored = posts.find((sp) => sp.post_id === p.post_id);
-              return (
-                <a
-                  key={p.post_id}
-                  href={stored?.post_url ?? `https://www.instagram.com/p/${p.post_id}/`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="group flex flex-col gap-1 overflow-hidden rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] bg-[var(--color-neutral-50)] p-2 transition hover:border-violet-300"
-                >
-                  {stored?.display_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={stored.display_url}
-                      alt=""
-                      className="aspect-square w-full rounded-sm object-cover"
-                      loading="lazy"
-                    />
-                  ) : (
-                    <div className="aspect-square w-full rounded-sm bg-[var(--color-neutral-200)]" />
-                  )}
-                  <div className="flex gap-2 text-[10px] text-[var(--color-text-secondary)]">
-                    <span>❤️ {p.likes.toLocaleString()}</span>
-                    <span>💬 {p.comments}</span>
-                  </div>
-                </a>
-              );
+            {best.slice(0, 4).map((b) => {
+              const sp = posts.find((p) => p.post_id === b.post_id);
+              if (!sp) return null;
+              return <OrganicPostThumb key={b.post_id} post={sp} />;
             })}
           </div>
+        </div>
+      ) : null}
+
+      {/* All posts grid */}
+      {posts.length ? (
+        <div>
+          <button
+            type="button"
+            onClick={() => setShowAllPosts((v) => !v)}
+            className="flex w-full items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)] transition hover:text-violet-600"
+          >
+            <span>Todos los posts ({posts.length})</span>
+            <span className={cn("transition-transform", showAllPosts ? "rotate-180" : "")}>▾</span>
+          </button>
+          {showAllPosts ? (
+            <div className="mt-2 grid grid-cols-3 gap-1.5">
+              {sortedPosts.map((sp) => <OrganicPostThumb key={sp.post_id} post={sp} />)}
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>
