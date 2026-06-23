@@ -18,10 +18,12 @@ export type MonitoredCompetitor = {
   maxPages?: number;
   /** Idioma de la síntesis. Default "es-AR". */
   language?: string;
+  /** Handle de Instagram (sin @). Si está presente, se scrapea el orgánico vía Apify. */
+  instagramHandle?: string;
 };
 
 export const MONITORED_COMPETITORS: MonitoredCompetitor[] = [
-  { name: "Buk",      source: "meta_ads", query: "Buk",          pageId: "208911196408595", region: "latam", maxPages: 3, language: "es-AR" },
-  { name: "Caju",     source: "meta_ads", query: "Caju",         pageId: "702340783527508", region: "latam", maxPages: 3, language: "pt-BR" },
-  { name: "Factorial",source: "meta_ads", query: "Factorial HR", pageId: "110204987823596", region: "latam", maxPages: 3, language: "pt-BR" },
+  { name: "Buk",      source: "meta_ads", query: "Buk",          pageId: "208911196408595", region: "latam", maxPages: 3, language: "es-AR", instagramHandle: "buk_chile" },
+  { name: "Caju",     source: "meta_ads", query: "Caju",         pageId: "702340783527508", region: "latam", maxPages: 3, language: "pt-BR", instagramHandle: "caju" },
+  { name: "Factorial",source: "meta_ads", query: "Factorial HR", pageId: "110204987823596", region: "latam", maxPages: 3, language: "pt-BR", instagramHandle: "factorial_br" },
 ];
