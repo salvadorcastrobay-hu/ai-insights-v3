@@ -133,6 +133,7 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, read
   };
   const goalLabel = (k: string) => GOAL_LABELS[k] ?? k;
   const contentLabel = (k: string) => CONTENT_LABELS[k] ?? k;
+  const [selectedCompetitor, setSelectedCompetitor] = useState<string | null>(null);
 
   const groups = useMemo<Group[]>(() => {
     const byComp = new Map<string, StoredAd[]>();
@@ -200,6 +201,38 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, read
           subtitle={t("subtitle")}
         />
         <div className="flex flex-col items-end gap-1">
+          {groups.length > 1 ? (
+            <div className="flex flex-wrap gap-1.5 mb-1">
+              <button
+                type="button"
+                onClick={() => setSelectedCompetitor(null)}
+                className={cn(
+                  "rounded-full px-3 py-1 text-[12px] font-medium transition",
+                  selectedCompetitor === null
+                    ? "bg-[var(--color-brand-500)] text-white"
+                    : "border border-[var(--color-neutral-200)] text-[var(--color-text-secondary)] hover:border-[var(--color-brand-400)] hover:text-[var(--color-brand-500)]"
+                )}
+              >
+                Todos
+              </button>
+              {groups.map((g) => (
+                <button
+                  key={g.competitor}
+                  type="button"
+                  onClick={() => setSelectedCompetitor(g.competitor)}
+                  className={cn(
+                    "rounded-full px-3 py-1 text-[12px] font-medium transition",
+                    selectedCompetitor === g.competitor
+                      ? "bg-[var(--color-brand-500)] text-white"
+                      : "border border-[var(--color-neutral-200)] text-[var(--color-text-secondary)] hover:border-[var(--color-brand-400)] hover:text-[var(--color-brand-500)]"
+                  )}
+                >
+                  {g.competitor}
+                  <span className="ml-1 opacity-60">{g.active}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
           {canRefresh ? (
             <button
               type="button"
@@ -242,7 +275,9 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, read
           </p>
         </ChartCard>
       ) : (
-        groups.map((g) => <CompetitorSection key={g.competitor} g={g} />)
+        groups
+          .filter((g) => selectedCompetitor === null || g.competitor === selectedCompetitor)
+          .map((g) => <CompetitorSection key={g.competitor} g={g} />)
       )}
     </div>
   );
