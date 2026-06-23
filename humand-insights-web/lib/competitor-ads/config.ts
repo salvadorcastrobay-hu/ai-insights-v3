@@ -14,10 +14,12 @@ export type MonitoredCompetitor = {
   /** Opcional: pageId exacto del Ad Library (más preciso que el nombre). */
   pageId?: string;
   region: "latam" | "emea" | "north_america" | "apac";
+  /** Páginas de cursor a traer en cada refresh (~20 ads/página, 1 crédito c/u). Default 1. */
+  maxPages?: number;
 };
 
 export const MONITORED_COMPETITORS: MonitoredCompetitor[] = [
-  // Arrancamos con uno solo para validar el flujo y no quemar créditos.
-  // Sumar más / otras fuentes acá cuando confirmemos el flujo end-to-end.
-  { name: "Buk", source: "meta_ads", query: "Buk", pageId: "208911196408595", region: "latam" },
+  { name: "Buk",      source: "meta_ads", query: "Buk",          pageId: "208911196408595", region: "latam", maxPages: 3 },
+  { name: "Caju",     source: "meta_ads", query: "Caju",         pageId: "702340783527508", region: "latam", maxPages: 3 },
+  { name: "Factorial",source: "meta_ads", query: "Factorial HR", pageId: "110204987823596", region: "latam", maxPages: 3 },
 ];

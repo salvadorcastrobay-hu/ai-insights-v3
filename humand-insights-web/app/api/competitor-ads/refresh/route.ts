@@ -64,7 +64,7 @@ export async function POST(): Promise<Response> {
           country: "ALL",
           status: "ACTIVE",
           sortBy: "relevancy_monthly_grouped",
-          maxPages: 1,
+          maxPages: c.maxPages ?? 1,
           // DCO/multi-version vienen sin creativo en el listado → completar
           // vía detalle por aviso (1 crédito extra c/u, solo los vacíos).
           enrichMissingMedia: true,
