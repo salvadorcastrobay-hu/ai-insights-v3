@@ -122,6 +122,8 @@ def deserialize_insights(data: dict | None) -> SegmentInsights | None:
         top_modules=list(data.get("top_modules") or []),
         competitors=list(data.get("competitors") or []),
         top_gaps=list(data.get("top_gaps") or []),
+        competitor_ads=list(data.get("competitor_ads") or []),
+        competitor_organic=list(data.get("competitor_organic") or []),
         sample_size=int(data.get("sample_size") or 0),
         insight_volume=dict(data.get("insight_volume") or {}),
     )

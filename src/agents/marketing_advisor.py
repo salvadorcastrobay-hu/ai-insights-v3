@@ -402,11 +402,16 @@ class MarketingAdvisorAgent:
         context = self._build_followup_context(recommendation, pipeline, insights)
         history_lines = []
         for item in chat_history or []:
-            role = "Usuario" if item.get("role") == "user" else "Asistente"
+            role = item.get("role", "")
             content = (item.get("content") or "").strip()
-            if content:
-                history_lines.append(f"{role}: {content}")
-        history_block = "\n".join(history_lines[-8:])
+            if not content:
+                continue
+            if role == "user":
+                history_lines.append(f"Usuario: {content}")
+            else:
+                truncated = content if len(content) <= 600 else content[:600] + "… [respuesta truncada]"
+                history_lines.append(f"Asistente: {truncated}")
+        history_block = "\n".join(history_lines[-10:])
         user_content = context
         if history_block:
             user_content += f"\n\nHISTORIAL RECIENTE:\n{history_block}"
@@ -548,6 +553,35 @@ class MarketingAdvisorAgent:
                         lines.append(f'    copy: "{copies[0]}"')
             lines.append("")
 
+        if getattr(insights, "competitor_organic", None):
+            lines.append("CONTENIDO ORGÁNICO DE COMPETIDORES (cómo trabajan estos pains en Instagram):")
+            for item in insights.competitor_organic:
+                pains = ", ".join(item.get("related_pains") or [])
+                content_types = ", ".join(item.get("content_types") or [])
+                objectives = ", ".join(item.get("objectives") or [])
+                personas = ", ".join(item.get("personas") or [])
+                lines.append(
+                    f"\n{item.get('competitor', '?')} | {item.get('posts_matching', 0)} posts relacionados"
+                    f" | pains: {pains or '—'}"
+                )
+                if content_types or objectives or personas:
+                    lines.append(
+                        f"  · patrones: contenido={content_types or '—'}; objetivo={objectives or '—'}; persona={personas or '—'}"
+                    )
+                for example in (item.get("examples") or [])[:2]:
+                    snippet = (example.get("caption_snippet") or "").strip()
+                    hook = (example.get("hook") or "").strip()
+                    offer = (example.get("offer_type") or "").strip()
+                    metric = int(example.get("likes") or 0) + int(example.get("comments") or 0)
+                    parts = [f"pain: {example.get('pain', '—')}"]
+                    if hook:
+                        parts.append(f"hook: {hook}")
+                    if offer:
+                        parts.append(f"oferta: {offer}")
+                    parts.append(f"engagement público: {metric}")
+                    lines.append(f"  · ejemplo ({'; '.join(parts)}): \"{snippet[:160]}\"")
+            lines.append("")
+
         if insights.top_gaps:
             lines.append(f"FEATURE GAPS CRITICOS (top {len(insights.top_gaps)}):")
             for i, gap in enumerate(insights.top_gaps, 1):
@@ -576,17 +610,19 @@ Dado un analisis estructurado de un segmento de mercado, genera 2 o 3 angulos de
 de marketing concreta, justificada exclusivamente con los datos del input.
 
 CONTEXTOS QUE RECIBIRAS:
-- Un bloque "CONTEXTO HUMAND (FIRST-PARTY)" con verdades de producto y posicionamiento de Humand
-- Un bloque de evidencia del segmento con pipeline, pains, FAQs, modulos, competidores y gaps
-- Un bloque "ADS DE COMPETIDORES" con los angulos de mensaje que los competidores usan en sus campañas pagas para atacar los mismos pains del segmento (puede estar ausente si no hay datos)
-- Un bloque de parametros esperados con idioma de mercado, tono recomendado, confianza deterministica y ventana temporal efectiva
+	- Un bloque "CONTEXTO HUMAND (FIRST-PARTY)" con verdades de producto y posicionamiento de Humand
+	- Un bloque de evidencia del segmento con pipeline, pains, FAQs, modulos, competidores y gaps
+	- Un bloque "ADS DE COMPETIDORES" con los angulos de mensaje que los competidores usan en sus campañas pagas para atacar los mismos pains del segmento (puede estar ausente si no hay datos)
+	- Un bloque "CONTENIDO ORGÁNICO DE COMPETIDORES" con posts/temas orgánicos de Instagram que atacan los mismos pains (puede estar ausente si no hay datos)
+	- Un bloque de parametros esperados con idioma de mercado, tono recomendado, confianza deterministica y ventana temporal efectiva
 
 COMO USAR CADA CONTEXTO:
 - Usa el CONTEXTO HUMAND para entender quien es Humand, que modulos existen hoy, cuales son gaps conocidos y que competidores importan estrategicamente
 - Usa la evidencia del segmento como UNICA base para claims de demanda, numeros, supporting_data y menciones competitivas del segmento
 - Si un competidor aparece solo en el catalogo curado y no en la evidencia del segmento, NO digas que fue mencionado o evaluado en la muestra
-- Si el bloque ADS DE COMPETIDORES esta presente, usalo para identificar como los competidores estan atacando los mismos pains en sus campañas. Esto es inteligencia de mercado: puedes mencionar el enfoque del competidor para justificar un angulo diferenciador de Humand, o para recomendar que Humand ocupe el mismo espacio con una propuesta mas fuerte. NUNCA inventes angles ni copies que no esten en el bloque
-- Si el bloque ADS DE COMPETIDORES esta ausente o vacio, ignora esta dimension y recomienda basandote solo en los demas datos
+	- Si el bloque ADS DE COMPETIDORES esta presente, usalo para identificar como los competidores estan atacando los mismos pains en sus campañas. Esto es inteligencia de mercado: puedes mencionar el enfoque del competidor para justificar un angulo diferenciador de Humand, o para recomendar que Humand ocupe el mismo espacio con una propuesta mas fuerte. NUNCA inventes angles ni copies que no esten en el bloque
+	- Si el bloque CONTENIDO ORGÁNICO DE COMPETIDORES esta presente, usalo para proponer respuestas orgánicas, pilares de contenido, hooks o ángulos editoriales. Tratá likes/comments/views como señales públicas estimadas, no como performance real privada
+	- Si el bloque ADS DE COMPETIDORES esta ausente o vacio, ignora esta dimension y recomienda basandote solo en los demas datos
 - Si una necesidad depende de un modulo marcado como missing, NO lo promociones como capacidad nativa actual de Humand
 - Si el segmento muestra demanda por algo missing, responde con transparencia: recomienda calificar upfront, explicitar el caveat o posicionar un angulo alternativo basado en fortalezas actuales de Humand
 - El hero_message y el titulo deben enfocarse en pains validados + fortalezas actuales de Humand. Los gaps criticos deben ir a qualification_checks y, si hace falta, a la ultima parte del core_message, no al inicio del mensaje
@@ -680,16 +716,31 @@ REGLAS:
         }
         destination = language_map.get(target_language, "español")
         return f"""\
-Eres el advisor de marketing de Humand.
-Tu trabajo es responder preguntas de seguimiento sobre un plan ya generado.
+Eres el advisor de marketing ejecutivo de Humand, con acceso al plan de campaña ya generado y a la evidencia del segmento.
 
-REGLAS:
-- Responde solo con la evidencia disponible del plan y del segmento.
-- No inventes nuevos segmentos, cifras ni claims.
-- Si falta evidencia para responder, dilo de forma directa.
-- Si la pregunta pide accion, responde de forma concreta y ejecutiva.
-- Responde en {destination}.
-- Usa markdown simple cuando ayude a la lectura.
+MODOS DE RESPUESTA — detecta la intención del usuario y ejecuta directamente:
+
+1. ANÁLISIS / PREGUNTAS ("¿por qué X?", "¿cuál es mejor?", "explicá..."):
+   - Respondé basándote en la evidencia del plan y el segmento.
+   - Sé directo, no repitas lo que el usuario ya puede ver en el plan.
+
+2. EJECUCIÓN CREATIVA ("escribí", "dame", "generá", "creá", "necesito las copies"):
+   - Ejecutá la tarea directamente: si piden 5 emails, escribí los 5 emails completos.
+   - Si piden asuntos, subject lines, copies de ads, scripts, posts — producí el output real, no una descripción de cómo hacerlo.
+   - Basate en los pains del segmento, el idioma de mercado del plan y el tono recomendado.
+   - Usá los mensajes clave del plan (hero_message, core_message) como base para el copy.
+   - Variá formatos: usa numeración, bloques separados, headers claros para cada pieza de copy.
+
+3. AJUSTES AL PLAN ("cambiá X", "adaptá para Y"):
+   - Producí la versión ajustada, no solo describí qué cambiarías.
+   - Mantené coherencia con el segmento y la evidencia.
+
+RESTRICCIONES:
+- No inventés segmentos, cifras ni claims que no estén en el plan o la evidencia del segmento.
+- Si falta evidencia para algo específico, completá con lo que hay y señalá la limitación al final.
+- No devuelvas el plan completo si no se pidió — respondé lo que se preguntó.
+- Respondé en {destination}. Todo el output (análisis, copy, emails) en ese idioma.
+- Usá markdown cuando ayude a la legibilidad (headers, listas, bloques de copy bien delimitados).
 """
 
     def _response_schema(self) -> dict:
@@ -964,14 +1015,14 @@ REGLAS:
                         model=self.model,
                         instructions=instructions,
                         input=user_content,
-                        max_output_tokens=1200,
+                        max_output_tokens=3000,
                     )
                     return self._extract_response_text(response) or ""
 
                 response = self.client.chat.completions.create(
                     model=self.model,
                     temperature=0.2,
-                    max_tokens=1200,
+                    max_tokens=3000,
                     messages=[
                         {"role": "system", "content": instructions},
                         {"role": "user", "content": user_content},
@@ -1298,8 +1349,13 @@ REGLAS:
             )
             lines.append(f"    Hero: {angle.hero_message}")
             lines.append(f"    Mensaje: {angle.core_message}")
+            if getattr(angle, "supporting_data", None):
+                lines.append(f"    Evidencia: {angle.supporting_data}")
+            if getattr(angle, "content_ideas", None):
+                lines.append("    Ideas de contenido:")
+                lines.extend(f"      - {idea}" for idea in angle.content_ideas[:6])
             if angle.qualification_checks:
-                lines.append("    Chequeos:")
+                lines.append("    Chequeos de calificacion:")
                 lines.extend(f"      - {item}" for item in angle.qualification_checks[:4])
 
         lines.append("")

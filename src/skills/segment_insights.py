@@ -91,6 +91,7 @@ class SegmentInsights:
     competitors: list[dict] = field(default_factory=list)
     top_gaps: list[dict] = field(default_factory=list)
     competitor_ads: list[dict] = field(default_factory=list)
+    competitor_organic: list[dict] = field(default_factory=list)
     sample_size: int = 0
     insight_volume: dict = field(default_factory=dict)
 
@@ -379,6 +380,85 @@ def _get_competitor_ads(cur, segment_pain_labels: list[str], n: int = 5) -> list
     return rows
 
 
+def _get_competitor_organic(cur, segment_pain_labels: list[str], n: int = 5) -> list[dict]:
+    """
+    Retorna contenido orgánico de competidores que ataca los mismos pains del segmento.
+
+    Usa competitor_organic_posts.analysis.related_pains y excluye la marca propia
+    (profiles.is_own_brand = true) para no mezclar baseline Humand como competidor.
+    """
+    if not segment_pain_labels:
+        return []
+
+    pain_set = [p.lower() for p in segment_pain_labels]
+    sql = """
+        WITH matching_posts AS (
+            SELECT
+                p.competitor,
+                p.post_id,
+                p.post_url,
+                p.caption,
+                p.likes_count,
+                p.comments_count,
+                p.video_views,
+                p.analysis,
+                rp AS related_pain
+            FROM competitor_organic_posts p
+            LEFT JOIN competitor_organic_profiles prof
+              ON prof.competitor = p.competitor
+            CROSS JOIN LATERAL jsonb_array_elements_text(COALESCE(p.analysis->'related_pains', '[]'::jsonb)) rp
+            WHERE LOWER(rp) = ANY(%s)
+              AND COALESCE(prof.is_own_brand, false) = false
+        ),
+        ranked AS (
+            SELECT
+                competitor,
+                COUNT(DISTINCT post_id) AS posts_matching,
+                ARRAY_AGG(DISTINCT related_pain) AS related_pains,
+                ARRAY_AGG(DISTINCT analysis->>'content_type') FILTER (WHERE analysis->>'content_type' IS NOT NULL) AS content_types,
+                ARRAY_AGG(DISTINCT analysis->>'objective') FILTER (WHERE analysis->>'objective' IS NOT NULL) AS objectives,
+                ARRAY_AGG(DISTINCT analysis->>'persona') FILTER (WHERE analysis->>'persona' IS NOT NULL) AS personas,
+                jsonb_agg(
+                    jsonb_build_object(
+                        'post_id', post_id,
+                        'post_url', post_url,
+                        'caption_snippet', LEFT(COALESCE(caption, ''), 180),
+                        'likes', COALESCE(likes_count, 0),
+                        'comments', COALESCE(comments_count, 0),
+                        'video_views', COALESCE(video_views, 0),
+                        'pain', related_pain,
+                        'hook', analysis->>'hook',
+                        'offer_type', analysis->>'offer_type'
+                    )
+                    ORDER BY COALESCE(likes_count, 0) + COALESCE(comments_count, 0) DESC
+                ) AS examples
+            FROM matching_posts
+            GROUP BY competitor
+        )
+        SELECT *
+        FROM ranked
+        ORDER BY posts_matching DESC, competitor ASC
+        LIMIT %s
+    """
+    cur.execute(sql, [pain_set, n])
+    rows = []
+    for r in cur.fetchall():
+        examples = r.get("examples") or []
+        if isinstance(examples, str):
+            import json
+            examples = json.loads(examples)
+        rows.append({
+            "competitor": r["competitor"],
+            "posts_matching": int(r["posts_matching"] or 0),
+            "related_pains": list(r.get("related_pains") or []),
+            "content_types": list(r.get("content_types") or []),
+            "objectives": list(r.get("objectives") or []),
+            "personas": list(r.get("personas") or []),
+            "examples": examples[:4],
+        })
+    return rows
+
+
 # ---------------------------------------------------------------------------
 # Función pública
 # ---------------------------------------------------------------------------
@@ -428,6 +508,7 @@ def get_segment_insights(
             top_gaps = safe("top_gaps", lambda: _get_top_gaps(cur, where, params, n_gaps), [])
             pain_labels = [p.get("subtype_display", "") for p in top_pains if p.get("subtype_display")]
             competitor_ads = safe("competitor_ads", lambda: _get_competitor_ads(cur, pain_labels), [])
+            competitor_organic = safe("competitor_organic", lambda: _get_competitor_organic(cur, pain_labels), [])
 
         return SegmentInsights(
             top_pains=top_pains,
@@ -436,6 +517,7 @@ def get_segment_insights(
             competitors=competitors,
             top_gaps=top_gaps,
             competitor_ads=competitor_ads,
+            competitor_organic=competitor_organic,
             sample_size=sample_size,
             insight_volume=insight_volume,
         )
