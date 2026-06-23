@@ -42,7 +42,6 @@ type Synthesis = {
   by_persona?: Tally[];
 };
 
-
 type Props = {
   ads: StoredAd[];
   insights: AdInsight[];
@@ -51,7 +50,6 @@ type Props = {
   readError?: string | null;
 };
 
-// Formateo determinístico en UTC (evita hydration mismatch).
 function fmtDate(iso: string | null): string {
   if (!iso) return "—";
   const d = new Date(iso);
@@ -104,8 +102,6 @@ function dedupeCampaigns(ads: StoredAd[]): Campaign[] {
     const existing = map.get(key);
     if (existing) {
       existing.variants += 1;
-      // Preferir como lead la variante que tenga creativo: las campañas con
-      // múltiples versiones a veces traen el media en una variante y no en otra.
       if (!hasMedia(existing.lead) && hasMedia(a)) existing.lead = a;
     } else {
       map.set(key, { lead: a, variants: 1 });
@@ -114,11 +110,87 @@ function dedupeCampaigns(ads: StoredAd[]): Campaign[] {
   return [...map.values()];
 }
 
+function campaignHasContent(c: Campaign, cls: PerAd | null): boolean {
+  if (hasMedia(c.lead)) return true;
+  if (c.lead.body_text && c.lead.body_text.trim()) return true;
+  if (cls?.creative_text && cls.creative_text.trim()) return true;
+  return false;
+}
+
+type TimeBucket = { label: string; count: number };
+function campaignTimeStats(campaigns: Campaign[]): { oldest: string | null; new30: number; buckets: TimeBucket[] } {
+  const now = Date.now();
+  const DAY = 86_400_000;
+  const active = campaigns.filter((c) => c.lead.is_active && c.lead.ad_start_date);
+  let oldest: string | null = null;
+  let new30 = 0;
+  const b = { "≥6 meses": 0, "3–6 meses": 0, "1–3 meses": 0, "<1 mes": 0 };
+  for (const c of active) {
+    const iso = c.lead.ad_start_date as string;
+    if (!oldest || iso < oldest) oldest = iso;
+    const days = (now - new Date(iso).getTime()) / DAY;
+    if (days <= 30) new30 += 1;
+    if (days >= 182) b["≥6 meses"] += 1;
+    else if (days >= 91) b["3–6 meses"] += 1;
+    else if (days >= 30) b["1–3 meses"] += 1;
+    else b["<1 mes"] += 1;
+  }
+  const buckets = (Object.entries(b) as [string, number][])
+    .filter(([, count]) => count > 0)
+    .map(([label, count]) => ({ label, count }));
+  return { oldest, new30, buckets };
+}
+
+function ageBucketOf(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const days = (Date.now() - new Date(iso).getTime()) / 86_400_000;
+  if (Number.isNaN(days)) return null;
+  if (days >= 182) return "≥6 meses";
+  if (days >= 91) return "3–6 meses";
+  if (days >= 30) return "1–3 meses";
+  return "<1 mes";
+}
+
+type AdFilter = { kind: "goal" | "content_type" | "module" | "persona" | "age" | "format"; value: string };
+
+function campaignMatches(c: Campaign, cls: PerAd | null, f: AdFilter): boolean {
+  switch (f.kind) {
+    case "goal":        return cls?.goal === f.value;
+    case "content_type":return cls?.content_type === f.value;
+    case "module":      return (cls?.modules ?? []).includes(f.value);
+    case "persona":     return cls?.persona === f.value;
+    case "age":         return ageBucketOf(c.lead.ad_start_date) === f.value;
+    case "format":      return f.value === "video" ? Boolean(c.lead.media?.videos?.[0]) : !c.lead.media?.videos?.[0];
+  }
+}
+
+function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "rounded-full px-2 py-0.5 text-[11px] transition",
+        active
+          ? "bg-[var(--color-brand-500)] text-white"
+          : "bg-[var(--color-neutral-100)] hover:bg-[var(--color-neutral-200)]",
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
 export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, readError }: Props) {
   const router = useRouter();
   const t = useTranslations("competitorAds");
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [view, setView] = useState<"inteligencia" | "creativos">("inteligencia");
+  const [selectedCompetitor, setSelectedCompetitor] = useState<string | null>(null);
+  const [filter, setFilter] = useState<AdFilter | null>(null);
 
   const GOAL_LABELS: Record<string, string> = {
     lead_gen: t("goal.lead_gen"), demo: t("goal.demo"), descarga: t("goal.descarga"),
@@ -133,7 +205,6 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, read
   };
   const goalLabel = (k: string) => GOAL_LABELS[k] ?? k;
   const contentLabel = (k: string) => CONTENT_LABELS[k] ?? k;
-  const [selectedCompetitor, setSelectedCompetitor] = useState<string | null>(null);
 
   const groups = useMemo<Group[]>(() => {
     const byComp = new Map<string, StoredAd[]>();
@@ -161,6 +232,67 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, read
       })
       .sort((a, b) => b.active - a.active || b.total - a.total);
   }, [ads, insights]);
+
+  const visibleGroups = useMemo(
+    () => selectedCompetitor ? groups.filter((g) => g.competitor === selectedCompetitor) : groups,
+    [groups, selectedCompetitor],
+  );
+
+  // Flat campaigns for Creativos view
+  type FlatCampaign = { campaign: Campaign; competitor: string; cls: PerAd | null };
+  const allFlatCampaigns = useMemo<FlatCampaign[]>(() => {
+    return visibleGroups.flatMap((g) =>
+      g.campaigns
+        .filter((c) => campaignHasContent(c, g.classByKey.get(campaignKey(c.lead)) ?? null))
+        .map((c) => ({ campaign: c, competitor: g.competitor, cls: g.classByKey.get(campaignKey(c.lead)) ?? null })),
+    );
+  }, [visibleGroups]);
+
+  const filteredCampaigns = useMemo<FlatCampaign[]>(() => {
+    if (!filter) return allFlatCampaigns;
+    return allFlatCampaigns.filter(({ campaign, cls }) => campaignMatches(campaign, cls, filter));
+  }, [allFlatCampaigns, filter]);
+
+  // Aggregated filter chips across all visible campaigns
+  const aggGoal = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const { cls } of allFlatCampaigns) if (cls?.goal) m.set(cls.goal, (m.get(cls.goal) ?? 0) + 1);
+    return [...m.entries()].sort((a, b) => b[1] - a[1]).map(([key, count]) => ({ key, count }));
+  }, [allFlatCampaigns]);
+
+  const aggContent = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const { cls } of allFlatCampaigns)
+      if (cls?.content_type && cls.content_type !== "generico")
+        m.set(cls.content_type, (m.get(cls.content_type) ?? 0) + 1);
+    return [...m.entries()].sort((a, b) => b[1] - a[1]).map(([key, count]) => ({ key, count }));
+  }, [allFlatCampaigns]);
+
+  const aggFormat = useMemo(() => {
+    let video = 0, estatico = 0;
+    for (const { campaign } of allFlatCampaigns) {
+      if (campaign.lead.media?.videos?.[0]) video++; else estatico++;
+    }
+    return [
+      ...(video ? [{ key: "video", label: "Video", count: video }] : []),
+      ...(estatico ? [{ key: "estatico", label: "Estático", count: estatico }] : []),
+    ];
+  }, [allFlatCampaigns]);
+
+  const aggAge = useMemo(
+    () => campaignTimeStats(allFlatCampaigns.map((x) => x.campaign)).buckets,
+    [allFlatCampaigns],
+  );
+
+  const pick = (kind: AdFilter["kind"], value: string) =>
+    setFilter((f) => (f && f.kind === kind && f.value === value ? null : { kind, value }));
+
+  const filterLabel = (f: AdFilter): string => {
+    if (f.kind === "goal") return goalLabel(f.value);
+    if (f.kind === "content_type") return contentLabel(f.value);
+    if (f.kind === "format") return f.value === "video" ? t("video") : t("static");
+    return f.value;
+  };
 
   async function refresh() {
     setLoading(true);
@@ -195,44 +327,10 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, read
 
   return (
     <div className="space-y-5">
+      {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <PageTitle
-          title={t("title")}
-          subtitle={t("subtitle")}
-        />
+        <PageTitle title={t("title")} subtitle={t("subtitle")} />
         <div className="flex flex-col items-end gap-1">
-          {groups.length > 1 ? (
-            <div className="flex flex-wrap gap-1.5 mb-1">
-              <button
-                type="button"
-                onClick={() => setSelectedCompetitor(null)}
-                className={cn(
-                  "rounded-full px-3 py-1 text-[12px] font-medium transition",
-                  selectedCompetitor === null
-                    ? "bg-[var(--color-brand-500)] text-white"
-                    : "border border-[var(--color-neutral-200)] text-[var(--color-text-secondary)] hover:border-[var(--color-brand-400)] hover:text-[var(--color-brand-500)]"
-                )}
-              >
-                Todos
-              </button>
-              {groups.map((g) => (
-                <button
-                  key={g.competitor}
-                  type="button"
-                  onClick={() => setSelectedCompetitor(g.competitor)}
-                  className={cn(
-                    "rounded-full px-3 py-1 text-[12px] font-medium transition",
-                    selectedCompetitor === g.competitor
-                      ? "bg-[var(--color-brand-500)] text-white"
-                      : "border border-[var(--color-neutral-200)] text-[var(--color-text-secondary)] hover:border-[var(--color-brand-400)] hover:text-[var(--color-brand-500)]"
-                  )}
-                >
-                  {g.competitor}
-                  <span className="ml-1 opacity-60">{g.active}</span>
-                </button>
-              ))}
-            </div>
-          ) : null}
           {canRefresh ? (
             <button
               type="button"
@@ -260,7 +358,6 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, read
           ⚠️ Error leyendo de la DB: <code className="font-mono">{readError}</code>
         </div>
       ) : null}
-
       {msg ? (
         <div className="rounded-[var(--radius-s)] border border-[var(--color-brand-200)] bg-[var(--color-brand-50)] px-3 py-2 text-[12px] text-[var(--color-brand-500)]">
           {msg}
@@ -275,472 +372,348 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, read
           </p>
         </ChartCard>
       ) : (
-        groups
-          .filter((g) => selectedCompetitor === null || g.competitor === selectedCompetitor)
-          .map((g) => <CompetitorSection key={g.competitor} g={g} />)
+        <>
+          {/* Controls: competitor pills + view tabs */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            {groups.length > 1 ? (
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => { setSelectedCompetitor(null); setFilter(null); }}
+                  className={cn(
+                    "rounded-full px-3 py-1 text-[12px] font-medium transition",
+                    selectedCompetitor === null
+                      ? "bg-[var(--color-brand-500)] text-white"
+                      : "border border-[var(--color-neutral-200)] text-[var(--color-text-secondary)] hover:border-[var(--color-brand-400)] hover:text-[var(--color-brand-500)]",
+                  )}
+                >
+                  Todos
+                </button>
+                {groups.map((g) => (
+                  <button
+                    key={g.competitor}
+                    type="button"
+                    onClick={() => { setSelectedCompetitor(g.competitor); setFilter(null); }}
+                    className={cn(
+                      "rounded-full px-3 py-1 text-[12px] font-medium transition",
+                      selectedCompetitor === g.competitor
+                        ? "bg-[var(--color-brand-500)] text-white"
+                        : "border border-[var(--color-neutral-200)] text-[var(--color-text-secondary)] hover:border-[var(--color-brand-400)] hover:text-[var(--color-brand-500)]",
+                    )}
+                  >
+                    {g.competitor}
+                    <span className="ml-1 opacity-60">{g.active}</span>
+                  </button>
+                ))}
+              </div>
+            ) : <div />}
+
+            {/* Tab toggle */}
+            <div className="flex overflow-hidden rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] bg-[var(--color-neutral-100)]">
+              {(["inteligencia", "creativos"] as const).map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => { setView(tab); setFilter(null); }}
+                  className={cn(
+                    "px-4 py-1.5 text-[12px] font-medium transition capitalize",
+                    view === tab
+                      ? "bg-white text-[var(--color-text-default)] shadow-[var(--shadow-4dp)]"
+                      : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-default)]",
+                  )}
+                >
+                  {tab === "inteligencia" ? "Inteligencia" : "Creativos"}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {view === "inteligencia" ? (
+            <IntelligenceView groups={visibleGroups} />
+          ) : (
+            <CreativosView
+              campaigns={filteredCampaigns}
+              totalCount={allFlatCampaigns.length}
+              filter={filter}
+              filterLabel={filter ? filterLabel(filter) : null}
+              onClear={() => setFilter(null)}
+              aggGoal={aggGoal}
+              aggContent={aggContent}
+              aggFormat={aggFormat}
+              aggAge={aggAge}
+              onPick={pick}
+              goalLabel={goalLabel}
+              contentLabel={contentLabel}
+            />
+          )}
+        </>
       )}
     </div>
   );
 }
 
-// Stats de tiempo de las campañas (todo derivado de ad_start_date + is_active).
-type TimeBucket = { label: string; count: number };
-function campaignTimeStats(campaigns: Campaign[]): {
-  oldest: string | null;
-  new30: number;
-  buckets: TimeBucket[];
-} {
-  const now = Date.now();
-  const DAY = 86_400_000;
-  const active = campaigns.filter((c) => c.lead.is_active && c.lead.ad_start_date);
-  let oldest: string | null = null;
-  let new30 = 0;
-  const b = { "≥6 meses": 0, "3–6 meses": 0, "1–3 meses": 0, "<1 mes": 0 };
-  for (const c of active) {
-    const iso = c.lead.ad_start_date as string;
-    if (!oldest || iso < oldest) oldest = iso;
-    const days = (now - new Date(iso).getTime()) / DAY;
-    if (days <= 30) new30 += 1;
-    if (days >= 182) b["≥6 meses"] += 1;
-    else if (days >= 91) b["3–6 meses"] += 1;
-    else if (days >= 30) b["1–3 meses"] += 1;
-    else b["<1 mes"] += 1;
-  }
-  const buckets = (Object.entries(b) as [string, number][])
-    .filter(([, count]) => count > 0)
-    .map(([label, count]) => ({ label, count }));
-  return { oldest, new30, buckets };
-}
+// ─── Intelligence view ────────────────────────────────────────────────────────
 
-function ageBucketOf(iso: string | null | undefined): string | null {
-  if (!iso) return null;
-  const days = (Date.now() - new Date(iso).getTime()) / 86_400_000;
-  if (Number.isNaN(days)) return null;
-  if (days >= 182) return "≥6 meses";
-  if (days >= 91) return "3–6 meses";
-  if (days >= 30) return "1–3 meses";
-  return "<1 mes";
-}
-
-// Filtro de la grilla, manejado clickeando los chips de agregados.
-type AdFilter = { kind: "goal" | "content_type" | "module" | "persona" | "age" | "format"; value: string };
-
-function campaignMatches(c: Campaign, cls: PerAd | null, f: AdFilter): boolean {
-  switch (f.kind) {
-    case "goal":
-      return cls?.goal === f.value;
-    case "content_type":
-      return cls?.content_type === f.value;
-    case "module":
-      return (cls?.modules ?? []).includes(f.value);
-    case "persona":
-      return cls?.persona === f.value;
-    case "age":
-      return ageBucketOf(c.lead.ad_start_date) === f.value;
-    case "format":
-      return f.value === "video" ? Boolean(c.lead.media?.videos?.[0]) : !c.lead.media?.videos?.[0];
-  }
-}
-
-function formatCounts(campaigns: Campaign[]): { key: string; label: string; count: number }[] {
-  let video = 0;
-  let estatico = 0;
-  for (const c of campaigns) {
-    if (c.lead.media?.videos?.[0]) video += 1;
-    else estatico += 1;
-  }
-  return [
-    { key: "video", label: "Video", count: video },
-    { key: "estatico", label: "Estático", count: estatico },
-  ].filter((x) => x.count > 0);
-}
-
-// Chip clickeable (para filtrar). active = filtro aplicado.
-function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
+function IntelligenceView({ groups }: { groups: Group[] }) {
+  if (!groups.length) return null;
   return (
-    <button
-      type="button"
-      onClick={onClick}
+    <div
       className={cn(
-        "rounded-full px-2 py-0.5 text-[11px] transition",
-        active
-          ? "bg-[var(--color-brand-500)] text-white"
-          : "bg-[var(--color-neutral-100)] hover:bg-[var(--color-neutral-200)]",
+        "grid gap-4",
+        groups.length === 1 && "grid-cols-1",
+        groups.length === 2 && "grid-cols-2",
+        groups.length >= 3 && "md:grid-cols-3",
       )}
     >
-      {children}
-    </button>
+      {groups.map((g) => <IntelligenceColumn key={g.competitor} g={g} />)}
+    </div>
   );
 }
 
-// ¿La campaña tiene algo para mostrar? (creativo o texto). Si no, se oculta
-// para no dejar tarjetas vacías raras.
-function campaignHasContent(c: Campaign, cls: PerAd | null): boolean {
-  if (hasMedia(c.lead)) return true;
-  if (c.lead.body_text && c.lead.body_text.trim()) return true;
-  if (cls?.creative_text && cls.creative_text.trim()) return true;
-  return false;
+function IntelligenceColumn({ g }: { g: Group }) {
+  const ts = campaignTimeStats(g.campaigns);
+  return (
+    <div className="flex flex-col gap-4 rounded-[var(--radius-m)] border border-[var(--color-neutral-200)] bg-[var(--color-bg-card)] p-4 shadow-[var(--shadow-4dp)]">
+      {/* Header */}
+      <div>
+        <div className="mb-1 flex items-center justify-between gap-2">
+          <h3 className="text-[16px] font-semibold text-[var(--color-text-default)]">{g.competitor}</h3>
+          <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+            {g.active} activos
+          </span>
+        </div>
+        <p className="text-[11px] text-[var(--color-text-secondary)]">
+          {g.total} avisos
+          {ts.oldest ? <> · campaña más vieja desde {fmtDate(ts.oldest)}</> : null}
+          {ts.new30 ? <> · {ts.new30} nuevas (30d)</> : null}
+        </p>
+      </div>
+
+      {g.synthesis ? (
+        <>
+          {/* Summary */}
+          {g.synthesis.summary ? (
+            <p className="text-[12px] leading-snug text-[var(--color-text-secondary)]">
+              {g.synthesis.summary}
+            </p>
+          ) : null}
+
+          {/* Angles */}
+          {g.synthesis.angles?.length ? (
+            <div className="space-y-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">
+                Ángulos de mensaje
+              </p>
+              {g.synthesis.angles.map((a, i) => (
+                <div key={i} className="border-l-2 border-[var(--color-brand-200)] pl-3">
+                  <div className="flex flex-wrap items-baseline gap-x-2">
+                    <span className="text-[13px] font-semibold text-[var(--color-text-default)]">{a.label}</span>
+                    {typeof a.weight === "number" ? (
+                      <span className="text-[11px] text-[var(--color-text-secondary)]">
+                        {a.weight} campañas
+                        {a.oldest_start ? <> · desde {fmtDate(a.oldest_start)}</> : null}
+                      </span>
+                    ) : null}
+                  </div>
+                  {a.description ? (
+                    <p className="mt-0.5 text-[12px] leading-snug text-[var(--color-text-secondary)]">
+                      {a.description}
+                    </p>
+                  ) : null}
+                  {a.related_pains?.length ? (
+                    <div className="mt-1.5 flex flex-wrap gap-1">
+                      {a.related_pains.map((p) => (
+                        <span key={p} className="rounded-full bg-rose-50 px-1.5 py-0.5 text-[10px] font-medium text-rose-600">
+                          🎯 {p}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                  {a.example_copies?.[0] ? (
+                    <p className="mt-1 text-[11px] italic text-[var(--color-text-secondary)]">
+                      &ldquo;{a.example_copies[0]}&rdquo;
+                    </p>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          {/* Offer types */}
+          {g.synthesis.offer_types?.length ? (
+            <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+              <span className="text-[var(--color-text-secondary)]">Offers:</span>
+              {g.synthesis.offer_types.map((o) => (
+                <span key={o} className="rounded-full border border-[var(--color-neutral-200)] px-1.5 py-0.5">
+                  {o}
+                </span>
+              ))}
+            </div>
+          ) : null}
+
+          {/* Analyzed count */}
+          {g.synthesis.ads_analyzed ? (
+            <p className="mt-auto text-[11px] text-[var(--color-text-secondary)]">
+              <Sparkles size={10} className="mr-0.5 inline text-[var(--color-brand-500)]" />
+              Basado en {g.synthesis.ads_analyzed} avisos analizados
+            </p>
+          ) : null}
+        </>
+      ) : (
+        <p className="text-[12px] italic text-[var(--color-text-secondary)]">
+          Sin análisis disponible. Hacé un refresh para generar.
+        </p>
+      )}
+    </div>
+  );
 }
 
-// Sección por competidor: mantiene el estado de filtro y filtra la grilla.
-function CompetitorSection({ g }: { g: Group }) {
-  const t = useTranslations("competitorAds");
-  const [filter, setFilter] = useState<AdFilter | null>(null);
-  const pick = (kind: AdFilter["kind"], value: string) =>
-    setFilter((f) => (f && f.kind === kind && f.value === value ? null : { kind, value }));
-  const GOAL_LABELS: Record<string, string> = {
-    lead_gen: t("goal.lead_gen"), demo: t("goal.demo"), descarga: t("goal.descarga"),
-    contenido: t("goal.contenido"), trafico: t("goal.trafico"), otro: t("goal.otro"),
-  };
-  const CONTENT_LABELS: Record<string, string> = {
-    caso_exito: t("contentType.caso_exito"), webinar: t("contentType.webinar"),
-    evento: t("contentType.evento"), demo_producto: t("contentType.demo_producto"),
-    guia_descargable: t("contentType.guia_descargable"), calculadora: t("contentType.calculadora"),
-    blog_articulo: t("contentType.blog_articulo"), lanzamiento_feature: t("contentType.lanzamiento_feature"),
-    generico: t("contentType.generico"),
-  };
-  const goalLabel = (k: string) => GOAL_LABELS[k] ?? k;
-  const contentLabel = (k: string) => CONTENT_LABELS[k] ?? k;
-  const filterLabel = (f: AdFilter): string => {
-    if (f.kind === "goal") return goalLabel(f.value);
-    if (f.kind === "content_type") return contentLabel(f.value);
-    if (f.kind === "format") return f.value === "video" ? t("video") : t("static");
-    return f.value;
-  };
+// ─── Creativos view ───────────────────────────────────────────────────────────
 
-  // Base: solo campañas con creativo o texto (oculta las vacías).
-  const visible = g.campaigns.filter((c) => campaignHasContent(c, g.classByKey.get(campaignKey(c.lead)) ?? null));
-  const ts = campaignTimeStats(visible);
-  const filtered = filter
-    ? visible.filter((c) => campaignMatches(c, g.classByKey.get(campaignKey(c.lead)) ?? null, filter))
-    : visible;
+type FlatCampaign = { campaign: Campaign; competitor: string; cls: PerAd | null };
+
+function CreativosView({
+  campaigns,
+  totalCount,
+  filter,
+  filterLabel,
+  onClear,
+  aggGoal,
+  aggContent,
+  aggFormat,
+  aggAge,
+  onPick,
+  goalLabel,
+  contentLabel,
+}: {
+  campaigns: FlatCampaign[];
+  totalCount: number;
+  filter: AdFilter | null;
+  filterLabel: string | null;
+  onClear: () => void;
+  aggGoal: Tally[];
+  aggContent: Tally[];
+  aggFormat: { key: string; label: string; count: number }[];
+  aggAge: TimeBucket[];
+  onPick: (kind: AdFilter["kind"], value: string) => void;
+  goalLabel: (k: string) => string;
+  contentLabel: (k: string) => string;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const PREVIEW = 9;
+  const visible = expanded ? campaigns : campaigns.slice(0, PREVIEW);
 
   return (
-    <ChartCard title={g.competitor}>
-      <p className="mb-3 text-[12px] text-[var(--color-text-secondary)]">
-        <span className="font-semibold text-emerald-700">{g.active} {t("active").toLowerCase()}</span> · {visible.length}{" "}
-        {t("campaigns")} · {g.total} variantes
-        {ts.oldest ? <> · {t("oldestCampaign")} {t("since")} {fmtDate(ts.oldest)}</> : null}
-        {ts.new30 ? <> · {ts.new30} nuevas (30d)</> : null}
-      </p>
+    <div className="space-y-4">
+      {/* Global filter chips */}
+      <div className="rounded-[var(--radius-m)] border border-[var(--color-neutral-200)] bg-[var(--color-bg-card)] p-4">
+        <div className="grid gap-4 md:grid-cols-4">
+          <div>
+            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">
+              Objetivo
+            </p>
+            <div className="flex flex-wrap gap-1">
+              {aggGoal.length ? aggGoal.map(({ key, count }) => (
+                <Chip key={key} active={filter?.kind === "goal" && filter.value === key} onClick={() => onPick("goal", key)}>
+                  {goalLabel(key)} <span className="font-semibold">{count}</span>
+                </Chip>
+              )) : <span className="text-[11px] text-[var(--color-text-secondary)]">—</span>}
+            </div>
+          </div>
 
-      {g.synthesis ? <SynthesisBlock s={g.synthesis} /> : null}
-      {g.synthesis ? <QuestionsBlock s={g.synthesis} campaigns={visible} filter={filter} onPick={pick} /> : null}
+          <div>
+            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">
+              Tipo de contenido
+            </p>
+            <div className="flex flex-wrap gap-1">
+              {aggContent.length ? aggContent.map(({ key, count }) => (
+                <Chip key={key} active={filter?.kind === "content_type" && filter.value === key} onClick={() => onPick("content_type", key)}>
+                  {contentLabel(key)} <span className="font-semibold">{count}</span>
+                </Chip>
+              )) : <span className="text-[11px] text-[var(--color-text-secondary)]">—</span>}
+            </div>
+          </div>
 
+          <div>
+            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">
+              Formato
+            </p>
+            <div className="flex flex-wrap gap-1">
+              {aggFormat.length ? aggFormat.map(({ key, label, count }) => (
+                <Chip key={key} active={filter?.kind === "format" && filter.value === key} onClick={() => onPick("format", key)}>
+                  {label} <span className="font-semibold">{count}</span>
+                </Chip>
+              )) : <span className="text-[11px] text-[var(--color-text-secondary)]">—</span>}
+            </div>
+          </div>
+
+          <div>
+            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">
+              Antigüedad
+            </p>
+            <div className="flex flex-wrap gap-1">
+              {aggAge.length ? aggAge.map(({ label, count }) => (
+                <Chip key={label} active={filter?.kind === "age" && filter.value === label} onClick={() => onPick("age", label)}>
+                  {label} <span className="font-semibold">{count}</span>
+                </Chip>
+              )) : <span className="text-[11px] text-[var(--color-text-secondary)]">—</span>}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Active filter */}
       {filter ? (
-        <div className="mt-3 flex items-center gap-2 text-[12px]">
+        <div className="flex items-center gap-2 text-[12px]">
           <span className="text-[var(--color-text-secondary)]">
-            Filtro: <span className="font-semibold text-[var(--color-text-default)]">{filterLabel(filter)}</span> ·{" "}
-            {filtered.length} {t("campaigns")}
+            Filtro: <span className="font-semibold text-[var(--color-text-default)]">{filterLabel}</span>
+            {" · "}{campaigns.length} de {totalCount} avisos
           </span>
           <button
             type="button"
-            onClick={() => setFilter(null)}
+            onClick={onClear}
             className="rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] px-2 py-0.5 text-[11px] font-medium hover:bg-[var(--color-neutral-100)]"
           >
-            ✕
+            ✕ Limpiar
           </button>
         </div>
-      ) : null}
+      ) : (
+        <p className="text-[12px] text-[var(--color-text-secondary)]">
+          {totalCount} avisos — filtrá haciendo click en los chips de arriba
+        </p>
+      )}
 
-      <CampaignGrid campaigns={filtered} classByKey={g.classByKey} />
-    </ChartCard>
-  );
-}
-
-// Grid de avisos con desplegable: muestra un preview y "Ver todos los anuncios".
-function CampaignGrid({ campaigns, classByKey }: { campaigns: Campaign[]; classByKey: Map<string, PerAd> }) {
-  const t = useTranslations("competitorAds");
-  const [expanded, setExpanded] = useState(false);
-  const PREVIEW = 6;
-  const visible = expanded ? campaigns : campaigns.slice(0, PREVIEW);
-  return (
-    <>
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {visible.map((c) => (
-          <AdCard key={campaignKey(c.lead)} c={c} cls={classByKey.get(campaignKey(c.lead)) ?? null} />
-        ))}
-      </div>
-      {campaigns.length > PREVIEW ? (
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          className="mt-3 inline-flex items-center gap-1.5 rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] px-3 py-1.5 text-[12px] font-medium text-[var(--color-text-default)] transition hover:bg-[var(--color-neutral-100)]"
-        >
-          <ChevronDown size={14} className={cn("transition-transform", expanded && "rotate-180")} />
-          {expanded ? t("seeLess") : t("seeAll", { count: campaigns.length })}
-        </button>
-      ) : null}
-    </>
-  );
-}
-
-function SynthesisBlock({ s }: { s: Synthesis }) {
-  const t = useTranslations("competitorAds");
-  return (
-    <div className="rounded-[var(--radius-m)] border border-[var(--color-brand-200)] bg-gradient-to-b from-[var(--color-brand-50)] to-[var(--color-bg-card)] p-4">
-      <div className="mb-2 flex items-center gap-2 text-[13px] font-semibold text-[var(--color-text-default)]">
-        <Sparkles size={14} className="text-[var(--color-brand-500)]" />
-        {t("whatCommunicating")}
-        {s.ads_analyzed ? (
-          <span className="font-normal text-[var(--color-text-secondary)]">· {t("analyzedCampaigns", { n: s.ads_analyzed })}</span>
-        ) : null}
-      </div>
-      {s.summary ? <p className="mb-3 text-[13px] leading-snug">{s.summary}</p> : null}
-
-      <div className="space-y-2.5">
-        {(s.angles ?? []).map((a, i) => (
-          <div key={i} className="border-l-2 border-[var(--color-brand-200)] pl-3">
-            <div className="flex flex-wrap items-baseline gap-x-2 text-[13px]">
-              <span className="font-semibold">{a.label}</span>
-              {typeof a.weight === "number" ? (
-                <span className="text-[11px] text-[var(--color-text-secondary)]">
-                  {a.weight} {t("campaigns")}
-                  {a.oldest_start ? <> · {t("oldestCampaign")} {fmtDate(a.oldest_start)}</> : null}
-                </span>
-              ) : null}
-            </div>
-            {a.description ? (
-              <p className="text-[12px] text-[var(--color-text-secondary)]">{a.description}</p>
-            ) : null}
-            {a.related_pains?.length ? (
-              <div className="mt-1 flex flex-wrap gap-1">
-                {a.related_pains.map((p) => (
-                  <span
-                    key={p}
-                    className="rounded-full bg-rose-50 px-1.5 py-0.5 text-[10px] font-medium text-rose-600"
-                    title={t("painTooltip")}
-                  >
-                    🎯 {p}
-                  </span>
-                ))}
-              </div>
-            ) : null}
-            {a.example_copies?.length ? (
-              <p className="mt-1 text-[11px] italic text-[var(--color-text-secondary)]">
-                "{a.example_copies[0]}"
-              </p>
-            ) : null}
+      {/* Flat grid */}
+      {campaigns.length === 0 ? (
+        <p className="rounded-[var(--radius-m)] border border-dashed border-[var(--color-neutral-200)] px-6 py-8 text-center text-[13px] text-[var(--color-text-secondary)]">
+          Ningún aviso coincide con el filtro.
+        </p>
+      ) : (
+        <>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {visible.map(({ campaign, competitor, cls }) => (
+              <AdCard key={campaignKey(campaign.lead)} c={campaign} cls={cls} competitor={competitor} />
+            ))}
           </div>
-        ))}
-      </div>
-
-      {s.offer_types?.length ? (
-        <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[11px]">
-          <span className="text-[var(--color-text-secondary)]">{t("offers")}</span>
-          {s.offer_types.map((o) => (
-            <span key={o} className="rounded-full border border-[var(--color-neutral-200)] px-1.5 py-0.5">
-              {o}
-            </span>
-          ))}
-        </div>
-      ) : null}
+          {campaigns.length > PREVIEW ? (
+            <button
+              type="button"
+              onClick={() => setExpanded((v) => !v)}
+              className="inline-flex items-center gap-1.5 rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] px-3 py-1.5 text-[12px] font-medium text-[var(--color-text-default)] transition hover:bg-[var(--color-neutral-100)]"
+            >
+              <ChevronDown size={14} className={cn("transition-transform", expanded && "rotate-180")} />
+              {expanded ? "Ver menos" : `Ver todos (${campaigns.length})`}
+            </button>
+          ) : null}
+        </>
+      )}
     </div>
   );
 }
 
-// Bloque "qué responde esta data" — agregados que pidió el equipo:
-// distribución por objetivo (CTA), por tipo de contenido y los avisos más
-// longevos (proxy de "ad ganador": si lleva mucho corriendo, funciona).
-function QuestionsBlock({
-  s,
-  campaigns,
-  filter,
-  onPick,
-}: {
-  s: Synthesis;
-  campaigns: Campaign[];
-  filter: AdFilter | null;
-  onPick: (kind: AdFilter["kind"], value: string) => void;
-}) {
-  const t = useTranslations("competitorAds");
-  const GOAL_LABELS: Record<string, string> = {
-    lead_gen: t("goal.lead_gen"), demo: t("goal.demo"), descarga: t("goal.descarga"),
-    contenido: t("goal.contenido"), trafico: t("goal.trafico"), otro: t("goal.otro"),
-  };
-  const CONTENT_LABELS: Record<string, string> = {
-    caso_exito: t("contentType.caso_exito"), webinar: t("contentType.webinar"),
-    evento: t("contentType.evento"), demo_producto: t("contentType.demo_producto"),
-    guia_descargable: t("contentType.guia_descargable"), calculadora: t("contentType.calculadora"),
-    blog_articulo: t("contentType.blog_articulo"), lanzamiento_feature: t("contentType.lanzamiento_feature"),
-    generico: t("contentType.generico"),
-  };
-  const goalLabel = (k: string) => GOAL_LABELS[k] ?? k;
-  const contentLabel = (k: string) => CONTENT_LABELS[k] ?? k;
-  const byGoal = s.by_goal ?? [];
-  const byContent = (s.by_content_type ?? []).filter((t) => t.key !== "generico" || (s.by_content_type ?? []).length === 1);
-  const byModule = (s.by_module ?? []).slice(0, 10);
-  const byPersona = (s.by_persona ?? []).slice(0, 8);
-  const ageBuckets = campaignTimeStats(campaigns).buckets;
-  const formats = formatCounts(campaigns);
+// ─── Ad card ──────────────────────────────────────────────────────────────────
 
-  const veterans = [...campaigns]
-    .filter((c) => c.lead.is_active && c.lead.ad_start_date)
-    .sort((a, b) => (a.lead.ad_start_date ?? "").localeCompare(b.lead.ad_start_date ?? ""))
-    .slice(0, 3);
-
-  if (
-    !byGoal.length &&
-    !byContent.length &&
-    !byModule.length &&
-    !byPersona.length &&
-    !ageBuckets.length &&
-    !formats.length &&
-    !veterans.length
-  )
-    return null;
-
-  return (
-    <div className="mt-3 grid gap-3 rounded-[var(--radius-m)] border border-[var(--color-neutral-200)] bg-[var(--color-bg-card)] p-4 md:grid-cols-3">
-      <div>
-        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">
-          {t("byGoalCta")}
-        </p>
-        <div className="flex flex-wrap gap-1">
-          {byGoal.length ? (
-            byGoal.map((t) => (
-              <Chip
-                key={t.key}
-                active={filter?.kind === "goal" && filter.value === t.key}
-                onClick={() => onPick("goal", t.key)}
-              >
-                {goalLabel(t.key)} <span className="font-semibold">{t.count}</span>
-              </Chip>
-            ))
-          ) : (
-            <span className="text-[11px] text-[var(--color-text-secondary)]">—</span>
-          )}
-        </div>
-      </div>
-
-      <div>
-        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">
-          {t("contentTypes")}
-        </p>
-        <div className="flex flex-wrap gap-1">
-          {byContent.length ? (
-            byContent.map((t) => (
-              <Chip
-                key={t.key}
-                active={filter?.kind === "content_type" && filter.value === t.key}
-                onClick={() => onPick("content_type", t.key)}
-              >
-                {contentLabel(t.key)} <span className="font-semibold">{t.count}</span>
-              </Chip>
-            ))
-          ) : (
-            <span className="text-[11px] text-[var(--color-text-secondary)]">—</span>
-          )}
-        </div>
-      </div>
-
-      <div>
-        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">
-          {t("byModule")}
-        </p>
-        <div className="flex flex-wrap gap-1">
-          {byModule.length ? (
-            byModule.map((t) => (
-              <Chip
-                key={t.key}
-                active={filter?.kind === "module" && filter.value === t.key}
-                onClick={() => onPick("module", t.key)}
-              >
-                {t.key} <span className="font-semibold">{t.count}</span>
-              </Chip>
-            ))
-          ) : (
-            <span className="text-[11px] text-[var(--color-text-secondary)]">—</span>
-          )}
-        </div>
-      </div>
-
-      <div>
-        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">
-          {t("byPersona")}
-        </p>
-        <div className="flex flex-wrap gap-1">
-          {byPersona.length ? (
-            byPersona.map((t) => (
-              <Chip
-                key={t.key}
-                active={filter?.kind === "persona" && filter.value === t.key}
-                onClick={() => onPick("persona", t.key)}
-              >
-                👤 {t.key} <span className="font-semibold">{t.count}</span>
-              </Chip>
-            ))
-          ) : (
-            <span className="text-[11px] text-[var(--color-text-secondary)]">—</span>
-          )}
-        </div>
-      </div>
-
-      <div>
-        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">
-          {t("format")}
-        </p>
-        <div className="flex flex-wrap gap-1">
-          {formats.length ? (
-            formats.map((t) => (
-              <Chip
-                key={t.key}
-                active={filter?.kind === "format" && filter.value === t.key}
-                onClick={() => onPick("format", t.key)}
-              >
-                {t.label} <span className="font-semibold">{t.count}</span>
-              </Chip>
-            ))
-          ) : (
-            <span className="text-[11px] text-[var(--color-text-secondary)]">—</span>
-          )}
-        </div>
-      </div>
-
-      <div>
-        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">
-          {t("ageBuckets")}
-        </p>
-        <div className="flex flex-wrap gap-1">
-          {ageBuckets.length ? (
-            ageBuckets.map((t) => (
-              <Chip
-                key={t.label}
-                active={filter?.kind === "age" && filter.value === t.label}
-                onClick={() => onPick("age", t.label)}
-              >
-                {t.label} <span className="font-semibold">{t.count}</span>
-              </Chip>
-            ))
-          ) : (
-            <span className="text-[11px] text-[var(--color-text-secondary)]">—</span>
-          )}
-        </div>
-      </div>
-
-      <div>
-        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">
-          {t("veterans")}
-        </p>
-        <div className="space-y-0.5">
-          {veterans.length ? (
-            veterans.map((c) => (
-              <p key={campaignKey(c.lead)} className="truncate text-[11px] text-[var(--color-text-default)]">
-                <span className="text-[var(--color-text-secondary)]">{t("since")} {fmtDate(c.lead.ad_start_date)}</span>
-                {" · "}
-                {c.lead.title || c.lead.body_text?.slice(0, 40) || t("noTitle")}
-              </p>
-            ))
-          ) : (
-            <span className="text-[11px] text-[var(--color-text-secondary)]">—</span>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function AdCard({ c, cls }: { c: Campaign; cls: PerAd | null }) {
+function AdCard({ c, cls, competitor }: { c: Campaign; cls: PerAd | null; competitor?: string }) {
   const t = useTranslations("competitorAds");
   const tl = useTaxonomyLabel();
   const [showTranscript, setShowTranscript] = useState(false);
@@ -764,22 +737,27 @@ function AdCard({ c, cls }: { c: Campaign; cls: PerAd | null }) {
   return (
     <div className="flex flex-col gap-2 rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] bg-[var(--color-bg-card)] p-3">
       <div className="flex items-center justify-between gap-2 text-[11px]">
-        <span
-          className={cn(
-            "rounded-full px-1.5 py-0.5 font-medium",
-            ad.is_active ? "bg-emerald-50 text-emerald-700" : "bg-[var(--color-neutral-100)] text-[var(--color-text-secondary)]",
-          )}
-        >
-          {ad.is_active ? t("active") : t("inactive")}
-        </span>
+        <div className="flex items-center gap-1.5">
+          <span
+            className={cn(
+              "rounded-full px-1.5 py-0.5 font-medium",
+              ad.is_active ? "bg-emerald-50 text-emerald-700" : "bg-[var(--color-neutral-100)] text-[var(--color-text-secondary)]",
+            )}
+          >
+            {ad.is_active ? t("active") : t("inactive")}
+          </span>
+          {competitor ? (
+            <span className="rounded-full bg-[var(--color-brand-50)] px-1.5 py-0.5 font-medium text-[var(--color-brand-500)]">
+              {competitor}
+            </span>
+          ) : null}
+        </div>
         <span className="text-[var(--color-text-secondary)]">
           {c.variants > 1 ? `${c.variants} variantes · ` : ""}{t("since")} {fmtDate(ad.ad_start_date)}
         </span>
       </div>
 
       {video ? (
-        // Aviso de video: reproductor real (el preview de Meta suele venir
-        // borroso). preload="metadata" → muestra el poster y carga al play.
         <div className="overflow-hidden rounded-[var(--radius-s)] bg-[var(--color-neutral-100)]">
           <video
             controls
@@ -791,9 +769,6 @@ function AdCard({ c, cls }: { c: Campaign; cls: PerAd | null }) {
           </video>
         </div>
       ) : thumb ? (
-        // Creativo estático completo (sin crop), centrado sobre fondo neutro,
-        // como en Meta Ad Library. object-contain + tope de altura para que un
-        // retrato muy alto no domine la tarjeta.
         <div className="overflow-hidden rounded-[var(--radius-s)] bg-[var(--color-neutral-100)]">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
