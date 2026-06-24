@@ -1044,6 +1044,61 @@ function topTextValues(values: string[], limit = 8): string[] {
   return tallyTextValues(values, limit).map((item) => item.key);
 }
 
+function uniqueStrings(values: Array<string | null | undefined>): string[] {
+  return [...new Set(values.filter((value): value is string => Boolean(value && value.trim())))];
+}
+
+function organicPostHref(post: Pick<StoredPost, "post_id" | "post_url">): string {
+  return post.post_url ?? `https://www.instagram.com/p/${post.post_id}/`;
+}
+
+function postHrefForId(posts: StoredPost[], postId: string): string {
+  const post = posts.find((p) => p.post_id === postId);
+  return post ? organicPostHref(post) : `https://www.instagram.com/p/${postId}/`;
+}
+
+function firstCaptionLine(post: StoredPost): string | null {
+  const caption = post.caption?.replace(/\s+/g, " ").trim();
+  if (!caption) return null;
+  const sentence = caption.split(/(?<=[.!?])\s+/)[0]?.trim() || caption;
+  return sentence.slice(0, 80);
+}
+
+function inferredHook(post: StoredPost): string | null {
+  return post.analysis?.hook || firstCaptionLine(post);
+}
+
+function inferredTone(post: StoredPost): string | null {
+  if (post.analysis?.tone) return post.analysis.tone;
+  const text = `${post.caption ?? ""} ${post.analysis?.creative_text ?? ""}`.toLowerCase();
+  if (!text.trim()) return null;
+  if (/(meme|humor|jaja|😂|🤣|divertid|emoji|juego|jugando)/.test(text)) return "humorístico";
+  if (/(guía|guia|tip|tips|aprend|cómo|como |claves|checklist|tutorial|manual)/.test(text)) return "educativo";
+  if (/(hoy|ahora|últim|ultimo|alerta|urgente|no esperes|cupos)/.test(text)) return "urgente";
+  if (/(futuro|transform|crec|mejor|logr|construy|potenci|inspir)/.test(text)) return "aspiracional";
+  return "conversacional";
+}
+
+function inferredCtaStrength(post: StoredPost): string | null {
+  if (post.analysis?.cta_strength && post.analysis.cta_strength !== "none") return post.analysis.cta_strength;
+  const text = post.caption?.toLowerCase() ?? "";
+  if (/(agenda|agendá|solicita|solicitá|descarga|descargá|inscríbete|inscribite|registr|compra|reserva|demo)/.test(text)) return "strong";
+  if (/(conoce|conocé|lee|mira|mirá|descubre|descubrí|comenta|cuéntanos|contanos|link en bio|bio)/.test(text)) return "soft";
+  return null;
+}
+
+function inferredOfferType(post: StoredPost): string | null {
+  if (post.analysis?.offer_type) return post.analysis.offer_type;
+  const text = post.caption?.toLowerCase() ?? "";
+  if (/(webinar|masterclass)/.test(text)) return "webinar";
+  if (/(evento|charla|encuentro|conferencia|feria)/.test(text)) return "evento";
+  if (/(guía|guia|manual|ebook|checklist|descarga)/.test(text)) return "guía";
+  if (/(demo|llamada|reunión|reunion)/.test(text)) return "demo";
+  if (/(curso|certificación|certificacion|training|taller)/.test(text)) return "curso";
+  if (/(producto|feature|funcionalidad|plataforma|software|app)/.test(text)) return "producto";
+  return null;
+}
+
 type MentionCategory = "news" | "community" | "person" | "company" | "other";
 type MentionSignal = { handle: string; count: number; category: MentionCategory };
 
@@ -1274,15 +1329,20 @@ function OrganicBenchmark({
 
 function OrganicPostThumb({ post }: { post: StoredPost }) {
   const t = useTranslations("competitorAds");
-  const src = organicImgSrc(post.display_url);
-  const href = post.post_url ?? `https://www.instagram.com/p/${post.post_id}/`;
+  const imageCandidates = useMemo(
+    () => uniqueStrings([post.display_url, ...(post.media?.images ?? [])]),
+    [post.display_url, post.media?.images],
+  );
+  const [imageIndex, setImageIndex] = useState(0);
+  const src = imageIndex < imageCandidates.length ? organicImgSrc(imageCandidates[imageIndex]) : null;
+  const href = organicPostHref(post);
   const signals = [
-    post.analysis?.hook ? { label: t("organic.hook"), value: post.analysis.hook } : null,
-    post.analysis?.tone ? { label: t("organic.tone"), value: post.analysis.tone } : null,
-    post.analysis?.cta_strength && post.analysis.cta_strength !== "none"
-      ? { label: t("organic.ctaStrength"), value: post.analysis.cta_strength }
+    inferredHook(post) ? { label: t("organic.hook"), value: inferredHook(post)! } : null,
+    inferredTone(post) ? { label: t("organic.tone"), value: inferredTone(post)! } : null,
+    inferredCtaStrength(post)
+      ? { label: t("organic.ctaStrength"), value: inferredCtaStrength(post)! }
       : null,
-    post.analysis?.offer_type ? { label: t("organic.offerType"), value: post.analysis.offer_type } : null,
+    inferredOfferType(post) ? { label: t("organic.offerType"), value: inferredOfferType(post)! } : null,
   ].filter((item): item is { label: string; value: string } => Boolean(item));
   return (
     <a
@@ -1293,7 +1353,13 @@ function OrganicPostThumb({ post }: { post: StoredPost }) {
     >
       {src ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={src} alt="" className="aspect-square w-full rounded-sm object-cover" loading="lazy" />
+        <img
+          src={src}
+          alt=""
+          className="aspect-square w-full rounded-sm object-cover"
+          loading="lazy"
+          onError={() => setImageIndex((index) => index + 1)}
+        />
       ) : (
         <div className="flex aspect-square w-full items-center justify-center rounded-sm bg-[var(--color-neutral-200)] text-[18px]">
           {post.format === "video" || post.format === "reel" ? "▶" : "🖼"}
@@ -1407,10 +1473,10 @@ function OrganicColumn({
   };
   const activeFilterLabel = organicFilter ? `${filterLabels[organicFilter.kind]}: ${organicFilter.value}` : null;
   const creativeSignals = useMemo(() => ({
-    hooks: topTextValues(posts.map((p) => p.analysis?.hook).filter((value): value is string => Boolean(value)), 4),
-    tones: tallyTextValues(posts.map((p) => p.analysis?.tone).filter((value): value is string => Boolean(value)), 5),
-    ctas: tallyTextValues(posts.map((p) => p.analysis?.cta_strength).filter((value): value is string => Boolean(value) && value !== "none"), 3),
-    offers: tallyTextValues(posts.map((p) => p.analysis?.offer_type).filter((value): value is string => Boolean(value)), 5),
+    hooks: topTextValues(posts.map(inferredHook).filter((value): value is string => Boolean(value)), 4),
+    tones: tallyTextValues(posts.map(inferredTone).filter((value): value is string => Boolean(value)), 5),
+    ctas: tallyTextValues(posts.map(inferredCtaStrength).filter((value): value is string => Boolean(value)), 3),
+    offers: tallyTextValues(posts.map(inferredOfferType).filter((value): value is string => Boolean(value)), 5),
   }), [posts]);
   const mentionSignals = useMemo(() => organicMentionSignals(posts), [posts]);
   const mentionCategoryLabel = (category: MentionCategory) => t(`organic.mentionCategory.${category}`);
@@ -1766,6 +1832,15 @@ function OrganicColumn({
                 <span className="font-semibold text-[var(--color-text-default)]">{pct(item.engagement_rate)}</span>
                 {" · "}
                 {item.caption_snippet || item.post_id}
+                {" · "}
+                <a
+                  href={postHrefForId(posts, item.post_id)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-medium text-[var(--color-brand-500)] underline underline-offset-2"
+                >
+                  {t("organic.postLink")}
+                </a>
               </p>
             ))}
           </div>
@@ -1782,6 +1857,15 @@ function OrganicColumn({
               <p key={item.post_id} className="text-[11px] text-[var(--color-text-secondary)]">
                 +{item.likes_growth} likes · +{item.comments_growth} comments · +{item.views_growth} views
                 {item.caption_snippet ? ` — ${item.caption_snippet}` : ""}
+                {" · "}
+                <a
+                  href={postHrefForId(posts, item.post_id)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-medium text-[var(--color-brand-500)] underline underline-offset-2"
+                >
+                  {t("organic.postLink")}
+                </a>
               </p>
             ))}
           </div>
