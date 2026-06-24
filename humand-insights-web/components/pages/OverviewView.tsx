@@ -19,6 +19,22 @@ function fmt(n: number): string {
   return n.toLocaleString("es-AR");
 }
 
+function formatShortDate(value: string | null): string | null {
+  if (!value) return null;
+  const [year, month, day] = value.split("-");
+  if (!year || !month || !day) return value;
+  return `${day}/${month}/${year}`;
+}
+
+function formatPeriod(start: string | null, end: string | null): string {
+  const formattedStart = formatShortDate(start);
+  const formattedEnd = formatShortDate(end);
+  if (formattedStart && formattedEnd) return `${formattedStart} - ${formattedEnd}`;
+  if (formattedStart) return `Desde ${formattedStart}`;
+  if (formattedEnd) return `Hasta ${formattedEnd}`;
+  return "Sin fecha";
+}
+
 function DeltaBadge({ deltaPct }: { deltaPct: number | null }) {
   if (deltaPct == null) return <span className="text-[12px] text-[var(--color-text-secondary)]">—</span>;
   const up = deltaPct >= 0;
@@ -147,19 +163,14 @@ export function OverviewView({ data, coveragePct, validated }: Props) {
       </section>
 
       {/* KPIs */}
-      <section className="grid gap-3 md:grid-cols-3 lg:grid-cols-5">
+      <section className="grid gap-3 md:grid-cols-3">
         <MetricCard label={t("analyzedCalls")} value={fmt(kpis.uniqueCalls)} caption={t("coveragePct", { pct: coveragePct.toFixed(1) })} />
         <MetricCard label={tc("deals")} value={fmt(kpis.uniqueDeals)} caption={t("dealsWithInsight")} />
-        <MetricCard label={tc("insights")} value={fmt(kpis.insightsCount)} />
-        <MetricCard
-          label={tc("confidence")}
-          value={kpis.avgConfidence != null ? kpis.avgConfidence.toFixed(2) : "—"}
-          caption={kpis.highConfidencePct != null ? `${kpis.highConfidencePct.toFixed(0)}% alta` : undefined}
-        />
         <MetricCard
           label={tc("period")}
-          value={kpis.periodEnd ?? "—"}
-          caption={kpis.periodStart ? `desde ${kpis.periodStart}` : undefined}
+          value={formatPeriod(kpis.periodStart, kpis.periodEnd)}
+          caption="según filtros aplicados"
+          valueClassName="text-[24px]"
         />
       </section>
 

@@ -71,7 +71,7 @@ function parseFiltersFromParams(sp: URLSearchParams): Filters {
     countries: getArr("countries"),
     industries: getArr("industries"),
     owners: getArr("owners"),
-    modules: getArr("modules"),
+    modules: [],
     categories: getArr("categories"),
     channels: getArr("channels"),
     sources: getArr("sources"),

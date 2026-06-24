@@ -13,6 +13,15 @@ import { PageTitle } from "@/components/pages/common";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FIELD_LABELS } from "@/lib/data/constants";
+import {
+  ANALYTICS_DIMENSIONS,
+  type AnalyticsDimensionKey,
+  filterRowsForAnalyticsDimension,
+  getAnalyticsDimension,
+  getAnalyticsDimensionValue,
+  normalizeAnalyticsDimensionKey,
+  rowMatchesAnalyticsDimension,
+} from "@/lib/analysis-dimensions";
 import { useFilteredRows } from "@/lib/data/use-filtered-rows";
 import type { InsightRow } from "@/lib/supabase/types";
 import { useTranslations } from "next-intl";
@@ -25,12 +34,12 @@ type ChartConfig = {
   id: string;
   title: string;
   type: ChartType;
-  xField: keyof InsightRow;
+  xField: AnalyticsDimensionKey;
   yAgg: AggType;
   /** Numeric field to aggregate on. Required for sum/mean/median. Optional for distinct (defaults to deal_id). */
   yField?: keyof InsightRow;
   /** Optional second dimension for stacked-bar / pie color split. */
-  colorBy?: keyof InsightRow;
+  colorBy?: AnalyticsDimensionKey;
   source: Source;
   topN: number;
 };
@@ -75,14 +84,16 @@ function median(nums: number[]): number {
 
 function aggregateOneDim(
   rows: InsightRow[],
-  xField: keyof InsightRow,
+  xField: AnalyticsDimensionKey,
   yAgg: AggType,
   yField: keyof InsightRow | undefined,
   topN: number,
 ): Array<{ name: string; value: number }> {
+  const xDimension = getAnalyticsDimension(xField);
+  const scopedRows = filterRowsForAnalyticsDimension(rows, xDimension);
   const buckets = new Map<string, InsightRow[]>();
-  for (const r of rows) {
-    const key = String(r[xField] ?? "").trim();
+  for (const r of scopedRows) {
+    const key = getAnalyticsDimensionValue(r, xDimension);
     if (!key) continue;
     const list = buckets.get(key) ?? [];
     list.push(r);
@@ -115,17 +126,21 @@ function aggregateOneDim(
 
 function aggregateTwoDim(
   rows: InsightRow[],
-  xField: keyof InsightRow,
-  colorBy: keyof InsightRow,
+  xField: AnalyticsDimensionKey,
+  colorBy: AnalyticsDimensionKey,
   yAgg: AggType,
   yField: keyof InsightRow | undefined,
   topN: number,
 ) {
+  const xDimension = getAnalyticsDimension(xField);
+  const colorDimension = getAnalyticsDimension(colorBy);
   const stacks = new Map<string, Map<string, InsightRow[]>>();
   const colorTotals = new Map<string, number>();
   for (const r of rows) {
-    const x = String(r[xField] ?? "").trim();
-    const c = String(r[colorBy] ?? "").trim();
+    if (!rowMatchesAnalyticsDimension(r, xDimension)) continue;
+    if (!rowMatchesAnalyticsDimension(r, colorDimension)) continue;
+    const x = getAnalyticsDimensionValue(r, xDimension);
+    const c = getAnalyticsDimensionValue(r, colorDimension);
     if (!x || !c) continue;
     if (!stacks.has(x)) stacks.set(x, new Map());
     const inner = stacks.get(x)!;
@@ -175,13 +190,15 @@ function aggregateTimeSeries(
   rows: InsightRow[],
   yAgg: AggType,
   yField: keyof InsightRow | undefined,
-  colorBy: keyof InsightRow | undefined,
+  colorBy: AnalyticsDimensionKey | undefined,
 ) {
+  const colorDimension = colorBy ? getAnalyticsDimension(colorBy) : null;
   const byMonth = new Map<string, Map<string, InsightRow[]>>();
   for (const r of rows) {
     if (!r.call_date) continue;
     const month = r.call_date.slice(0, 7);
-    const series = colorBy ? String(r[colorBy] ?? "").trim() || "(sin)" : "value";
+    if (colorDimension && !rowMatchesAnalyticsDimension(r, colorDimension)) continue;
+    const series = colorDimension ? getAnalyticsDimensionValue(r, colorDimension) || "(sin)" : "value";
     if (!byMonth.has(month)) byMonth.set(month, new Map());
     const inner = byMonth.get(month)!;
     const list = inner.get(series) ?? [];
@@ -248,12 +265,22 @@ function newChart(): ChartConfig {
   };
 }
 
+function normalizeChartConfig(chart: ChartConfig): ChartConfig {
+  const colorBy = chart.colorBy ? normalizeAnalyticsDimensionKey(chart.colorBy) : undefined;
+  return {
+    ...chart,
+    xField: normalizeAnalyticsDimensionKey(chart.xField),
+    colorBy,
+  };
+}
+
 export function CustomDashboardsClient({ rows }: { rows: InsightRow[] }) {
   const t = useTranslations("customDashboards");
   const { filteredRows } = useFilteredRows(rows);
 
   const CHART_TYPES = CHART_TYPE_KEYS.map(({ value, key }) => ({ value, label: t(key) }));
   const AGG_TYPES = AGG_TYPE_KEYS.map(({ value, key }) => ({ value, label: t(key) }));
+  const DIMENSION_OPTIONS = ANALYTICS_DIMENSIONS;
 
   const [dashboards, setDashboards] = useState<Dashboard[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -276,7 +303,7 @@ export function CustomDashboardsClient({ rows }: { rows: InsightRow[] }) {
     setSelectedId(d.id);
     setName(d.name);
     setIsShared(d.is_shared);
-    setCharts(d.config?.charts?.length ? d.config.charts : [newChart()]);
+    setCharts(d.config?.charts?.length ? d.config.charts.map(normalizeChartConfig) : [newChart()]);
     setRenaming(false);
     setEditingChartId(null);
   }, []);
@@ -288,10 +315,11 @@ export function CustomDashboardsClient({ rows }: { rows: InsightRow[] }) {
     setCharts([newChart()]);
     setEditingChartId(null);
     setRenaming(false);
-  }, []);
+  }, [t]);
 
   async function saveDashboard() {
-    const config: DashboardConfig = { charts };
+    const normalizedCharts = charts.map(normalizeChartConfig);
+    const config: DashboardConfig = { charts: normalizedCharts };
     const body = selectedId
       ? { id: selectedId, name, config, is_shared: isShared }
       : { name, config, is_shared: isShared };
@@ -438,9 +466,11 @@ export function CustomDashboardsClient({ rows }: { rows: InsightRow[] }) {
                     <select
                       className="w-full rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] p-1.5"
                       value={String(chart.xField)}
-                      onChange={(e) => updateChart(chart.id, { xField: e.target.value as keyof InsightRow })}
+                      onChange={(e) => updateChart(chart.id, { xField: normalizeAnalyticsDimensionKey(e.target.value) })}
                     >
-                      {Object.entries(FIELD_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                      {DIMENSION_OPTIONS.map((dimension) => (
+                        <option key={dimension.key} value={dimension.key}>{dimension.label}</option>
+                      ))}
                     </select>
                   </FieldLabel>
 
@@ -470,11 +500,11 @@ export function CustomDashboardsClient({ rows }: { rows: InsightRow[] }) {
                     <select
                       className="w-full rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] p-1.5"
                       value={chart.colorBy ? String(chart.colorBy) : ""}
-                      onChange={(e) => updateChart(chart.id, { colorBy: e.target.value ? (e.target.value as keyof InsightRow) : undefined })}
+                      onChange={(e) => updateChart(chart.id, { colorBy: e.target.value ? normalizeAnalyticsDimensionKey(e.target.value) : undefined })}
                     >
                       <option value="">{t("optNone")}</option>
-                      {Object.entries(FIELD_LABELS).filter(([k]) => k !== String(chart.xField)).map(([k, v]) => (
-                        <option key={k} value={k}>{v}</option>
+                      {DIMENSION_OPTIONS.filter((dimension) => dimension.key !== chart.xField).map((dimension) => (
+                        <option key={dimension.key} value={dimension.key}>{dimension.label}</option>
                       ))}
                     </select>
                   </FieldLabel>

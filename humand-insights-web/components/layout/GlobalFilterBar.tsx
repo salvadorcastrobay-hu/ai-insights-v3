@@ -31,7 +31,6 @@ const ARRAY_FILTER_KEYS: FilterMultiKey[] = [
   "segments",
   "countries",
   "industries",
-  "modules",
   "channels",
   "sources",
 ];

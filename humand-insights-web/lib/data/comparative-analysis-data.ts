@@ -1,4 +1,10 @@
 import { applyFilters, type Filters } from "@/lib/data/filters";
+import {
+  ANALYTICS_DIMENSIONS,
+  type AnalyticsDimension,
+  getAnalyticsDimensionValue,
+  rowMatchesAnalyticsDimension,
+} from "@/lib/analysis-dimensions";
 import type { InsightRow } from "@/lib/supabase/types";
 
 // -------- Config constants shared with the view --------
@@ -13,25 +19,7 @@ export const COMPARISON_OPTIONS = [
 ];
 export type CompareByKey = (typeof COMPARISON_OPTIONS)[number]["key"];
 
-export const FACET_OPTIONS: Record<string, keyof SlimRow> = {
-  "Tipo de insight": "insight_type_display",
-  "Subtipo de insight": "insight_subtype_display",
-  "Tema de pain": "pain_theme",
-  "Módulo": "module_display",
-  "Estado del módulo": "module_status",
-  "Categoría HR": "hr_category_display",
-  "Feature gap": "feature_display",
-  "Competidor": "competitor_name",
-  "Relación competitiva": "competitor_relationship_display",
-  "Deal stage": "deal_stage",
-  "Deal owner": "deal_owner",
-  "País": "country",
-  "Región": "region",
-  "Segmento": "segment",
-  "Industria": "industry",
-  "Canal de adquisición": "acquisition_channel",
-  "Fuente del deal": "deal_source",
-};
+export const FACET_OPTIONS = ANALYTICS_DIMENSIONS;
 
 export const METRIC_OPTIONS = {
   Menciones: "mentions",
@@ -68,6 +56,7 @@ export type SlimRow = {
   deal_source: string | null;
   deal_stage: string | null;
   deal_owner: string | null;
+  insight_type: InsightRow["insight_type"] | null;
   insight_type_display: string | null;
   insight_subtype_display: string | null;
   pain_theme: string | null;
@@ -114,6 +103,7 @@ export function buildComparativePayload(
       deal_source: r.deal_source ?? null,
       deal_stage: r.deal_stage ?? null,
       deal_owner: r.deal_owner ?? null,
+      insight_type: r.insight_type ?? null,
       insight_type_display: r.insight_type_display ?? null,
       insight_subtype_display: r.insight_subtype_display ?? null,
       pain_theme: r.pain_theme ?? null,
@@ -178,7 +168,7 @@ export function metricTotal(rows: SlimRow[], metric: MetricKey): number {
 
 export function groupMetric(
   rows: SlimRow[],
-  facetCol: keyof SlimRow,
+  facet: AnalyticsDimension,
   metric: MetricKey,
 ): Map<string, number> {
   const out = new Map<string, number>();
@@ -187,7 +177,8 @@ export function groupMetric(
   // bucket rows by cleaned facet label
   const buckets = new Map<string, SlimRow[]>();
   for (const r of rows) {
-    const label = cleanLabel(r[facetCol]);
+    if (!rowMatchesAnalyticsDimension(r, facet)) continue;
+    const label = cleanLabel(getAnalyticsDimensionValue(r, facet));
     if (!label) continue;
     const list = buckets.get(label);
     if (list) list.push(r);
@@ -213,11 +204,11 @@ export type ComparisonRow = {
 export function buildComparison(
   dfA: SlimRow[],
   dfB: SlimRow[],
-  facetCol: keyof SlimRow,
+  facet: AnalyticsDimension,
   metric: MetricKey,
 ): ComparisonRow[] {
-  const mapA = groupMetric(dfA, facetCol, metric);
-  const mapB = groupMetric(dfB, facetCol, metric);
+  const mapA = groupMetric(dfA, facet, metric);
+  const mapB = groupMetric(dfB, facet, metric);
   const keys = new Set<string>([...mapA.keys(), ...mapB.keys()]);
   const totalA = [...mapA.values()].reduce((acc, v) => acc + v, 0);
   const totalB = [...mapB.values()].reduce((acc, v) => acc + v, 0);
