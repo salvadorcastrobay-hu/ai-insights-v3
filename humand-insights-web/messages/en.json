@@ -287,6 +287,18 @@
       "tone": "Tone",
       "ctaStrength": "CTA",
       "offerType": "Offer",
+      "mentionsTitle": "Collaborations and mentions",
+      "mentionedPosts": "Posts with mentions",
+      "paidPartnerships": "Paid partnership",
+      "uniqueMentions": "Unique mentions",
+      "mentionHeuristic": "Category inferred from the handle; it does not replace profile enrichment.",
+      "mentionCategory": {
+        "news": "news/media outlet",
+        "community": "community or HR",
+        "person": "possible person/influencer",
+        "company": "company/partner",
+        "other": "other"
+      },
       "filters": "Filters",
       "clear": "clear",
       "filteredPosts": "Filtered posts",

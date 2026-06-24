@@ -10,6 +10,10 @@ export type OrganicPostAnalysis = {
   has_cta: boolean;
   cta_type: string | null; // "link_in_bio"|"dm"|"registrate"|"otro"
   creative_text?: string | null;
+  audio_transcript?: string | null;
+  visual_text?: string | null;
+  images_analyzed?: number;
+  videos_analyzed?: number;
   related_pains?: string[];
   persona?: string | null;
   modules?: string[];

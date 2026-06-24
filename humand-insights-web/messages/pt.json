@@ -287,6 +287,18 @@
       "tone": "Tom",
       "ctaStrength": "CTA",
       "offerType": "Oferta",
+      "mentionsTitle": "Colaborações e menções",
+      "mentionedPosts": "Posts com menções",
+      "paidPartnerships": "Paid partnership",
+      "uniqueMentions": "Menções únicas",
+      "mentionHeuristic": "Categoria inferida pelo handle; não substitui enriquecimento de perfil.",
+      "mentionCategory": {
+        "news": "portal/mídia",
+        "community": "comunidade ou HR",
+        "person": "pessoa/influencer possível",
+        "company": "empresa/parceiro",
+        "other": "outro"
+      },
       "filters": "Filtros",
       "clear": "limpar",
       "filteredPosts": "Posts filtrados",
