@@ -348,6 +348,7 @@ async function classifyPosts(
 // ─── Aggregated synthesis ─────────────────────────────────────────────────────
 
 const DAYS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+const POSTING_PATTERN_TZ_OFFSET_HOURS = -3;
 
 function computeStats(posts: StoredPost[]): {
   posting_frequency: OrganicSynthesis["posting_frequency"];
@@ -382,7 +383,8 @@ function computeStats(posts: StoredPost[]): {
   const by_day: Record<string, number> = {};
   const by_hour: Record<string, number> = {};
   for (const p of dated) {
-    const d = new Date(p.posted_at!);
+    const rawDate = new Date(p.posted_at!);
+    const d = new Date(rawDate.getTime() + POSTING_PATTERN_TZ_OFFSET_HOURS * 60 * 60 * 1000);
     const dayLabel = DAYS[d.getUTCDay()] ?? "?";
     by_day[dayLabel] = (by_day[dayLabel] ?? 0) + 1;
     const hour = String(d.getUTCHours()).padStart(2, "0") + ":00";

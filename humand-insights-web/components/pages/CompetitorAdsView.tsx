@@ -996,6 +996,8 @@ function AdCard({ c, cls, competitor }: { c: Campaign; cls: PerAd | null; compet
 
 const DAY_ORDER = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 const JS_DAY_LABELS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+const ORGANIC_TIMEZONE_LABEL = "GMT-3";
+const ORGANIC_TIMEZONE_OFFSET_HOURS = -3;
 
 type OrganicFilter = { kind: "format" | "pain" | "persona" | "module"; value: string };
 
@@ -1043,17 +1045,22 @@ function topTextValues(values: string[], limit = 8): string[] {
 }
 
 function postDayLabel(post: StoredPost): string | null {
-  if (!post.posted_at) return null;
-  const date = new Date(post.posted_at);
-  if (Number.isNaN(date.getTime())) return null;
+  const date = organicTimezoneDate(post);
+  if (!date) return null;
   return JS_DAY_LABELS[date.getUTCDay()] ?? null;
 }
 
 function postHourKey(post: StoredPost): string | null {
+  const date = organicTimezoneDate(post);
+  if (!date) return null;
+  return `${String(date.getUTCHours()).padStart(2, "0")}:00`;
+}
+
+function organicTimezoneDate(post: StoredPost): Date | null {
   if (!post.posted_at) return null;
   const date = new Date(post.posted_at);
   if (Number.isNaN(date.getTime())) return null;
-  return `${String(date.getUTCHours()).padStart(2, "0")}:00`;
+  return new Date(date.getTime() + ORGANIC_TIMEZONE_OFFSET_HOURS * 60 * 60 * 1000);
 }
 
 function profileFor(profiles: OrganicProfile[], competitor: string): OrganicProfile | null {
@@ -1292,6 +1299,7 @@ function OrganicColumn({
   const t = useTranslations("competitorAds");
   const [expandedPillar, setExpandedPillar] = useState<number | null>(null);
   const [hoveredDay, setHoveredDay] = useState<string | null>(null);
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [hourTooltip, setHourTooltip] = useState<string | null>(null);
   const [showAllPosts, setShowAllPosts] = useState(false);
   const [organicFilter, setOrganicFilter] = useState<OrganicFilter | null>(null);
@@ -1303,18 +1311,21 @@ function OrganicColumn({
   const bestEr = synth?.best_by_engagement_rate ?? [];
   const momentum = synth?.top_momentum_posts ?? [];
   const overlap = synth?.overlap_with_ads;
-  const byDay = synth?.posting_patterns?.by_day ?? {};
-  const byHour = synth?.posting_patterns?.by_hour ?? {};
   const gaps = synth?.gaps_vs_humand ?? [];
 
   const totalFmt = Object.values(fmtDist).reduce((a, b) => a + b, 0);
-  const dayData = DAY_ORDER.map((d) => ({ label: d, count: byDay[d] ?? 0 }));
-  const hoveredDayCount = hoveredDay ? (dayData.find((d) => d.label === hoveredDay)?.count ?? 0) : 0;
+  const activeDay = hoveredDay ?? selectedDay;
+  const dayData = DAY_ORDER.map((label) => ({
+    label,
+    count: posts.filter((post) => postDayLabel(post) === label).length,
+  }));
+  const activeDayCount = activeDay ? (dayData.find((d) => d.label === activeDay)?.count ?? 0) : 0;
   const hourData = Array.from({ length: 24 }, (_, h) => {
     const key = String(h).padStart(2, "0") + ":00";
-    const count = hoveredDay
-      ? posts.filter((post) => postDayLabel(post) === hoveredDay && postHourKey(post) === key).length
-      : byHour[key] ?? 0;
+    const count = posts.filter((post) => {
+      if (postHourKey(post) !== key) return false;
+      return activeDay ? postDayLabel(post) === activeDay : true;
+    }).length;
     return { label: String(h), count };
   });
   const maxDay = Math.max(...dayData.map((d) => d.count), 1);
@@ -1575,9 +1586,10 @@ function OrganicColumn({
             <div className="mb-2">
               <div className="mb-1 flex items-center justify-between">
                 <p className="text-[10px] text-[var(--color-text-secondary)]">{t("organic.weekday")}</p>
-                {hoveredDay ? (
+                {activeDay ? (
                   <span className="text-[10px] font-medium text-violet-600">
-                    {hoveredDay}: {hoveredDayCount} {t("organic.postsLabel")}
+                    {activeDay}: {activeDayCount} {t("organic.postsLabel")}
+                    {selectedDay === activeDay ? ` · ${t("organic.pinned")}` : ""}
                   </span>
                 ) : null}
               </div>
@@ -1588,9 +1600,14 @@ function OrganicColumn({
                     className="flex flex-1 flex-col items-center gap-0.5"
                     onMouseEnter={() => setHoveredDay(label)}
                     onMouseLeave={() => setHoveredDay(null)}
+                    onClick={() => setSelectedDay((current) => current === label ? null : label)}
                   >
                     <div
-                      className={cn("w-full rounded-sm transition-colors", count > 0 ? "bg-violet-400 hover:bg-violet-500" : "bg-[var(--color-neutral-100)]")}
+                      className={cn(
+                        "w-full cursor-pointer rounded-sm transition-colors",
+                        count > 0 ? "bg-violet-400 hover:bg-violet-500" : "bg-[var(--color-neutral-100)]",
+                        selectedDay === label && "ring-2 ring-violet-700 ring-offset-1",
+                      )}
                       style={{ height: `${Math.round((count / maxDay) * 34)}px`, minHeight: count ? 2 : 0 }}
                     />
                     <span className="text-[9px] text-[var(--color-text-secondary)]">{label.slice(0, 2)}</span>
@@ -1604,7 +1621,7 @@ function OrganicColumn({
             <div>
               <div className="mb-1 flex items-center justify-between">
                 <p className="text-[10px] text-[var(--color-text-secondary)]">
-                  {hoveredDay ? `${t("organic.hoursForDay")} ${hoveredDay} (UTC)` : t("organic.hourOfDayUtc")}
+                  {activeDay ? `${t("organic.hoursForDay")} ${activeDay} (${ORGANIC_TIMEZONE_LABEL})` : t("organic.hourOfDay")}
                 </p>
                 {hourTooltip ? <span className="text-[10px] font-medium text-violet-600">{hourTooltip}</span> : null}
               </div>
@@ -1614,7 +1631,7 @@ function OrganicColumn({
                     key={label}
                     className={cn("flex-1 rounded-sm transition-colors", count > 0 ? "bg-violet-400 hover:bg-violet-500" : "bg-[var(--color-neutral-100)]")}
                     style={{ height: `${Math.round((count / maxHour) * 24)}px`, minHeight: count ? 2 : 0 }}
-                    onMouseEnter={() => setHourTooltip(`${label}:00 UTC — ${count} ${t("organic.postsLabel")}`)}
+                    onMouseEnter={() => setHourTooltip(`${label}:00 ${ORGANIC_TIMEZONE_LABEL} — ${count} ${t("organic.postsLabel")}`)}
                     onMouseLeave={() => setHourTooltip(null)}
                   />
                 ))}
