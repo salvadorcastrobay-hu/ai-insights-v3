@@ -346,7 +346,7 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, read
       const json = (await res.json()) as {
         totalUpserted?: number;
         error?: string;
-        results?: Array<{ competitor: string; fetched?: number; error?: string; analyzeError?: string; analyzed?: boolean }>;
+        results?: Array<{ competitor: string; fetched?: number; skipped?: number; error?: string; analyzeError?: string; analyzed?: boolean }>;
       };
       if (!res.ok) {
         setOrganicMsg(json.error ?? `Error ${res.status}`);
@@ -356,10 +356,12 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, read
         const analyzeErr = results.find((r) => r.analyzeError)?.analyzeError;
         const analyzedOk = results.filter((r) => r.analyzed).length;
         const fetched = results.reduce((acc, item) => acc + (item.fetched ?? 0), 0);
-        const parts = [`Orgánico actualizado: ${json.totalUpserted ?? 0} posts (${fetched} leídos)`];
-        if (fetchErr) parts.push(`fetch falló: ${fetchErr}`);
-        if (analyzeErr) parts.push(`análisis falló: ${analyzeErr}`);
-        else parts.push(`análisis OK (${analyzedOk})`);
+        const skipped = results.reduce((acc, item) => acc + (item.skipped ?? 0), 0);
+        const parts = [t("organic.updated", { upserted: json.totalUpserted ?? 0, fetched })];
+        if (skipped) parts.push(t("organic.skippedWithoutId", { count: skipped }));
+        if (fetchErr) parts.push(t("organic.fetchFailed", { error: fetchErr }));
+        if (analyzeErr) parts.push(t("organic.analysisFailed", { error: analyzeErr }));
+        else parts.push(t("organic.analysisOk", { count: analyzedOk }));
         setOrganicMsg(parts.join(" · "));
         router.refresh();
       }
@@ -404,7 +406,7 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, read
                 )}
               >
                 {organicLoading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-                {organicLoading ? "Refrescando orgánico" : "Refrescar orgánico"}
+                {organicLoading ? t("organic.refreshing") : t("organic.refresh")}
               </button>
             </div>
           ) : null}
@@ -993,6 +995,7 @@ function AdCard({ c, cls, competitor }: { c: Campaign; cls: PerAd | null; compet
 // ─── Organic view ─────────────────────────────────────────────────────────────
 
 const DAY_ORDER = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+const JS_DAY_LABELS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 
 type OrganicFilter = { kind: "format" | "pain" | "persona" | "module"; value: string };
 
@@ -1021,6 +1024,36 @@ function topTallyValues(posts: StoredPost[], kind: OrganicFilter["kind"]): strin
   const counts = new Map<string, number>();
   for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
   return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([value]) => value);
+}
+
+function tallyTextValues(values: string[], limit = 8): Tally[] {
+  const counts = new Map<string, number>();
+  for (const raw of values) {
+    const value = raw.trim();
+    if (value) counts.set(value, (counts.get(value) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([key, count]) => ({ key, count }));
+}
+
+function topTextValues(values: string[], limit = 8): string[] {
+  return tallyTextValues(values, limit).map((item) => item.key);
+}
+
+function postDayLabel(post: StoredPost): string | null {
+  if (!post.posted_at) return null;
+  const date = new Date(post.posted_at);
+  if (Number.isNaN(date.getTime())) return null;
+  return JS_DAY_LABELS[date.getUTCDay()] ?? null;
+}
+
+function postHourKey(post: StoredPost): string | null {
+  if (!post.posted_at) return null;
+  const date = new Date(post.posted_at);
+  if (Number.isNaN(date.getTime())) return null;
+  return `${String(date.getUTCHours()).padStart(2, "0")}:00`;
 }
 
 function profileFor(profiles: OrganicProfile[], competitor: string): OrganicProfile | null {
@@ -1111,6 +1144,7 @@ function OrganicView({
           const tr = synth?.i18n?.[i18nKey];
           const summary = tr?.summary ?? synth?.summary ?? null;
           const pillars = tr?.content_pillars ?? synth?.content_pillars ?? [];
+          const recommendations = tr?.recommendations ?? synth?.recommendations ?? [];
           return (
             <OrganicColumn
               key={name}
@@ -1120,6 +1154,7 @@ function OrganicView({
               synth={synth}
               summary={summary}
               pillars={pillars}
+              recommendations={recommendations}
             />
           );
         })}
@@ -1187,8 +1222,17 @@ function OrganicBenchmark({
 }
 
 function OrganicPostThumb({ post }: { post: StoredPost }) {
+  const t = useTranslations("competitorAds");
   const src = organicImgSrc(post.display_url);
   const href = post.post_url ?? `https://www.instagram.com/p/${post.post_id}/`;
+  const signals = [
+    post.analysis?.hook ? { label: t("organic.hook"), value: post.analysis.hook } : null,
+    post.analysis?.tone ? { label: t("organic.tone"), value: post.analysis.tone } : null,
+    post.analysis?.cta_strength && post.analysis.cta_strength !== "none"
+      ? { label: t("organic.ctaStrength"), value: post.analysis.cta_strength }
+      : null,
+    post.analysis?.offer_type ? { label: t("organic.offerType"), value: post.analysis.offer_type } : null,
+  ].filter((item): item is { label: string; value: string } => Boolean(item));
   return (
     <a
       href={href}
@@ -1211,6 +1255,19 @@ function OrganicPostThumb({ post }: { post: StoredPost }) {
       {post.caption ? (
         <p className="line-clamp-2 text-[10px] text-[var(--color-text-secondary)]">{post.caption}</p>
       ) : null}
+      {signals.length ? (
+        <div className="flex flex-wrap gap-1">
+          {signals.slice(0, 3).map((signal) => (
+            <span
+              key={`${signal.label}:${signal.value}`}
+              className="max-w-full truncate rounded-full bg-white px-1.5 py-0.5 text-[9px] text-[var(--color-text-secondary)]"
+              title={`${signal.label}: ${signal.value}`}
+            >
+              {signal.label}: {signal.value}
+            </span>
+          ))}
+        </div>
+      ) : null}
     </a>
   );
 }
@@ -1222,6 +1279,7 @@ function OrganicColumn({
   synth,
   summary,
   pillars,
+  recommendations,
 }: {
   name: string;
   posts: StoredPost[];
@@ -1229,9 +1287,11 @@ function OrganicColumn({
   synth: OrganicSynthesis | undefined;
   summary: string | null;
   pillars: string[];
+  recommendations: string[];
 }) {
+  const t = useTranslations("competitorAds");
   const [expandedPillar, setExpandedPillar] = useState<number | null>(null);
-  const [dayTooltip, setDayTooltip] = useState<string | null>(null);
+  const [hoveredDay, setHoveredDay] = useState<string | null>(null);
   const [hourTooltip, setHourTooltip] = useState<string | null>(null);
   const [showAllPosts, setShowAllPosts] = useState(false);
   const [organicFilter, setOrganicFilter] = useState<OrganicFilter | null>(null);
@@ -1246,13 +1306,16 @@ function OrganicColumn({
   const byDay = synth?.posting_patterns?.by_day ?? {};
   const byHour = synth?.posting_patterns?.by_hour ?? {};
   const gaps = synth?.gaps_vs_humand ?? [];
-  const recommendations = synth?.recommendations ?? [];
 
   const totalFmt = Object.values(fmtDist).reduce((a, b) => a + b, 0);
   const dayData = DAY_ORDER.map((d) => ({ label: d, count: byDay[d] ?? 0 }));
+  const hoveredDayCount = hoveredDay ? (dayData.find((d) => d.label === hoveredDay)?.count ?? 0) : 0;
   const hourData = Array.from({ length: 24 }, (_, h) => {
     const key = String(h).padStart(2, "0") + ":00";
-    return { label: String(h), count: byHour[key] ?? 0 };
+    const count = hoveredDay
+      ? posts.filter((post) => postDayLabel(post) === hoveredDay && postHourKey(post) === key).length
+      : byHour[key] ?? 0;
+    return { label: String(h), count };
   });
   const maxDay = Math.max(...dayData.map((d) => d.count), 1);
   const maxHour = Math.max(...hourData.map((d) => d.count), 1);
@@ -1281,11 +1344,24 @@ function OrganicColumn({
         .sort((a, b) => organicEngagement(b) - organicEngagement(a)),
     [posts, organicFilter],
   );
+  const filterLabels: Record<OrganicFilter["kind"], string> = {
+    format: t("organic.filterFormat"),
+    pain: t("organic.filterPain"),
+    persona: t("organic.filterPersona"),
+    module: t("organic.filterModule"),
+  };
+  const activeFilterLabel = organicFilter ? `${filterLabels[organicFilter.kind]}: ${organicFilter.value}` : null;
+  const creativeSignals = useMemo(() => ({
+    hooks: topTextValues(posts.map((p) => p.analysis?.hook).filter((value): value is string => Boolean(value)), 4),
+    tones: tallyTextValues(posts.map((p) => p.analysis?.tone).filter((value): value is string => Boolean(value)), 5),
+    ctas: tallyTextValues(posts.map((p) => p.analysis?.cta_strength).filter((value): value is string => Boolean(value) && value !== "none"), 3),
+    offers: tallyTextValues(posts.map((p) => p.analysis?.offer_type).filter((value): value is string => Boolean(value)), 5),
+  }), [posts]);
   const filterChips: Array<{ kind: OrganicFilter["kind"]; label: string; values: string[] }> = [
-    { kind: "format", label: "Formato", values: topTallyValues(posts, "format") },
-    { kind: "pain", label: "Pain", values: topTallyValues(posts, "pain") },
-    { kind: "persona", label: "Persona", values: topTallyValues(posts, "persona") },
-    { kind: "module", label: "Módulo", values: topTallyValues(posts, "module") },
+    { kind: "format", label: filterLabels.format, values: topTallyValues(posts, "format") },
+    { kind: "pain", label: filterLabels.pain, values: topTallyValues(posts, "pain") },
+    { kind: "persona", label: filterLabels.persona, values: topTallyValues(posts, "persona") },
+    { kind: "module", label: filterLabels.module, values: topTallyValues(posts, "module") },
   ].filter((group): group is { kind: OrganicFilter["kind"]; label: string; values: string[] } => group.values.length > 0);
 
   return (
@@ -1316,7 +1392,7 @@ function OrganicColumn({
       {recommendations.length ? (
         <div className="rounded-[var(--radius-s)] border border-[var(--color-brand-200)] bg-[var(--color-brand-50)] p-3">
           <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-brand-500)]">
-            Qué podría responder Humand
+            {t("organic.responseTitle")}
           </p>
           <ul className="space-y-1 text-[12px] text-[var(--color-text-default)]">
             {recommendations.slice(0, 3).map((item, idx) => <li key={idx}>• {item}</li>)}
@@ -1324,17 +1400,52 @@ function OrganicColumn({
         </div>
       ) : null}
 
+      {(creativeSignals.hooks.length || creativeSignals.tones.length || creativeSignals.ctas.length || creativeSignals.offers.length) ? (
+        <div className="rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] p-3">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">
+            {t("organic.creativeSignals")}
+          </p>
+          {creativeSignals.hooks.length ? (
+            <div className="mb-2">
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">
+                {t("organic.hooks")}
+              </p>
+              <ul className="space-y-1 text-[11px] text-[var(--color-text-default)]">
+                {creativeSignals.hooks.map((hook) => <li key={hook}>“{hook}”</li>)}
+              </ul>
+            </div>
+          ) : null}
+          <div className="flex flex-wrap gap-1">
+            {creativeSignals.tones.map(({ key, count }) => (
+              <span key={`tone:${key}`} className="rounded-full bg-[var(--color-neutral-100)] px-2 py-0.5 text-[11px] text-[var(--color-text-secondary)]">
+                {t("organic.tone")}: {key} · {count}
+              </span>
+            ))}
+            {creativeSignals.ctas.map(({ key, count }) => (
+              <span key={`cta:${key}`} className="rounded-full bg-[var(--color-neutral-100)] px-2 py-0.5 text-[11px] text-[var(--color-text-secondary)]">
+                {t("organic.ctaStrength")}: {key} · {count}
+              </span>
+            ))}
+            {creativeSignals.offers.map(({ key, count }) => (
+              <span key={`offer:${key}`} className="rounded-full bg-[var(--color-neutral-100)] px-2 py-0.5 text-[11px] text-[var(--color-text-secondary)]">
+                {t("organic.offerType")}: {key} · {count}
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       {filterChips.length ? (
         <div className="space-y-1.5">
           <div className="flex items-center justify-between gap-2">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">Filtros</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">{t("organic.filters")}</p>
             {organicFilter ? (
               <button
                 type="button"
                 onClick={() => setOrganicFilter(null)}
                 className="text-[11px] text-[var(--color-text-secondary)] underline hover:text-[var(--color-brand-500)]"
               >
-                limpiar
+                {t("organic.clear")}
               </button>
             ) : null}
           </div>
@@ -1353,6 +1464,26 @@ function OrganicColumn({
               )),
             )}
           </div>
+        </div>
+      ) : null}
+
+      {organicFilter ? (
+        <div className="rounded-[var(--radius-s)] border border-[var(--color-brand-200)] bg-white p-3">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-brand-500)]">
+              {t("organic.filteredPosts")}
+            </p>
+            <span className="text-[11px] text-[var(--color-text-secondary)]">
+              {activeFilterLabel} · {sortedPosts.length}/{posts.length}
+            </span>
+          </div>
+          {sortedPosts.length ? (
+            <div className="grid grid-cols-3 gap-1.5">
+              {sortedPosts.slice(0, 6).map((sp) => <OrganicPostThumb key={sp.post_id} post={sp} />)}
+            </div>
+          ) : (
+            <p className="text-[11px] italic text-[var(--color-text-secondary)]">{t("organic.noFilteredPosts")}</p>
+          )}
         </div>
       ) : null}
 
@@ -1443,16 +1574,20 @@ function OrganicColumn({
           {dayData.some((d) => d.count > 0) ? (
             <div className="mb-2">
               <div className="mb-1 flex items-center justify-between">
-                <p className="text-[10px] text-[var(--color-text-secondary)]">Día de semana</p>
-                {dayTooltip ? <span className="text-[10px] font-medium text-violet-600">{dayTooltip}</span> : null}
+                <p className="text-[10px] text-[var(--color-text-secondary)]">{t("organic.weekday")}</p>
+                {hoveredDay ? (
+                  <span className="text-[10px] font-medium text-violet-600">
+                    {hoveredDay}: {hoveredDayCount} {t("organic.postsLabel")}
+                  </span>
+                ) : null}
               </div>
               <div className="flex items-end gap-0.5" style={{ height: 42 }}>
                 {dayData.map(({ label, count }) => (
                   <div
                     key={label}
                     className="flex flex-1 flex-col items-center gap-0.5"
-                    onMouseEnter={() => setDayTooltip(`${label}: ${count} post${count !== 1 ? "s" : ""}`)}
-                    onMouseLeave={() => setDayTooltip(null)}
+                    onMouseEnter={() => setHoveredDay(label)}
+                    onMouseLeave={() => setHoveredDay(null)}
                   >
                     <div
                       className={cn("w-full rounded-sm transition-colors", count > 0 ? "bg-violet-400 hover:bg-violet-500" : "bg-[var(--color-neutral-100)]")}
@@ -1468,7 +1603,9 @@ function OrganicColumn({
           {hourData.some((d) => d.count > 0) ? (
             <div>
               <div className="mb-1 flex items-center justify-between">
-                <p className="text-[10px] text-[var(--color-text-secondary)]">Hora del día (UTC)</p>
+                <p className="text-[10px] text-[var(--color-text-secondary)]">
+                  {hoveredDay ? `${t("organic.hoursForDay")} ${hoveredDay} (UTC)` : t("organic.hourOfDayUtc")}
+                </p>
                 {hourTooltip ? <span className="text-[10px] font-medium text-violet-600">{hourTooltip}</span> : null}
               </div>
               <div className="flex items-end gap-px" style={{ height: 30 }}>
@@ -1477,7 +1614,7 @@ function OrganicColumn({
                     key={label}
                     className={cn("flex-1 rounded-sm transition-colors", count > 0 ? "bg-violet-400 hover:bg-violet-500" : "bg-[var(--color-neutral-100)]")}
                     style={{ height: `${Math.round((count / maxHour) * 24)}px`, minHeight: count ? 2 : 0 }}
-                    onMouseEnter={() => setHourTooltip(`${label}:00 UTC — ${count} post${count !== 1 ? "s" : ""}`)}
+                    onMouseEnter={() => setHourTooltip(`${label}:00 UTC — ${count} ${t("organic.postsLabel")}`)}
                     onMouseLeave={() => setHourTooltip(null)}
                   />
                 ))}
