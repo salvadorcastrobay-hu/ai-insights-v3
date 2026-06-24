@@ -276,6 +276,8 @@
       "refresh": "Refresh organic",
       "refreshing": "Refreshing organic",
       "updated": "Organic updated: {upserted} posts ({fetched} read)",
+      "archived": "{count} media files archived",
+      "incrementalAnalysis": "incremental analysis: up to {count} new per competitor",
       "skippedWithoutId": "{count} skipped without ID",
       "fetchFailed": "fetch failed: {error}",
       "analysisFailed": "analysis failed: {error}",

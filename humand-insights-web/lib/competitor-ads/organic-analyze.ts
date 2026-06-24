@@ -659,12 +659,13 @@ async function translateOrganic(
 
 export async function analyzeOrganic(
   competitor: string,
-  opts: { force?: boolean; language?: string } = {},
+  opts: { force?: boolean; language?: string; maxPending?: number } = {},
 ): Promise<OrganicSynthesis | null> {
   const all = await loadPostsForCompetitor(competitor);
   if (!all.length) return null;
 
-  const pending = opts.force ? all : all.filter((p) => !p.analysis);
+  const pendingAll = opts.force ? all : all.filter((p) => !p.analysis);
+  const pending = opts.maxPending == null ? pendingAll : pendingAll.slice(0, Math.max(0, opts.maxPending));
   const painVocab = await loadPainVocab();
   const moduleVocab = await loadModuleVocab();
 
