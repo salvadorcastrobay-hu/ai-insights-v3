@@ -275,6 +275,11 @@
     "organic": {
       "refresh": "Refresh organic",
       "refreshing": "Refreshing organic",
+      "jobStarted": "Organic refresh started. You can let it run; the page updates when it finishes.",
+      "jobRunning": "Organic refresh running: {current}",
+      "jobCompleted": "Organic refresh completed",
+      "jobFailed": "Organic refresh failed",
+      "jobTimeout": "The refresh is taking longer than expected. Check Railway logs or reopen the screen in a few minutes.",
       "updated": "Organic updated: {upserted} posts ({fetched} read)",
       "archived": "{count} media files archived",
       "incrementalAnalysis": "incremental analysis: up to {count} new per competitor",

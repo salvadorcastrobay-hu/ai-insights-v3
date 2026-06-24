@@ -275,6 +275,11 @@
     "organic": {
       "refresh": "Atualizar orgânico",
       "refreshing": "Atualizando orgânico",
+      "jobStarted": "Refresh orgânico iniciado. Pode deixar rodando; a página será atualizada ao terminar.",
+      "jobRunning": "Refresh orgânico em andamento: {current}",
+      "jobCompleted": "Refresh orgânico concluído",
+      "jobFailed": "Refresh orgânico falhou",
+      "jobTimeout": "O refresh está demorando mais do que o esperado. Veja os logs do Railway ou reabra a tela em alguns minutos.",
       "updated": "Orgânico atualizado: {upserted} posts ({fetched} lidos)",
       "archived": "{count} mídias arquivadas",
       "incrementalAnalysis": "análise incremental: até {count} novos por concorrente",

@@ -338,53 +338,89 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, read
     }
   }
 
+  type OrganicJobResult = {
+    competitor: string;
+    fetched?: number;
+    skipped?: number;
+    archived?: number;
+    upserted?: number;
+    error?: string;
+    analyzeError?: string;
+    analyzed?: boolean;
+  };
+  type OrganicJob = {
+    id: string;
+    state: "queued" | "running" | "completed" | "failed";
+    current?: string | null;
+    totalUpserted?: number;
+    results?: OrganicJobResult[];
+    error?: string;
+  };
+  type OrganicJobResponse = { job?: OrganicJob; error?: string };
+
+  const parseOrganicJobResponse = (rawText: string, fallback: string): OrganicJobResponse => {
+    try {
+      return JSON.parse(rawText) as OrganicJobResponse;
+    } catch {
+      return { error: rawText.trim().slice(0, 180) || fallback };
+    }
+  };
+
+  const organicJobMessage = (job: OrganicJob): string => {
+    const results = job.results ?? [];
+    const fetched = results.reduce((acc, item) => acc + (item.fetched ?? 0), 0);
+    const skipped = results.reduce((acc, item) => acc + (item.skipped ?? 0), 0);
+    const archived = results.reduce((acc, item) => acc + (item.archived ?? 0), 0);
+    const analyzedOk = results.filter((r) => r.analyzed).length;
+    const fetchErr = results.find((r) => r.error)?.error;
+    const analyzeErr = results.find((r) => r.analyzeError)?.analyzeError;
+    const stateLabel =
+      job.state === "completed"
+        ? t("organic.jobCompleted")
+        : job.state === "failed"
+          ? t("organic.jobFailed")
+          : t("organic.jobRunning", { current: job.current ?? "…" });
+    const parts = [stateLabel, t("organic.updated", { upserted: job.totalUpserted ?? 0, fetched })];
+    if (archived) parts.push(t("organic.archived", { count: archived }));
+    if (skipped) parts.push(t("organic.skippedWithoutId", { count: skipped }));
+    if (fetchErr) parts.push(t("organic.fetchFailed", { error: fetchErr }));
+    if (analyzeErr) parts.push(t("organic.analysisFailed", { error: analyzeErr }));
+    if (job.state === "completed") parts.push(t("organic.analysisOk", { count: analyzedOk }));
+    if (job.error) parts.push(job.error);
+    return parts.join(" · ");
+  };
+
+  async function pollOrganicJob(jobId: string): Promise<void> {
+    for (let attempt = 0; attempt < 180; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, attempt < 3 ? 2000 : 4000));
+      const res = await fetch(`/api/competitor-ads/organic-refresh/status?jobId=${encodeURIComponent(jobId)}`, {
+        cache: "no-store",
+      });
+      const rawText = await res.text();
+      const json = parseOrganicJobResponse(rawText, `Error ${res.status}`);
+      if (!res.ok || !json.job) throw new Error(json.error ?? `Error ${res.status}`);
+      setOrganicMsg(organicJobMessage(json.job));
+      if (json.job.state === "completed" || json.job.state === "failed") {
+        router.refresh();
+        return;
+      }
+    }
+    throw new Error(t("organic.jobTimeout"));
+  }
+
   async function refreshOrganic() {
     setOrganicLoading(true);
     setOrganicMsg(null);
     try {
       const res = await fetch("/api/competitor-ads/organic-refresh", { method: "POST" });
       const rawText = await res.text();
-      type OrganicRefreshResponse = {
-        totalUpserted?: number;
-        error?: string;
-        results?: Array<{
-          competitor: string;
-          fetched?: number;
-          skipped?: number;
-          archived?: number;
-          maxAnalyze?: number;
-          error?: string;
-          analyzeError?: string;
-          analyzed?: boolean;
-        }>;
-      };
-      let json: OrganicRefreshResponse;
-      try {
-        json = JSON.parse(rawText) as OrganicRefreshResponse;
-      } catch {
-        json = { error: rawText.trim().slice(0, 180) || `Error ${res.status}` };
-      }
-      if (!res.ok) {
+      const json = parseOrganicJobResponse(rawText, `Error ${res.status}`);
+      if (!res.ok || !json.job) {
         setOrganicMsg(json.error ?? `Error ${res.status}`);
-      } else {
-        const results = json.results ?? [];
-        const fetchErr = results.find((r) => r.error)?.error;
-        const analyzeErr = results.find((r) => r.analyzeError)?.analyzeError;
-        const analyzedOk = results.filter((r) => r.analyzed).length;
-        const fetched = results.reduce((acc, item) => acc + (item.fetched ?? 0), 0);
-        const skipped = results.reduce((acc, item) => acc + (item.skipped ?? 0), 0);
-        const archived = results.reduce((acc, item) => acc + (item.archived ?? 0), 0);
-        const maxAnalyze = Math.max(...results.map((item) => item.maxAnalyze ?? 0), 0);
-        const parts = [t("organic.updated", { upserted: json.totalUpserted ?? 0, fetched })];
-        if (archived) parts.push(t("organic.archived", { count: archived }));
-        if (maxAnalyze) parts.push(t("organic.incrementalAnalysis", { count: maxAnalyze }));
-        if (skipped) parts.push(t("organic.skippedWithoutId", { count: skipped }));
-        if (fetchErr) parts.push(t("organic.fetchFailed", { error: fetchErr }));
-        if (analyzeErr) parts.push(t("organic.analysisFailed", { error: analyzeErr }));
-        else parts.push(t("organic.analysisOk", { count: analyzedOk }));
-        setOrganicMsg(parts.join(" · "));
-        router.refresh();
+        return;
       }
+      setOrganicMsg(t("organic.jobStarted"));
+      await pollOrganicJob(json.job.id);
     } catch (e) {
       setOrganicMsg(e instanceof Error ? e.message : "Error al actualizar orgánico");
     } finally {
