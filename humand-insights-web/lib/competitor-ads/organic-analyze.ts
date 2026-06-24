@@ -214,21 +214,50 @@ async function extractVideoFrameText(videoUrl: string, posterUrl?: string | null
   }
 }
 
-async function extractCreativeText(post: StoredPost): Promise<string | null> {
-  const video = post.media?.videos?.[0];
+type CreativeExtraction = {
+  creative_text: string | null;
+  audio_transcript: string | null;
+  visual_text: string | null;
+  images_analyzed: number;
+  videos_analyzed: number;
+};
+
+function uniqueStrings(values: Array<string | null | undefined>): string[] {
+  return [...new Set(values.filter((value): value is string => Boolean(value && value.trim())))];
+}
+
+async function extractCreativeText(post: StoredPost): Promise<CreativeExtraction | null> {
+  const videos = uniqueStrings(post.media?.videos ?? []);
   const poster = post.media?.images?.[0] ?? post.display_url;
-  if (video) {
+  const audioTexts: string[] = [];
+  const visualTexts: string[] = [];
+
+  for (const video of videos) {
     const audioText = await transcribeVideo(video);
+    if (audioText && !audioTexts.includes(audioText)) audioTexts.push(audioText);
     const visualText = await extractVideoFrameText(video, poster);
-    return [audioText, visualText].filter(Boolean).join(" · ").slice(0, 900) || null;
+    if (visualText && !visualTexts.includes(visualText)) visualTexts.push(visualText);
   }
+
   const imageTexts: string[] = [];
-  const images = post.media?.images?.length ? post.media.images : post.display_url ? [post.display_url] : [];
-  for (const image of images.slice(0, 3)) {
+  const images = uniqueStrings(post.media?.images?.length ? post.media.images : [post.display_url]);
+  for (const image of images) {
     const text = await extractImageText(image);
     if (text && !imageTexts.includes(text)) imageTexts.push(text);
   }
-  return imageTexts.join(" · ").slice(0, 700) || null;
+
+  const audioTranscript = audioTexts.join(" · ").slice(0, 1600) || null;
+  const visualText = [...visualTexts, ...imageTexts].join(" · ").slice(0, 2600) || null;
+  const creativeText = [audioTranscript, visualText].filter(Boolean).join(" · ").slice(0, 3000) || null;
+
+  if (!creativeText) return null;
+  return {
+    creative_text: creativeText,
+    audio_transcript: audioTranscript,
+    visual_text: visualText,
+    images_analyzed: images.length,
+    videos_analyzed: videos.length,
+  };
 }
 
 // ─── Per-post classification ──────────────────────────────────────────────────
@@ -285,7 +314,7 @@ const ClassifyListSchema = z.object({ posts: z.array(ClassifyPostSchema) });
 
 async function classifyPosts(
   posts: StoredPost[],
-  creativeText: Map<string, string>,
+  creativeText: Map<string, CreativeExtraction>,
   painVocab: string[],
   moduleVocab: string[],
 ): Promise<Map<string, OrganicPostAnalysis>> {
@@ -299,7 +328,7 @@ async function classifyPosts(
     return [
       `POST ${i + 1} [${fmt}]`,
       cap ? `caption: ${cap}` : "",
-      creative ? `texto visual/audio: ${creative.slice(0, 500)}` : "",
+      creative?.creative_text ? `texto visual/audio: ${creative.creative_text.slice(0, 1200)}` : "",
       hashtags ? `hashtags: ${hashtags}` : "",
     ].filter(Boolean).join(" · ");
   });
@@ -326,12 +355,17 @@ async function classifyPosts(
   for (const item of object.posts) {
     const post = posts[item.post_index - 1];
     if (!post) continue;
+    const extracted = creativeText.get(post.post_id);
     result.set(post.post_id, {
       content_type: item.content_type,
       objective: item.objective,
       has_cta: item.has_cta,
       cta_type: item.cta_type,
-      creative_text: creativeText.get(post.post_id) ?? null,
+      creative_text: extracted?.creative_text ?? null,
+      audio_transcript: extracted?.audio_transcript ?? null,
+      visual_text: extracted?.visual_text ?? null,
+      images_analyzed: extracted?.images_analyzed ?? 0,
+      videos_analyzed: extracted?.videos_analyzed ?? 0,
       related_pains: item.related_pains ?? [],
       persona: item.persona,
       modules: item.modules ?? [],
@@ -635,7 +669,7 @@ export async function analyzeOrganic(
   const moduleVocab = await loadModuleVocab();
 
   if (pending.length) {
-    const creativeText = new Map<string, string>();
+    const creativeText = new Map<string, CreativeExtraction>();
     let cursor = 0;
     const worker = async () => {
       while (cursor < pending.length) {

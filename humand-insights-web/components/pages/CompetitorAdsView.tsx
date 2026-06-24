@@ -1044,6 +1044,50 @@ function topTextValues(values: string[], limit = 8): string[] {
   return tallyTextValues(values, limit).map((item) => item.key);
 }
 
+type MentionCategory = "news" | "community" | "person" | "company" | "other";
+type MentionSignal = { handle: string; count: number; category: MentionCategory };
+
+function normalizeMention(value: string): string | null {
+  const clean = value.replace(/^@/, "").trim().toLowerCase();
+  return clean ? clean : null;
+}
+
+function classifyMentionHandle(handle: string): MentionCategory {
+  const clean = handle.toLowerCase();
+  if (/(news|noticias|diario|revista|magazine|radio|tv|medio|forbes|bloomberg|mercurio|emol|pulso|americaeconomia|exame|valor|infomoney)/.test(clean)) {
+    return "news";
+  }
+  if (/(rrhh|hr|people|talent|recurso|human|work|empleo|labor|startup|saas|tech|comunidad|community)/.test(clean)) {
+    return "community";
+  }
+  if (/(consult|partner|agency|agencia|studio|software|app|global|group|company|corp|empresa|[._](co|cl|br|mx|es|latam)$)/.test(clean)) {
+    return "company";
+  }
+  if (/^[a-z]+[._][a-z]+/.test(clean)) return "person";
+  return "other";
+}
+
+function organicMentionSignals(posts: StoredPost[]): {
+  mentionedPosts: number;
+  paidPartnershipPosts: number;
+  signals: MentionSignal[];
+} {
+  const counts = new Map<string, number>();
+  let mentionedPosts = 0;
+  let paidPartnershipPosts = 0;
+  for (const post of posts) {
+    if (post.is_paid_partnership) paidPartnershipPosts += 1;
+    const handles = [...new Set(post.mentions.map(normalizeMention).filter((value): value is string => Boolean(value)))];
+    if (handles.length) mentionedPosts += 1;
+    for (const handle of handles) counts.set(handle, (counts.get(handle) ?? 0) + 1);
+  }
+  const signals = [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, 10)
+    .map(([handle, count]) => ({ handle, count, category: classifyMentionHandle(handle) }));
+  return { mentionedPosts, paidPartnershipPosts, signals };
+}
+
 function postDayLabel(post: StoredPost): string | null {
   const date = organicTimezoneDate(post);
   if (!date) return null;
@@ -1368,6 +1412,8 @@ function OrganicColumn({
     ctas: tallyTextValues(posts.map((p) => p.analysis?.cta_strength).filter((value): value is string => Boolean(value) && value !== "none"), 3),
     offers: tallyTextValues(posts.map((p) => p.analysis?.offer_type).filter((value): value is string => Boolean(value)), 5),
   }), [posts]);
+  const mentionSignals = useMemo(() => organicMentionSignals(posts), [posts]);
+  const mentionCategoryLabel = (category: MentionCategory) => t(`organic.mentionCategory.${category}`);
   const filterChips: Array<{ kind: OrganicFilter["kind"]; label: string; values: string[] }> = [
     { kind: "format", label: filterLabels.format, values: topTallyValues(posts, "format") },
     { kind: "pain", label: filterLabels.pain, values: topTallyValues(posts, "pain") },
@@ -1443,6 +1489,39 @@ function OrganicColumn({
               </span>
             ))}
           </div>
+        </div>
+      ) : null}
+
+      {(mentionSignals.mentionedPosts || mentionSignals.paidPartnershipPosts || mentionSignals.signals.length) ? (
+        <div className="rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] p-3">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">
+            {t("organic.mentionsTitle")}
+          </p>
+          <div className="mb-2 flex flex-wrap gap-1">
+            <span className="rounded-full bg-[var(--color-neutral-100)] px-2 py-0.5 text-[11px] text-[var(--color-text-secondary)]">
+              {t("organic.mentionedPosts")}: {mentionSignals.mentionedPosts}
+            </span>
+            <span className="rounded-full bg-[var(--color-neutral-100)] px-2 py-0.5 text-[11px] text-[var(--color-text-secondary)]">
+              {t("organic.paidPartnerships")}: {mentionSignals.paidPartnershipPosts}
+            </span>
+            <span className="rounded-full bg-[var(--color-neutral-100)] px-2 py-0.5 text-[11px] text-[var(--color-text-secondary)]">
+              {t("organic.uniqueMentions")}: {mentionSignals.signals.length}
+            </span>
+          </div>
+          {mentionSignals.signals.length ? (
+            <div className="space-y-1">
+              {mentionSignals.signals.slice(0, 6).map((signal) => (
+                <p key={signal.handle} className="text-[11px] text-[var(--color-text-secondary)]">
+                  <span className="font-semibold text-[var(--color-text-default)]">@{signal.handle}</span>
+                  {" · "}
+                  {signal.count} {t("organic.postsLabel")}
+                  {" · "}
+                  {mentionCategoryLabel(signal.category)}
+                </p>
+              ))}
+              <p className="text-[10px] italic text-[var(--color-text-secondary)]">{t("organic.mentionHeuristic")}</p>
+            </div>
+          ) : null}
         </div>
       ) : null}
 
