@@ -591,6 +591,7 @@ async function computeOverlapWithAds(
 const TranslationSchema = z.object({
   summary: z.string(),
   content_pillars: z.array(z.string()),
+  recommendations: z.array(z.string()),
 });
 
 const TRANSLATE_INSTRUCTION: Record<string, string> = {
@@ -600,9 +601,9 @@ const TRANSLATE_INSTRUCTION: Record<string, string> = {
 };
 
 async function translateOrganic(
-  data: { summary: string; content_pillars: string[] },
+  data: { summary: string; content_pillars: string[]; recommendations: string[] },
   targetLocale: string,
-): Promise<{ summary: string; content_pillars: string[] } | null> {
+): Promise<{ summary: string; content_pillars: string[]; recommendations: string[] } | null> {
   const instruction = TRANSLATE_INSTRUCTION[targetLocale];
   if (!instruction) return null;
   try {
@@ -675,7 +676,11 @@ export async function analyzeOrganic(
   const otherLocales = (["es-AR", "pt-BR", "en-US"] as const).filter((l) => l !== primaryLang);
   const translations = await Promise.all(otherLocales.map((l) => translateOrganic(llm, l)));
   const i18n: OrganicSynthesis["i18n"] = {
-    [primaryLang]: { summary: llm.summary, content_pillars: llm.content_pillars },
+    [primaryLang]: {
+      summary: llm.summary,
+      content_pillars: llm.content_pillars,
+      recommendations: llm.recommendations,
+    },
     ...Object.fromEntries(
       otherLocales.map((l, idx) => [l, translations[idx]]).filter(([, v]) => v !== null),
     ),

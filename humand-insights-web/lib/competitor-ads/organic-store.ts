@@ -85,7 +85,7 @@ export type OrganicSynthesis = {
     pretest_candidates: Array<{ post_id: string; pain: string; caption_snippet: string }>;
   };
   posts_analyzed: number;
-  i18n?: Record<string, { summary: string; content_pillars: string[] }>;
+  i18n?: Record<string, { summary: string; content_pillars: string[]; recommendations?: string[] }>;
 };
 
 export type OrganicInsight = {
@@ -200,10 +200,11 @@ function mapRow(r: Row): StoredPost {
 }
 
 export async function upsertPosts(posts: OrganicPost[]): Promise<number> {
-  if (!posts.length) return 0;
+  const validPosts = posts.filter((p) => typeof p.post_id === "string" && p.post_id.trim().length > 0);
+  if (!validPosts.length) return 0;
   const sb = getSupabase();
   const now = new Date().toISOString();
-  const rows = posts.map((p) => ({
+  const rows = validPosts.map((p) => ({
     competitor: p.competitor,
     post_id: p.post_id,
     post_url: p.post_url,
@@ -290,10 +291,11 @@ export async function insertMetricSnapshots(
   posts: OrganicPost[],
   followersCount: number | null,
 ): Promise<void> {
-  if (!posts.length) return;
+  const validPosts = posts.filter((p) => typeof p.post_id === "string" && p.post_id.trim().length > 0);
+  if (!validPosts.length) return;
   const sb = getSupabase();
   const snapshotAt = new Date().toISOString();
-  const rows = posts.map((p) => {
+  const rows = validPosts.map((p) => {
     const likes = p.likes_count ?? 0;
     const comments = p.comments_count ?? 0;
     const engagementRate = followersCount && followersCount > 0 ? (likes + comments) / followersCount : null;

@@ -1,4 +1,5 @@
 import { MONITORED_COMPETITORS } from "@/lib/competitor-ads/config";
+import { createHash } from "crypto";
 import { fetchInstagramFeed, type RawInstagramPost } from "@/lib/competitor-ads/apify";
 import { archiveOrganicPostMedia } from "@/lib/competitor-ads/organic-media-archive";
 import {
@@ -42,12 +43,47 @@ function collectMedia(raw: RawInstagramPost): { images: string[]; videos: string
   return { images, videos };
 }
 
-function mapPost(raw: RawInstagramPost, competitor: string): OrganicPost {
+function idFromInstagramUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    const parts = parsed.pathname.split("/").filter(Boolean);
+    const markerIndex = parts.findIndex((part) => ["p", "reel", "tv"].includes(part));
+    if (markerIndex >= 0 && parts[markerIndex + 1]) return parts[markerIndex + 1];
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function fallbackPostId(raw: RawInstagramPost, competitor: string): string | null {
+  const direct = raw.shortCode ?? raw.id ?? idFromInstagramUrl(raw.url);
+  if (direct && String(direct).trim()) return String(direct).trim();
+  const media = collectMedia(raw);
+  const fingerprint = [
+    competitor,
+    raw.url,
+    raw.timestamp,
+    raw.displayUrl,
+    raw.videoUrl,
+    media.images[0],
+    media.videos[0],
+    raw.caption?.slice(0, 200),
+  ]
+    .filter(Boolean)
+    .join("|");
+  if (!fingerprint) return null;
+  return `generated_${createHash("sha1").update(fingerprint).digest("hex").slice(0, 16)}`;
+}
+
+function mapPost(raw: RawInstagramPost, competitor: string): OrganicPost | null {
   const caption = raw.caption ?? null;
   const media = collectMedia(raw);
+  const postId = fallbackPostId(raw, competitor);
+  if (!postId) return null;
   return {
     competitor,
-    post_id: raw.shortCode ?? raw.id,
+    post_id: postId,
     post_url: raw.url ?? null,
     format: normalizeFormat(raw.type),
     caption,
@@ -74,6 +110,7 @@ type Result = {
   competitor: string;
   handle: string;
   fetched: number;
+  skipped: number;
   upserted: number;
   analyzed: boolean;
   error?: string;
@@ -106,7 +143,7 @@ export async function POST(request: Request): Promise<Response> {
 
   for (const c of targets) {
     const handle = c.instagramHandle!;
-    const r: Result = { competitor: c.name, handle, fetched: 0, upserted: 0, analyzed: false };
+    const r: Result = { competitor: c.name, handle, fetched: 0, skipped: 0, upserted: 0, analyzed: false };
     let profileFollowers: number | null = null;
     try {
       const feed = await fetchInstagramFeed(handle, { maxItems });
@@ -126,8 +163,12 @@ export async function POST(request: Request): Promise<Response> {
         avatar_url: feed.profile.avatar_url,
         raw: feed.profile.raw,
       });
+      const mappedPosts = feed.posts
+        .map((p) => mapPost(p, c.name))
+        .filter((p): p is OrganicPost => Boolean(p));
+      r.skipped = feed.posts.length - mappedPosts.length;
       const posts = await Promise.all(
-        feed.posts.map((p) => archiveOrganicPostMedia(mapPost(p, c.name)).catch(() => mapPost(p, c.name))),
+        mappedPosts.map((p) => archiveOrganicPostMedia(p).catch(() => p)),
       );
       r.upserted = await upsertPosts(posts);
       await insertMetricSnapshots(posts, profileFollowers).catch((e) =>
