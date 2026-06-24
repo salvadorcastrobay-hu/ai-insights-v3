@@ -30,7 +30,7 @@ export function parseFiltersFromSearchParams(
     countries: getArray("countries"),
     industries: getArray("industries"),
     owners: getArray("owners"),
-    modules: getArray("modules"),
+    modules: [],
     categories: getArray("categories"),
     channels: getArray("channels"),
     sources: getArray("sources"),

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Bar,
   BarChart as ReBarChart,
@@ -22,6 +22,14 @@ import { SectionHeader } from "@/components/layout/SectionHeader";
 import { PageTitle } from "@/components/pages/common";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@/components/ui/table";
 import { useTranslations } from "next-intl";
+import {
+  type AnalyticsDimension,
+  type AnalyticsDimensionKey,
+  availableAnalyticsDimensions,
+  getAnalyticsDimension,
+  normalizeAnalyticsDimensionKey,
+  rowMatchesAnalyticsDimension,
+} from "@/lib/analysis-dimensions";
 import {
   applyDateWindow,
   buildComparison,
@@ -48,12 +56,7 @@ type TimePresetKey = (typeof TIME_PRESET_KEYS)[number];
 
 function useFacetOptions(rows: SlimRow[]) {
   return useMemo(() => {
-    const available: Array<[string, keyof SlimRow]> = [];
-    for (const [label, col] of Object.entries(FACET_OPTIONS) as Array<[string, keyof SlimRow]>) {
-      const hasAny = rows.some((r) => cleanLabel(r[col]) !== null);
-      if (hasAny) available.push([label, col]);
-    }
-    return available;
+    return availableAnalyticsDimensions(rows, FACET_OPTIONS as AnalyticsDimension[]);
   }, [rows]);
 }
 
@@ -67,9 +70,7 @@ export function ComparativeAnalysisView({ data }: Props) {
 
   const facetOptions = useFacetOptions(rows);
   const [comparisonKey, setComparisonKey] = useState<CompareByKey>("periods");
-  const [facetLabel, setFacetLabel] = useState<string>(
-    facetOptions[1]?.[0] ?? facetOptions[0]?.[0] ?? "Tipo de insight",
-  );
+  const [facetKey, setFacetKey] = useState<AnalyticsDimensionKey>("insight_type_display");
   const [metricLabel, setMetricLabel] = useState<MetricLabel>("Menciones");
   const [displayMode, setDisplayMode] = useState<DisplayMode>("Volumen absoluto");
   const [topN, setTopN] = useState<number>(10);
@@ -87,16 +88,20 @@ export function ComparativeAnalysisView({ data }: Props) {
   const [valueB, setValueB] = useState<string>("");
 
   const comparisonMeta = COMPARISON_OPTIONS.find((o) => o.key === comparisonKey)!;
-  const facetCol = FACET_OPTIONS[facetLabel] ?? "insight_type_display";
+  const facet = getAnalyticsDimension(facetKey);
   const metricKey = METRIC_OPTIONS[metricLabel] as MetricKey;
 
-  // Filter out own-brand competitors when comparing on competitor_name facet
-  const scopedRows = useMemo(() => {
-    if (facetCol === "competitor_name") {
-      return rows.filter((r) => !r.is_own_brand_competitor);
+  useEffect(() => {
+    if (!facetOptions.length) return;
+    if (!facetOptions.some((option) => option.key === facetKey)) {
+      setFacetKey(facetOptions[0]?.key ?? "insight_type_display");
     }
-    return rows;
-  }, [rows, facetCol]);
+  }, [facetKey, facetOptions]);
+
+  // Scope facet-specific rows before A/B splitting so subtype-like facets never mix insight types.
+  const scopedRows = useMemo(() => {
+    return rows.filter((row) => rowMatchesAnalyticsDimension(row, facet));
+  }, [rows, facet]);
 
   // Split rows into A and B
   const { dfA, dfB, labelA, labelB, errorMessage } = useMemo(() => {
@@ -157,7 +162,7 @@ export function ComparativeAnalysisView({ data }: Props) {
       labelB: valueB,
       errorMessage: "",
     };
-  }, [comparisonMeta, timePreset, customStartA, customEndA, customStartB, customEndB, valueA, valueB, scopedRows, data.dateMin, data.dateMax]);
+  }, [comparisonMeta, timePreset, customStartA, customEndA, customStartB, customEndB, valueA, valueB, scopedRows, data.dateMin, data.dateMax, t]);
 
   const categoryValues = useMemo(() => {
     if (comparisonMeta.mode !== "category") return [] as string[];
@@ -172,8 +177,8 @@ export function ComparativeAnalysisView({ data }: Props) {
 
   const comparison = useMemo(() => {
     if (dfA.length === 0 && dfB.length === 0) return [];
-    return buildComparison(dfA, dfB, facetCol, metricKey);
-  }, [dfA, dfB, facetCol, metricKey]);
+    return buildComparison(dfA, dfB, facet, metricKey);
+  }, [dfA, dfB, facet, metricKey]);
 
   // Compute totals and sample sizes
   const totals = useMemo(() => {
@@ -274,9 +279,13 @@ export function ComparativeAnalysisView({ data }: Props) {
           </label>
           <label className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wide text-[var(--color-text-secondary)]">
             {t("facet")}
-            <select className={selectStyle()} value={facetLabel} onChange={(e) => setFacetLabel(e.target.value)}>
-              {facetOptions.map(([label]) => (
-                <option key={label} value={label}>{label}</option>
+            <select
+              className={selectStyle()}
+              value={facetKey}
+              onChange={(e) => setFacetKey(normalizeAnalyticsDimensionKey(e.target.value))}
+            >
+              {facetOptions.map((option) => (
+                <option key={option.key} value={option.key}>{option.label}</option>
               ))}
             </select>
           </label>
@@ -441,12 +450,12 @@ export function ComparativeAnalysisView({ data }: Props) {
               <SectionHeader
                 title={
                   showShare
-                    ? `${facetLabel} por participación relativa`
+                    ? `${facet.label} por participación relativa`
                     : displayMode === "Delta absoluto"
-                    ? `Delta absoluto por ${facetLabel}`
+                    ? `Delta absoluto por ${facet.label}`
                     : displayMode === "Delta porcentual"
-                    ? `Delta porcentual por ${facetLabel}`
-                    : `${facetLabel} en A vs B`
+                    ? `Delta porcentual por ${facet.label}`
+                    : `${facet.label} en A vs B`
                 }
               />
               <ChartCard title="Comparativa">
@@ -513,7 +522,7 @@ export function ComparativeAnalysisView({ data }: Props) {
                 <Table>
                   <Thead>
                     <Tr>
-                      <Th>{facetLabel}</Th>
+                      <Th>{facet.label}</Th>
                       <Th>{labelA}</Th>
                       <Th>{labelB}</Th>
                       <Th>Share A</Th>

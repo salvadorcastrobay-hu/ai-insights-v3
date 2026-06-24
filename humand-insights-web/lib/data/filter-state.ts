@@ -10,7 +10,6 @@ export const FILTER_PARSERS = {
   countries: parseAsArrayOf(parseAsString).withDefault([]),
   industries: parseAsArrayOf(parseAsString).withDefault([]),
   owners: parseAsArrayOf(parseAsString).withDefault([]),
-  modules: parseAsArrayOf(parseAsString).withDefault([]),
   categories: parseAsArrayOf(parseAsString).withDefault([]),
   channels: parseAsArrayOf(parseAsString).withDefault([]),
   sources: parseAsArrayOf(parseAsString).withDefault([]),

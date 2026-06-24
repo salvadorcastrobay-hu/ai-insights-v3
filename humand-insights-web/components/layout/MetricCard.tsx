@@ -7,9 +7,10 @@ type MetricCardProps = {
   trend?: "positive" | "negative" | "neutral";
   caption?: string;
   className?: string;
+  valueClassName?: string;
 };
 
-export function MetricCard({ label, value, delta, caption, className }: MetricCardProps) {
+export function MetricCard({ label, value, delta, caption, className, valueClassName }: MetricCardProps) {
   return (
     <article
       className={cn(
@@ -18,7 +19,14 @@ export function MetricCard({ label, value, delta, caption, className }: MetricCa
       )}
     >
       <p className="text-[12px] text-[var(--color-text-secondary)]">{label}</p>
-      <p className="text-[32px] font-semibold leading-tight text-[var(--color-text-default)]">{value}</p>
+      <p
+        className={cn(
+          "text-[32px] font-semibold leading-tight text-[var(--color-text-default)]",
+          valueClassName,
+        )}
+      >
+        {value}
+      </p>
       <div className="space-y-1">
         {delta ? <p className="text-[12px] font-semibold text-[var(--color-brand-500)]">{delta}</p> : null}
         {caption ? <p className="text-[12px] text-[var(--color-text-secondary)]">{caption}</p> : null}

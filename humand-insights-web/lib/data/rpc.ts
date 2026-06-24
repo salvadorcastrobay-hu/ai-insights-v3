@@ -50,7 +50,7 @@ export function filtersToJsonb(filters: Filters): Record<string, unknown> {
     countries: filters.countries ?? [],
     industries: filters.industries ?? [],
     owners: filters.owners ?? [],
-    modules: filters.modules ?? [],
+    modules: [],
     categories: filters.categories ?? [],
     channels: filters.channels ?? [],
     sources: filters.sources ?? [],
