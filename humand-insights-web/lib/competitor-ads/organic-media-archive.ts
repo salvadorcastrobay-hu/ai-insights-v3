@@ -72,6 +72,7 @@ async function archiveUrl(
     kind: MediaKind;
     url: string;
     index: number;
+    maxBytes?: number;
   },
 ): Promise<string | null> {
   if (isOwnStorageUrl(params.url)) return params.url;
@@ -82,11 +83,16 @@ async function archiveUrl(
       referer: "https://www.instagram.com/",
     },
     cache: "no-store",
+    signal: AbortSignal.timeout(20_000),
   });
   if (!res.ok) return null;
 
   const contentType = res.headers.get("content-type") ?? (params.kind === "videos" ? "video/mp4" : "image/jpeg");
+  const maxBytes = params.maxBytes ?? (params.kind === "videos" ? 60 * 1024 * 1024 : 8 * 1024 * 1024);
+  const contentLength = Number(res.headers.get("content-length") ?? "0");
+  if (contentLength && contentLength > maxBytes) return null;
   const bytes = await res.arrayBuffer();
+  if (bytes.byteLength > maxBytes) return null;
   const ext = extension(contentType, params.url, params.kind);
   const objectPath = [
     slug(params.competitor),
@@ -102,13 +108,22 @@ async function archiveUrl(
   return sb.storage.from(BUCKET).getPublicUrl(objectPath).data.publicUrl;
 }
 
-export async function archiveOrganicPostMedia(post: OrganicPost): Promise<OrganicPost> {
+export async function archiveOrganicPostMedia(
+  post: OrganicPost,
+  opts: { archiveVideos?: boolean; maxImages?: number } = {},
+): Promise<OrganicPost> {
   const sb = getSupabase();
   if (!sb || !(await ensureBucket(sb))) return post;
 
   const archived: OrganicMedia = { images: [], videos: [] };
   for (const kind of ["images", "videos"] as const) {
-    const urls = post.media?.[kind] ?? [];
+    if (kind === "videos" && opts.archiveVideos === false) {
+      archived.videos = post.media?.videos ?? [];
+      continue;
+    }
+    const urls = kind === "images"
+      ? (post.media?.images ?? []).slice(0, opts.maxImages ?? Number.POSITIVE_INFINITY)
+      : post.media?.videos ?? [];
     for (let index = 0; index < urls.length; index++) {
       const ownUrl = await archiveUrl(sb, {
         competitor: post.competitor,
@@ -118,6 +133,9 @@ export async function archiveOrganicPostMedia(post: OrganicPost): Promise<Organi
         index,
       }).catch(() => null);
       archived[kind].push(ownUrl ?? urls[index]);
+    }
+    if (kind === "images" && opts.maxImages != null) {
+      archived.images.push(...(post.media?.images ?? []).slice(opts.maxImages));
     }
   }
 

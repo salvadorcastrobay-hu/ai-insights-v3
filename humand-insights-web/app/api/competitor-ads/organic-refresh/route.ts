@@ -111,11 +111,30 @@ type Result = {
   handle: string;
   fetched: number;
   skipped: number;
+  archived: number;
   upserted: number;
   analyzed: boolean;
+  maxAnalyze: number;
   error?: string;
   analyzeError?: string;
 };
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let cursor = 0;
+  const runners = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor++;
+      results[index] = await worker(items[index], index);
+    }
+  });
+  await Promise.all(runners);
+  return results;
+}
 
 export async function POST(request: Request): Promise<Response> {
   const session = await getAuthenticatedSession();
@@ -139,11 +158,23 @@ export async function POST(request: Request): Promise<Response> {
   const targets = MONITORED_COMPETITORS.filter((c) => c.instagramHandle);
   const results: Result[] = [];
   const params = new URL(request.url).searchParams;
-  const maxItems = Math.min(100, Math.max(10, Number(params.get("maxItems") ?? "50")));
+  const maxItems = Math.min(100, Math.max(10, Number(params.get("maxItems") ?? "30")));
+  const maxAnalyze = Math.min(20, Math.max(0, Number(params.get("maxAnalyze") ?? "4")));
+  const maxArchivePosts = Math.min(50, Math.max(0, Number(params.get("maxArchivePosts") ?? "12")));
+  const archiveVideos = params.get("archiveVideos") === "1";
 
   for (const c of targets) {
     const handle = c.instagramHandle!;
-    const r: Result = { competitor: c.name, handle, fetched: 0, skipped: 0, upserted: 0, analyzed: false };
+    const r: Result = {
+      competitor: c.name,
+      handle,
+      fetched: 0,
+      skipped: 0,
+      archived: 0,
+      upserted: 0,
+      analyzed: false,
+      maxAnalyze,
+    };
     let profileFollowers: number | null = null;
     try {
       const feed = await fetchInstagramFeed(handle, { maxItems });
@@ -167,9 +198,12 @@ export async function POST(request: Request): Promise<Response> {
         .map((p) => mapPost(p, c.name))
         .filter((p): p is OrganicPost => Boolean(p));
       r.skipped = feed.posts.length - mappedPosts.length;
-      const posts = await Promise.all(
-        mappedPosts.map((p) => archiveOrganicPostMedia(p).catch(() => p)),
+      const postsToArchive = mappedPosts.slice(0, maxArchivePosts);
+      const archivedPosts = await mapWithConcurrency(postsToArchive, 2, (p) =>
+        archiveOrganicPostMedia(p, { archiveVideos, maxImages: 3 }).catch(() => p),
       );
+      r.archived = archivedPosts.length;
+      const posts = [...archivedPosts, ...mappedPosts.slice(maxArchivePosts)];
       r.upserted = await upsertPosts(posts);
       await insertMetricSnapshots(posts, profileFollowers).catch((e) =>
         console.warn(`[organic-refresh] snapshots ${c.name} fallaron:`, e),
@@ -181,7 +215,7 @@ export async function POST(request: Request): Promise<Response> {
     }
 
     try {
-      const synthesis = await analyzeOrganic(c.name, { language: c.language });
+      const synthesis = await analyzeOrganic(c.name, { language: c.language, maxPending: maxAnalyze });
       if (synthesis) {
         await saveOrganicInsight(c.name, synthesis, "gpt-4o-mini");
         r.analyzed = true;

@@ -343,11 +343,27 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, read
     setOrganicMsg(null);
     try {
       const res = await fetch("/api/competitor-ads/organic-refresh", { method: "POST" });
-      const json = (await res.json()) as {
+      const rawText = await res.text();
+      type OrganicRefreshResponse = {
         totalUpserted?: number;
         error?: string;
-        results?: Array<{ competitor: string; fetched?: number; skipped?: number; error?: string; analyzeError?: string; analyzed?: boolean }>;
+        results?: Array<{
+          competitor: string;
+          fetched?: number;
+          skipped?: number;
+          archived?: number;
+          maxAnalyze?: number;
+          error?: string;
+          analyzeError?: string;
+          analyzed?: boolean;
+        }>;
       };
+      let json: OrganicRefreshResponse;
+      try {
+        json = JSON.parse(rawText) as OrganicRefreshResponse;
+      } catch {
+        json = { error: rawText.trim().slice(0, 180) || `Error ${res.status}` };
+      }
       if (!res.ok) {
         setOrganicMsg(json.error ?? `Error ${res.status}`);
       } else {
@@ -357,7 +373,11 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, read
         const analyzedOk = results.filter((r) => r.analyzed).length;
         const fetched = results.reduce((acc, item) => acc + (item.fetched ?? 0), 0);
         const skipped = results.reduce((acc, item) => acc + (item.skipped ?? 0), 0);
+        const archived = results.reduce((acc, item) => acc + (item.archived ?? 0), 0);
+        const maxAnalyze = Math.max(...results.map((item) => item.maxAnalyze ?? 0), 0);
         const parts = [t("organic.updated", { upserted: json.totalUpserted ?? 0, fetched })];
+        if (archived) parts.push(t("organic.archived", { count: archived }));
+        if (maxAnalyze) parts.push(t("organic.incrementalAnalysis", { count: maxAnalyze }));
         if (skipped) parts.push(t("organic.skippedWithoutId", { count: skipped }));
         if (fetchErr) parts.push(t("organic.fetchFailed", { error: fetchErr }));
         if (analyzeErr) parts.push(t("organic.analysisFailed", { error: analyzeErr }));

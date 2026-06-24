@@ -276,6 +276,8 @@
       "refresh": "Atualizar orgânico",
       "refreshing": "Atualizando orgânico",
       "updated": "Orgânico atualizado: {upserted} posts ({fetched} lidos)",
+      "archived": "{count} mídias arquivadas",
+      "incrementalAnalysis": "análise incremental: até {count} novos por concorrente",
       "skippedWithoutId": "{count} ignorados sem ID",
       "fetchFailed": "fetch falhou: {error}",
       "analysisFailed": "análise falhou: {error}",
