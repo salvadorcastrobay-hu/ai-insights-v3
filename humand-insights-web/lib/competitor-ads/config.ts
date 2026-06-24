@@ -25,7 +25,7 @@ export type MonitoredCompetitor = {
 };
 
 export const MONITORED_COMPETITORS: MonitoredCompetitor[] = [
-  { name: "Humand",   source: "meta_ads", query: "Humand",       region: "latam", maxPages: 1, language: "es-AR", instagramHandle: "humand.co", ownBrand: true },
+  { name: "Humand",   source: "meta_ads", query: "Humand",       region: "latam", maxPages: 1, language: "es-AR", instagramHandle: "humand.es", ownBrand: true },
   { name: "Buk",      source: "meta_ads", query: "Buk",          pageId: "208911196408595", region: "latam", maxPages: 3, language: "es-AR", instagramHandle: "buk_chile" },
   { name: "Caju",     source: "meta_ads", query: "Caju",         pageId: "702340783527508", region: "latam", maxPages: 3, language: "pt-BR", instagramHandle: "caju" },
   { name: "Factorial",source: "meta_ads", query: "Factorial HR", pageId: "110204987823596", region: "latam", maxPages: 3, language: "pt-BR", instagramHandle: "factorial_br" },
