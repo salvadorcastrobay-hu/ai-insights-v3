@@ -292,6 +292,7 @@
       "paidPartnerships": "Paid partnership",
       "uniqueMentions": "Menções únicas",
       "mentionHeuristic": "Categoria inferida pelo handle; não substitui enriquecimento de perfil.",
+      "postLink": "post",
       "mentionCategory": {
         "news": "portal/mídia",
         "community": "comunidade ou HR",

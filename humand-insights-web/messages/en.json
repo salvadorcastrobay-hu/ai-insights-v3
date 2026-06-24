@@ -292,6 +292,7 @@
       "paidPartnerships": "Paid partnership",
       "uniqueMentions": "Unique mentions",
       "mentionHeuristic": "Category inferred from the handle; it does not replace profile enrichment.",
+      "postLink": "post",
       "mentionCategory": {
         "news": "news/media outlet",
         "community": "community or HR",
