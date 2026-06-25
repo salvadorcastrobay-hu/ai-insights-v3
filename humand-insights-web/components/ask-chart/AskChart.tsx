@@ -55,9 +55,9 @@ const PAGE_META: Record<string, { label: string; suggestions: string[] }> = {
   "/pains-detail": {
     label: "Pains Detail",
     suggestions: [
+      "¿Qué significa 'procesos manuales'? Explicame con citas de clientes.",
       "¿Qué pain theme tiene más demos asociadas?",
-      "¿Cuántos pains están vinculados a módulo vs sueltos?",
-      "Dame ejemplos de pains del tema principal.",
+      "Dame ejemplos de citas reales del pain principal.",
     ],
   },
   "/product-gaps-detail": {
