@@ -265,6 +265,53 @@ function buildPainRegionMatrix(rows: InsightRow[]): string {
   return [header, colHeader, ...lines].join("\n");
 }
 
+// Detect "what does X mean" questions in any phrasing
+function extractMeaningTarget(question: string): string | null {
+  const patterns = [
+    /(?:qué es|qué son|qué significa(?:n)?|a qué se refier(?:en|e)(?: con)?|explicame|explica(?:me)?|qué quiere(?:n)? decir|qué engloba|qué incluye|qué contempla|qué hay en|qué comprende|describime|describe)\s+["']?([^¿?]+?)["']?\s*\??$/i,
+    /["']([^"']+?)["']\s*[–—-]?\s*(?:qué es|qué significa|a qué se refiere|qué contempla)/i,
+  ];
+  for (const p of patterns) {
+    const m = question.match(p);
+    if (m?.[1]) return m[1].trim().replace(/[¿?]/g, "").trim();
+  }
+  return null;
+}
+
+// Find the best-matching dimension label in the dataset for a user's free-text query
+function findDimensionMatch(
+  rows: InsightRow[],
+  candidate: string,
+): { dim: DrillDimension; label: string } | null {
+  const checks: Array<{ dim: DrillDimension; key: keyof InsightRow }> = [
+    { dim: "pain_theme", key: "pain_theme" },
+    { dim: "insight_subtype_display", key: "insight_subtype_display" },
+    { dim: "feature_display", key: "feature_display" },
+    { dim: "module_display", key: "module_display" },
+    { dim: "competitor_name", key: "competitor_name" },
+  ];
+  const cand = candidate.toLowerCase();
+  for (const { dim, key } of checks) {
+    const values = new Set<string>();
+    for (const r of rows) {
+      const v = r[key];
+      if (v != null) values.add(String(v).trim());
+    }
+    // exact (case-insensitive) → starts-with → contains
+    for (const mode of ["exact", "starts", "contains"] as const) {
+      for (const v of values) {
+        const vl = v.toLowerCase();
+        const hit =
+          mode === "exact" ? vl === cand :
+          mode === "starts" ? vl.startsWith(cand) || cand.startsWith(vl) :
+          vl.includes(cand) || cand.includes(vl);
+        if (hit && v.length >= 4) return { dim, label: v };
+      }
+    }
+  }
+  return null;
+}
+
 function buildContext(rows: InsightRow[], pathname: string, filters: Filters): string {
   const pageLabel = PAGE_LABELS[pathname] ?? pathname;
 
@@ -487,6 +534,24 @@ export async function POST(req: Request) {
     const filtered = applyFilters(allRows, filters);
     context = buildContext(filtered, pathname, filters);
     scopeHint = `el dashboard actual`;
+
+    // Enrich with verbatim evidence when user asks "qué es / qué significa / a qué se
+    // refieren con X" even without a chart context — same quality as chart-scoped mode.
+    const meaningTarget = extractMeaningTarget(question);
+    if (meaningTarget) {
+      const match = findDimensionMatch(filtered, meaningTarget);
+      if (match) {
+        const evidence = buildRowEvidence(filtered, match.dim, match.label);
+        if (evidence) {
+          context +=
+            `\n\nEVIDENCIA ESPECÍFICA — el usuario preguntó por "${match.label}". ` +
+            `Este bloque es la fuente de verdad. Los totales y conteos por sub-tema son el dato duro; ` +
+            `las citas de la muestra son la fuente para describir en lenguaje natural.\n${evidence}`;
+          isSpecificDrill = true;
+          specificLabel = match.label;
+        }
+      }
+    }
   }
 
   const systemBase = [
@@ -527,9 +592,8 @@ export async function POST(req: Request) {
   ].join(" ");
 
   // Use prose + emergent sub-topics whenever we have per-row verbatim evidence
-  // (parent drill OR specific sub-label drill). Fall back to taxonomy-style
-  // bullets for dashboard-wide summaries without chart evidence.
-  const hasEvidence = !!chartCtx?.dimension;
+  // (chart-scoped with dimension, OR generic path that matched a "qué es X" question).
+  const hasEvidence = !!chartCtx?.dimension || isSpecificDrill;
   const system = hasEvidence ? systemProse : systemTaxonomy;
   const prompt = `CONTEXTO:\n${context}\n\nPREGUNTA DEL USUARIO: ${question}`;
 
