@@ -8,7 +8,6 @@ import { useDrillDown } from "@/components/drill-down/DrillDownProvider";
 import { MetricCard } from "@/components/layout/MetricCard";
 import { SectionHeader } from "@/components/layout/SectionHeader";
 import { EmptyState, PageTitle } from "@/components/pages/common";
-import { Table, Tbody, Td, Th, Thead, Tr } from "@/components/ui/table";
 import { useTranslations } from "next-intl";
 import { formatCurrency } from "@/lib/data/computations";
 import type { SalesEnablementData } from "@/lib/data/sales-enablement-data";
@@ -26,8 +25,6 @@ export function SalesEnablementView({ data, filteredRows }: Props) {
     frictionSegment,
     stageHeat,
     industryHeat,
-    aeRows,
-    aeFrictionStack,
     faqBattleCards,
     hasFaqs,
   } = data;
@@ -140,50 +137,6 @@ export function SalesEnablementView({ data, filteredRows }: Props) {
         Si aparece en Final Negotiation o Postponed, es un bloqueante tardío que necesita un
         argumento preparado de antemano.
       </p>
-
-      <SectionHeader
-        title={t("aeSupport")}
-        description={t("aeSupportDesc")}
-      />
-      <ChartCard>
-        <div className="max-h-[480px] overflow-auto">
-          <Table>
-            <Thead>
-              <Tr>
-                <Th>AE</Th>
-                <Th>Deals</Th>
-                <Th>Avg Amount</Th>
-                <Th>Fricc/deal</Th>
-                <Th>% c/fricción</Th>
-                <Th>Top Fricción</Th>
-                <Th>Top Competidor</Th>
-              </Tr>
-            </Thead>
-            <Tbody>
-              {aeRows.map((row) => (
-                <Tr key={row.ae}>
-                  <Td>{row.ae}</Td>
-                  <Td>{row.deals}</Td>
-                  <Td>{row.avgAmount}</Td>
-                  <Td>{row.frictionsPerDeal}</Td>
-                  <Td>{row.pctDealsWithFriction}</Td>
-                  <Td>{row.topFriction}</Td>
-                  <Td>{row.topCompetitor}</Td>
-                </Tr>
-              ))}
-            </Tbody>
-          </Table>
-        </div>
-      </ChartCard>
-
-      <ChartCard title={t("frictionByAe")}>
-        <StackedBarChart
-          data={aeFrictionStack.data}
-          yKey="name"
-          stackKeys={aeFrictionStack.stackKeys}
-          height={Math.max(320, aeFrictionStack.data.length * 36)}
-        />
-      </ChartCard>
 
       {hasFaqs ? (
         <>

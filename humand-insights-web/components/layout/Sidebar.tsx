@@ -48,7 +48,7 @@ const ITEMS: Item[] = [
   { href: "/product-gaps-detail", labelKey: "Product Gaps", section: "Detalle", icon: Puzzle },
   { href: "/faq-detail", labelKey: "FAQs", section: "Detalle", icon: HelpCircle },
   { href: "/comparative-analysis", labelKey: "Comparative Analysis", section: "Herramientas", icon: GitCompare },
-  { href: "/custom-dashboards", labelKey: "Custom Dashboards", section: "Herramientas", icon: LayoutGrid },
+  // { href: "/custom-dashboards", labelKey: "Custom Dashboards", section: "Herramientas", icon: LayoutGrid },
   { href: "/sql-chat", labelKey: "Chat con IA", section: "Herramientas", icon: Bot },
   { href: "/glossary", labelKey: "Glosario", section: "Herramientas", icon: BookOpen },
   { href: "/campaign-advisor", labelKey: "Campaign Advisor", section: "Marketing", icon: Megaphone, roles: ["admin", "campaign_advisor"] },
