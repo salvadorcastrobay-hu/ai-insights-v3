@@ -164,7 +164,7 @@ export function buildProductIntelligenceData(
     return [...totals.entries()]
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value)
-      .slice(0, 10);
+      .slice(0, 20);
   })();
 
   const featureSegmentStack = stackBy(

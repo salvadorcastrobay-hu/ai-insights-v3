@@ -112,42 +112,6 @@ export function ProductIntelligenceView({ data, filteredRows }: Props) {
           />
         </ChartCard>
 
-        {painThemeBreakdown.length > 0 ? (
-          <div className="space-y-3">
-            <h3 className="text-[14px] font-semibold text-[var(--color-text-default)]">
-              {t("themeBreakdownTitle")}
-            </h3>
-            <Caption>
-              {t("themeBreakdownDesc")}
-            </Caption>
-            <section className="grid gap-3 lg:grid-cols-2">
-              {painThemeBreakdown.map((theme) => (
-                <ChartCard
-                  key={theme.theme}
-                  title={`${theme.theme} — ${theme.demos} demos (${theme.pct.toFixed(1)}%)`}
-                >
-                  {theme.subtypes.length > 0 ? (
-                    <HorizontalBarChart
-                      data={theme.subtypes.map((s) => ({
-                        name: tl(s.name),
-                        value: s.value,
-                        pct: s.pctOfTheme,
-                      }))}
-                      label={(value) => {
-                        const row = theme.subtypes.find((s) => s.value === value);
-                        return row ? `${value} (${row.pctOfTheme.toFixed(1)}%)` : String(value);
-                      }}
-                      yAxisWidth={240}
-                      height={260}
-                    />
-                  ) : (
-                    <EmptyState>{t("noSubtypes")}</EmptyState>
-                  )}
-                </ChartCard>
-              ))}
-            </section>
-          </div>
-        ) : null}
 
         <ChartCard title={t("painBySegment")}>
           <HeatMap

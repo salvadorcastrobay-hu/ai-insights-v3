@@ -181,7 +181,7 @@
     "moduleBySegment": "Módulos × Segmento (pains + gaps)",
     "topGapsFreq": "Top 20 Feature Gaps — Frequência",
     "topGapsFreqDesc": "Features faltantes mais solicitadas por deals únicos.",
-    "topGapsRevenue": "Top 10 Feature Gaps — Receita em Risco",
+    "topGapsRevenue": "Top 20 Feature Gaps — Receita em Risco",
     "topGapsRevenueDesc": "Features ordenadas por receita acumulada dos deals que as solicitam.",
     "gapsBySegment": "Feature Gaps × Segmento",
     "gapsPriority": "Prioridade de gaps",
