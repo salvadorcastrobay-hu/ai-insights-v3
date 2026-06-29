@@ -453,7 +453,8 @@ export function getFunnelPhase(
 }
 
 // Outcome más granular dentro de "closed": distingue Won de Lost.
-// Postponed se trata como Lost (no cerró pero salió del pipeline activo).
+// Solo "won" / "closed won" y "lost" / "closed lost" cuentan — Postponed excluido
+// para mantener consistencia con el RPC rpc_won_lost_pains (LIKE '%won%' / '%lost%').
 export type DealOutcome = "won" | "lost";
 
 export function getDealOutcome(
@@ -461,11 +462,7 @@ export function getDealOutcome(
 ): DealOutcome | null {
   if (!dealStage || typeof dealStage !== "string") return null;
   const lowered = dealStage.toLowerCase();
-  // "Won" matchea "Won" y "Closed Won". El check de "closed" sale primero
-  // por si en algún momento hubiera "Closed Lost" — el orden previene falsos
-  // positivos donde "won" matchearía antes de chequear "lost".
   if (lowered.includes("closed won") || lowered.includes("won")) return "won";
   if (lowered.includes("closed lost") || lowered.includes("lost")) return "lost";
-  if (lowered.includes("postponed")) return "lost";
   return null;
 }

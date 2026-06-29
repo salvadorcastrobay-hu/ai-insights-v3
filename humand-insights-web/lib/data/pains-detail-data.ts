@@ -148,8 +148,8 @@ export function buildPainsDetailData(
     .sort((a, b) => b.total - a.total)
     .slice(0, 12);
 
-  // Min sample size para que las rates no sean ruido (≥5 deals cerrados).
-  const MIN_CLOSED = 5;
+  // Min sample size para que las rates no sean ruido (≥10 deals cerrados, igual que el RPC).
+  const MIN_CLOSED = 10;
   const painsByOutcome: PainByOutcomeRow[] = Array.from(painOutcomeDeals.entries())
     .map(([pain, b]) => {
       const won = b.won.size;
