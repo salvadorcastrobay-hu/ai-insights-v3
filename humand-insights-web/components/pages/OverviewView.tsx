@@ -218,22 +218,17 @@ export function OverviewView({ data, coveragePct, validated }: Props) {
                 <Th>{t("winRateColPain")}</Th>
                 <Th>{t("winRateColClosed")}</Th>
                 <Th>{t("winRateColWinRate")}</Th>
-                <Th>{t("winRateColVsGeneral")}</Th>
               </Tr>
             </Thead>
             <Tbody>
               {wonLostPains.map((p) => {
-                const diff = Math.round((p.winRate - winRateBaseline) * 10) / 10;
-                const above = diff >= 0;
+                const above = p.winRate >= winRateBaseline;
                 return (
                   <Tr key={p.name}>
                     <Td>{p.name}</Td>
                     <Td className="tabular-nums text-[var(--color-text-secondary)]">{fmt(p.closed)}</Td>
                     <Td className={`font-semibold tabular-nums ${above ? "text-emerald-700" : "text-rose-600"}`}>
                       {p.winRate}%
-                    </Td>
-                    <Td className="tabular-nums">
-                      {above ? "🟢 +" : "🔴 "}{diff} pts
                     </Td>
                   </Tr>
                 );
