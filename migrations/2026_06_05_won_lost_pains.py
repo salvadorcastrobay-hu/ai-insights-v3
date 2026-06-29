@@ -25,7 +25,10 @@ RETURNS TABLE(pain text, won_demos bigint, lost_demos bigint, won_total bigint, 
 LANGUAGE sql STABLE
 AS $$
     WITH cls AS (
-        SELECT transcript_id, insight_subtype_display AS pain,
+        -- Usamos deal_id como unidad de conteo (un deal = un voto, aunque tenga varias llamadas).
+        -- Si no hay deal_id, fallback a transcript_id para no perder la señal.
+        SELECT COALESCE(deal_id::text, transcript_id::text) AS entity_id,
+               insight_subtype_display AS pain,
                CASE
                    WHEN lower(deal_stage) LIKE '%won%' THEN 'won'
                    WHEN lower(deal_stage) LIKE '%lost%' THEN 'lost'
@@ -39,14 +42,14 @@ AS $$
     valid AS (SELECT * FROM cls WHERE outcome IS NOT NULL),
     totals AS (
         SELECT
-            COUNT(DISTINCT transcript_id) FILTER (WHERE outcome = 'won')  AS won_total,
-            COUNT(DISTINCT transcript_id) FILTER (WHERE outcome = 'lost') AS lost_total
+            COUNT(DISTINCT entity_id) FILTER (WHERE outcome = 'won')  AS won_total,
+            COUNT(DISTINCT entity_id) FILTER (WHERE outcome = 'lost') AS lost_total
         FROM valid
     ),
     per_pain AS (
         SELECT pain,
-               COUNT(DISTINCT transcript_id) FILTER (WHERE outcome = 'won')::bigint  AS won_demos,
-               COUNT(DISTINCT transcript_id) FILTER (WHERE outcome = 'lost')::bigint AS lost_demos
+               COUNT(DISTINCT entity_id) FILTER (WHERE outcome = 'won')::bigint  AS won_demos,
+               COUNT(DISTINCT entity_id) FILTER (WHERE outcome = 'lost')::bigint AS lost_demos
         FROM valid GROUP BY pain
     )
     SELECT pp.pain, pp.won_demos, pp.lost_demos,
