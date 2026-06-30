@@ -58,22 +58,33 @@ export function stackBy(
   const OTHER_LABEL = "Otros";
   const hasOther = stackTotals.size > topStacks.length;
 
-  // Second pass: fold everything not in top-N into an "Otros" bucket.
+  // Second pass: count distinct deals per (y, bucket) — same unit as groupDistinctTranscripts.
+  // Using deal_id when available, falling back to transcript_id so each deal votes once.
+  const matrixSets = new Map<string, Record<string, Set<string>>>();
+  for (const y of yOrder) matrixSets.set(y, {});
+
   for (const row of rows) {
     const y = String(row[yKey] ?? "").trim();
     const stackRaw = String(row[stackKey] ?? "").trim();
-    if (!y || !stackRaw || !matrix.has(y)) continue;
+    if (!y || !stackRaw || !matrixSets.has(y)) continue;
 
-    const record = matrix.get(y)!;
+    const dealKey = String(row.deal_id || row.transcript_id);
     const bucket = topStacksSet.has(stackRaw) ? stackRaw : OTHER_LABEL;
-    record[bucket] = Number(record[bucket] ?? 0) + 1;
+    const record = matrixSets.get(y)!;
+    if (!record[bucket]) record[bucket] = new Set<string>();
+    record[bucket].add(dealKey);
+  }
+
+  // Collapse sets → counts and build the final matrix.
+  for (const [y, record] of matrixSets) {
+    const row: Record<string, string | number> = { name: y };
+    for (const k of Object.keys(record)) row[k] = record[k].size;
+    matrix.set(y, row);
   }
 
   const stackKeys = hasOther ? [...topStacks, OTHER_LABEL] : topStacks;
 
-  // Sort rows by total bar length (sum of all stack values) so the visual order
-  // matches descending magnitude — groupDistinctTranscripts sorts by unique transcripts
-  // but the bar width reflects raw insight counts, which can diverge significantly.
+  // Sort by total bar length so visual order matches descending magnitude.
   const sortedData = yOrder
     .map((y) => matrix.get(y) ?? { name: y })
     .sort((a, b) => {
