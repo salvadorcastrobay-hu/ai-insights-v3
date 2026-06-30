@@ -70,7 +70,19 @@ export function stackBy(
   }
 
   const stackKeys = hasOther ? [...topStacks, OTHER_LABEL] : topStacks;
-  return { data: yOrder.map((y) => matrix.get(y) ?? { name: y }), stackKeys };
+
+  // Sort rows by total bar length (sum of all stack values) so the visual order
+  // matches descending magnitude — groupDistinctTranscripts sorts by unique transcripts
+  // but the bar width reflects raw insight counts, which can diverge significantly.
+  const sortedData = yOrder
+    .map((y) => matrix.get(y) ?? { name: y })
+    .sort((a, b) => {
+      const sumA = stackKeys.reduce((s, k) => s + (Number(a[k]) || 0), 0);
+      const sumB = stackKeys.reduce((s, k) => s + (Number(b[k]) || 0), 0);
+      return sumB - sumA;
+    });
+
+  return { data: sortedData, stackKeys };
 }
 
 export function buildHeatMap(
