@@ -23,7 +23,6 @@ export function SalesEnablementView({ data, filteredRows }: Props) {
     topFrictionTypes,
     top2Friction,
     frictionSegment,
-    stageHeat,
     industryHeat,
     faqBattleCards,
     hasFaqs,
@@ -115,14 +114,6 @@ export function SalesEnablementView({ data, filteredRows }: Props) {
       </ChartCard>
 
       <section className="space-y-3">
-        <ChartCard title={t("frictionByStage")}>
-          <HeatMap
-            rowLabels={stageHeat.rowLabels}
-            colLabels={stageHeat.colLabels}
-            values={stageHeat.values}
-            height={Math.max(360, stageHeat.rowLabels.length * 32 + 140)}
-          />
-        </ChartCard>
         <ChartCard title={t("frictionByIndustry")}>
           <HeatMap
             rowLabels={industryHeat.rowLabels}
@@ -132,12 +123,6 @@ export function SalesEnablementView({ data, filteredRows }: Props) {
           />
         </ChartCard>
       </section>
-      <p className="text-[12px] text-[var(--color-text-secondary)]">
-        Si una fricción aparece mucho en Discovery, hay que abordarla al inicio de la conversación.
-        Si aparece en Final Negotiation o Postponed, es un bloqueante tardío que necesita un
-        argumento preparado de antemano.
-      </p>
-
       {hasFaqs ? (
         <>
           <SectionHeader
