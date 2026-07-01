@@ -55,6 +55,8 @@ type Props = {
   insights: AdInsight[];
   refreshedAt: string | null;
   canRefresh: boolean;
+  /** LinkedIn/Google Ads son WIP: solo habilitados para ciertos usuarios. */
+  canRefreshWipSources?: boolean;
   readError?: string | null;
   organicPosts?: StoredPost[];
   organicInsights?: OrganicInsight[];
@@ -201,7 +203,7 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, readError, organicPosts = [], organicInsights = [], organicProfiles = [] }: Props) {
+export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, canRefreshWipSources = false, readError, organicPosts = [], organicInsights = [], organicProfiles = [] }: Props) {
   const router = useRouter();
   const t = useTranslations("competitorAds");
   const [loadingSource, setLoadingSource] = useState<"meta_ads" | "linkedin_ads" | "google_ads" | null>(null);
@@ -457,34 +459,38 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, read
                 {loadingSource === "meta_ads" ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
                 {loadingSource === "meta_ads" ? t("refreshing") : t("refresh")}
               </button>
-              <button
-                type="button"
-                onClick={() => refresh("linkedin_ads")}
-                disabled={loadingSource !== null}
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] px-3.5 py-2 text-[13px] font-semibold transition",
-                  loadingSource !== null
-                    ? "cursor-not-allowed bg-[var(--color-neutral-100)] text-[var(--color-text-secondary)]"
-                    : "bg-white text-[var(--color-text-default)] hover:bg-[var(--color-neutral-100)]",
-                )}
-              >
-                {loadingSource === "linkedin_ads" ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-                {loadingSource === "linkedin_ads" ? t("refreshingLinkedin") : t("refreshLinkedin")}
-              </button>
-              <button
-                type="button"
-                onClick={() => refresh("google_ads")}
-                disabled={loadingSource !== null}
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] px-3.5 py-2 text-[13px] font-semibold transition",
-                  loadingSource !== null
-                    ? "cursor-not-allowed bg-[var(--color-neutral-100)] text-[var(--color-text-secondary)]"
-                    : "bg-white text-[var(--color-text-default)] hover:bg-[var(--color-neutral-100)]",
-                )}
-              >
-                {loadingSource === "google_ads" ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-                {loadingSource === "google_ads" ? t("refreshingGoogle") : t("refreshGoogle")}
-              </button>
+              {canRefreshWipSources ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => refresh("linkedin_ads")}
+                    disabled={loadingSource !== null}
+                    className={cn(
+                      "inline-flex items-center gap-1.5 rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] px-3.5 py-2 text-[13px] font-semibold transition",
+                      loadingSource !== null
+                        ? "cursor-not-allowed bg-[var(--color-neutral-100)] text-[var(--color-text-secondary)]"
+                        : "bg-white text-[var(--color-text-default)] hover:bg-[var(--color-neutral-100)]",
+                    )}
+                  >
+                    {loadingSource === "linkedin_ads" ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                    {loadingSource === "linkedin_ads" ? t("refreshingLinkedin") : t("refreshLinkedin")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => refresh("google_ads")}
+                    disabled={loadingSource !== null}
+                    className={cn(
+                      "inline-flex items-center gap-1.5 rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] px-3.5 py-2 text-[13px] font-semibold transition",
+                      loadingSource !== null
+                        ? "cursor-not-allowed bg-[var(--color-neutral-100)] text-[var(--color-text-secondary)]"
+                        : "bg-white text-[var(--color-text-default)] hover:bg-[var(--color-neutral-100)]",
+                    )}
+                  >
+                    {loadingSource === "google_ads" ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                    {loadingSource === "google_ads" ? t("refreshingGoogle") : t("refreshGoogle")}
+                  </button>
+                </>
+              ) : null}
               <button
                 type="button"
                 onClick={refreshOrganic}

@@ -1,11 +1,11 @@
-import { MONITORED_COMPETITORS } from "@/lib/competitor-ads/config";
+import { MONITORED_COMPETITORS, isAdSourceWipEnabled } from "@/lib/competitor-ads/config";
 import { fetchCompanyAds } from "@/lib/competitor-ads/scrapecreators";
 import { fetchLinkedInAds } from "@/lib/competitor-ads/linkedin";
 import { fetchGoogleAds } from "@/lib/competitor-ads/googleads";
 import { upsertAds, markInactiveAds, saveAdInsight } from "@/lib/competitor-ads/store";
 import { analyzeCompetitor, adsModel } from "@/lib/competitor-ads/analyze";
 import { isAdmin, type AppRole } from "@/lib/auth/roles";
-import { getAuthenticatedSession, getServerUserRoles } from "@/lib/supabase/server";
+import { getAuthenticatedSession, getServerUserRoles, getServerUserEmail } from "@/lib/supabase/server";
 import type { AdSource } from "@/lib/competitor-ads/types";
 
 export const runtime = "nodejs";
@@ -65,6 +65,16 @@ export async function POST(req: Request): Promise<Response> {
     });
   }
   const source = requestedSource as AdSource;
+
+  if (source !== "meta_ads") {
+    const email = await getServerUserEmail();
+    if (!isAdSourceWipEnabled(email)) {
+      return new Response(JSON.stringify({ error: `${source} todavía no está disponible para tu usuario.` }), {
+        status: 403,
+        headers: { "content-type": "application/json" },
+      });
+    }
+  }
 
   const results: Result[] = [];
   await pooled(MONITORED_COMPETITORS.filter((c) => !c.ownBrand && c.source === source), 3, async (c) => {
