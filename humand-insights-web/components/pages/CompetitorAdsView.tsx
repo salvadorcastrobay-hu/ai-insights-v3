@@ -8,6 +8,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { ChartCard } from "@/components/charts/ChartCard";
 import { PageTitle } from "@/components/pages/common";
 import type { AdInsight, StoredAd } from "@/lib/competitor-ads/store";
+import type { AdSource } from "@/lib/competitor-ads/types";
 import type { StoredPost, OrganicInsight, OrganicSynthesis, OrganicProfile } from "@/lib/competitor-ads/organic-store";
 import { cn } from "@/lib/utils";
 import { useTaxonomyLabel } from "@/lib/taxonomy-labels";
@@ -86,9 +87,15 @@ type Group = {
   active: number;
   total: number;
   campaigns: Campaign[];
-  synthesis: Synthesis | null;
+  /** Síntesis IA por canal — cada fuente se analiza y guarda por separado. */
+  synthesisBySource: Partial<Record<AdSource, Synthesis>>;
+  /** Fuentes con al menos 1 aviso para este competidor, en orden de despliegue. */
+  sourcesPresent: AdSource[];
   classByKey: Map<string, PerAd>;
 };
+
+const SOURCE_ORDER: AdSource[] = ["meta_ads", "linkedin_ads", "google_ads"];
+const SOURCE_LABEL: Record<AdSource, string> = { meta_ads: "Meta", linkedin_ads: "LinkedIn", google_ads: "Google Ads" };
 
 const campaignKey = (a: StoredAd) => a.collation_id ?? a.ad_archive_id;
 
@@ -237,18 +244,25 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, canR
     }
     return [...byComp.entries()]
       .map(([competitor, list]) => {
-        const ins = insights.find((i) => i.competitor === competitor);
-        const synthesis = (ins?.payload as Synthesis | undefined) ?? null;
+        const compInsights = insights.filter((i) => i.competitor === competitor);
+        const synthesisBySource: Partial<Record<AdSource, Synthesis>> = {};
         const classByKey = new Map<string, PerAd>();
-        for (const p of synthesis?.per_ad ?? []) {
-          classByKey.set(p.collation_id ?? p.ad_archive_id, p);
+        for (const ins of compInsights) {
+          const synthesis = ins.payload as Synthesis | undefined;
+          if (!synthesis) continue;
+          synthesisBySource[ins.source] = synthesis;
+          for (const p of synthesis.per_ad ?? []) {
+            classByKey.set(p.collation_id ?? p.ad_archive_id, p);
+          }
         }
+        const sourcesPresent = SOURCE_ORDER.filter((s) => list.some((a) => a.source === s));
         return {
           competitor,
           active: list.filter((a) => a.is_active).length,
           total: list.length,
           campaigns: dedupeCampaigns(list),
-          synthesis,
+          synthesisBySource,
+          sourcesPresent,
           classByKey,
         };
       })
@@ -653,11 +667,16 @@ function IntelligenceColumn({ g }: { g: Group }) {
   const locale = useLocale();
   const ts = campaignTimeStats(g.campaigns);
   const i18nKey = LOCALE_TO_I18N[locale] ?? "es-AR";
-  const tr = g.synthesis?.i18n?.[i18nKey];
+
+  const [activeSource, setActiveSource] = useState<AdSource>(g.sourcesPresent[0] ?? "meta_ads");
+  const source = g.sourcesPresent.includes(activeSource) ? activeSource : (g.sourcesPresent[0] ?? "meta_ads");
+  const synthesis = g.synthesisBySource[source] ?? null;
+
+  const tr = synthesis?.i18n?.[i18nKey];
   // summary, angles labels/descriptions/copies del idioma activo (fallback al original)
-  const summary = tr?.summary ?? g.synthesis?.summary ?? null;
-  const offerTypes = tr?.offer_types ?? g.synthesis?.offer_types ?? [];
-  const angles = (g.synthesis?.angles ?? []).map((a, i) => ({
+  const summary = tr?.summary ?? synthesis?.summary ?? null;
+  const offerTypes = tr?.offer_types ?? synthesis?.offer_types ?? [];
+  const angles = (synthesis?.angles ?? []).map((a, i) => ({
     ...a,
     label: tr?.angles[i]?.label ?? a.label,
     description: tr?.angles[i]?.description ?? a.description,
@@ -680,7 +699,27 @@ function IntelligenceColumn({ g }: { g: Group }) {
         </p>
       </div>
 
-      {g.synthesis ? (
+      {g.sourcesPresent.length > 1 ? (
+        <div className="flex gap-1 border-b border-[var(--color-neutral-200)]">
+          {g.sourcesPresent.map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => setActiveSource(s)}
+              className={cn(
+                "px-2 pb-1.5 text-[12px] font-medium transition",
+                s === source
+                  ? "border-b-2 border-[var(--color-brand-500)] text-[var(--color-brand-500)]"
+                  : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-default)]",
+              )}
+            >
+              {SOURCE_LABEL[s]}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      {synthesis ? (
         <>
           {summary ? (
             <p className="text-[12px] leading-snug text-[var(--color-text-secondary)]">{summary}</p>
@@ -733,16 +772,16 @@ function IntelligenceColumn({ g }: { g: Group }) {
             </div>
           ) : null}
 
-          {g.synthesis.ads_analyzed ? (
+          {synthesis.ads_analyzed ? (
             <p className="mt-auto text-[11px] text-[var(--color-text-secondary)]">
               <Sparkles size={10} className="mr-0.5 inline text-[var(--color-brand-500)]" />
-              Basado en {g.synthesis.ads_analyzed} avisos analizados
+              Basado en {synthesis.ads_analyzed} avisos analizados ({SOURCE_LABEL[source]})
             </p>
           ) : null}
         </>
       ) : (
         <p className="text-[12px] italic text-[var(--color-text-secondary)]">
-          Sin análisis disponible. Hacé un refresh para generar.
+          Sin análisis disponible para {SOURCE_LABEL[source]}. Hacé un refresh para generar.
         </p>
       )}
     </div>
