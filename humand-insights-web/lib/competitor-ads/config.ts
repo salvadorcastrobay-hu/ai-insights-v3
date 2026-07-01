@@ -1,5 +1,13 @@
 import type { AdSource } from "./types";
 
+// LinkedIn/Google Ads son WIP: solo visibles/ejecutables para estos emails
+// hasta que se validen en producción. Sacar esta lista cuando se libere.
+export const AD_SOURCE_WIP_EMAILS: readonly string[] = ["salvador.castrobay@humand.co"];
+
+export function isAdSourceWipEnabled(email: string | null): boolean {
+  return !!email && AD_SOURCE_WIP_EMAILS.includes(email.toLowerCase());
+}
+
 // Competidores a monitorear en las ad libraries (vía ScrapeCreators).
 // Curado para acotar créditos: ~3 créditos por competidor por refresh (3 pages).
 // `query` se pasa como companyName; si el match por nombre es ambiguo, completar
