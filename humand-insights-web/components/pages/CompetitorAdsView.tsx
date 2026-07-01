@@ -90,6 +90,13 @@ type Group = {
 
 const campaignKey = (a: StoredAd) => a.collation_id ?? a.ad_archive_id;
 
+/** URL a la ad library de origen (Meta/LinkedIn/Google), según `source`. */
+function adLibraryUrl(a: StoredAd): string {
+  if (a.source === "linkedin_ads") return `https://www.linkedin.com/ad-library/detail/${a.ad_archive_id}`;
+  if (a.source === "google_ads") return `https://adstransparency.google.com/advertiser/${a.page_id}/creative/${a.ad_archive_id}`;
+  return `https://www.facebook.com/ads/library/?id=${a.ad_archive_id}`;
+}
+
 function hasMedia(a: StoredAd): boolean {
   return (a.media?.images?.length ?? 0) > 0 || (a.media?.videos?.length ?? 0) > 0;
 }
@@ -197,7 +204,7 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
 export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, readError, organicPosts = [], organicInsights = [], organicProfiles = [] }: Props) {
   const router = useRouter();
   const t = useTranslations("competitorAds");
-  const [loading, setLoading] = useState(false);
+  const [loadingSource, setLoadingSource] = useState<"meta_ads" | "linkedin_ads" | "google_ads" | null>(null);
   const [organicLoading, setOrganicLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [organicMsg, setOrganicMsg] = useState<string | null>(null);
@@ -307,11 +314,11 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, read
     return f.value;
   };
 
-  async function refresh() {
-    setLoading(true);
+  async function refresh(source: "meta_ads" | "linkedin_ads" | "google_ads") {
+    setLoadingSource(source);
     setMsg(null);
     try {
-      const res = await fetch("/api/competitor-ads/refresh", { method: "POST" });
+      const res = await fetch(`/api/competitor-ads/refresh?source=${source}`, { method: "POST" });
       const json = (await res.json()) as {
         totalUpserted?: number;
         error?: string;
@@ -334,7 +341,7 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, read
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "Error al actualizar");
     } finally {
-      setLoading(false);
+      setLoadingSource(null);
     }
   }
 
@@ -438,17 +445,45 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, read
             <div className="flex flex-wrap justify-end gap-2">
               <button
                 type="button"
-                onClick={refresh}
-                disabled={loading}
+                onClick={() => refresh("meta_ads")}
+                disabled={loadingSource !== null}
                 className={cn(
                   "inline-flex items-center gap-1.5 rounded-[var(--radius-s)] px-3.5 py-2 text-[13px] font-semibold transition",
-                  loading
+                  loadingSource !== null
                     ? "cursor-not-allowed bg-[var(--color-neutral-100)] text-[var(--color-text-secondary)]"
                     : "bg-[var(--color-brand-500)] text-white hover:opacity-90",
                 )}
               >
-                {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-                {loading ? t("refreshing") : t("refresh")}
+                {loadingSource === "meta_ads" ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                {loadingSource === "meta_ads" ? t("refreshing") : t("refresh")}
+              </button>
+              <button
+                type="button"
+                onClick={() => refresh("linkedin_ads")}
+                disabled={loadingSource !== null}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] px-3.5 py-2 text-[13px] font-semibold transition",
+                  loadingSource !== null
+                    ? "cursor-not-allowed bg-[var(--color-neutral-100)] text-[var(--color-text-secondary)]"
+                    : "bg-white text-[var(--color-text-default)] hover:bg-[var(--color-neutral-100)]",
+                )}
+              >
+                {loadingSource === "linkedin_ads" ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                {loadingSource === "linkedin_ads" ? t("refreshingLinkedin") : t("refreshLinkedin")}
+              </button>
+              <button
+                type="button"
+                onClick={() => refresh("google_ads")}
+                disabled={loadingSource !== null}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] px-3.5 py-2 text-[13px] font-semibold transition",
+                  loadingSource !== null
+                    ? "cursor-not-allowed bg-[var(--color-neutral-100)] text-[var(--color-text-secondary)]"
+                    : "bg-white text-[var(--color-text-default)] hover:bg-[var(--color-neutral-100)]",
+                )}
+              >
+                {loadingSource === "google_ads" ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                {loadingSource === "google_ads" ? t("refreshingGoogle") : t("refreshGoogle")}
               </button>
               <button
                 type="button"
@@ -1024,7 +1059,7 @@ function AdCard({ c, cls, competitor }: { c: Campaign; cls: PerAd | null; compet
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <a
-          href={`https://www.facebook.com/ads/library/?id=${ad.ad_archive_id}`}
+          href={adLibraryUrl(ad)}
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1 text-[11px] font-medium text-[var(--color-brand-500)] hover:underline"

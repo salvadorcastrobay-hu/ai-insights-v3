@@ -1,9 +1,12 @@
 import { MONITORED_COMPETITORS } from "@/lib/competitor-ads/config";
 import { fetchCompanyAds } from "@/lib/competitor-ads/scrapecreators";
+import { fetchLinkedInAds } from "@/lib/competitor-ads/linkedin";
+import { fetchGoogleAds } from "@/lib/competitor-ads/googleads";
 import { upsertAds, markInactiveAds, saveAdInsight } from "@/lib/competitor-ads/store";
 import { analyzeCompetitor, adsModel } from "@/lib/competitor-ads/analyze";
 import { isAdmin, type AppRole } from "@/lib/auth/roles";
 import { getAuthenticatedSession, getServerUserRoles } from "@/lib/supabase/server";
+import type { AdSource } from "@/lib/competitor-ads/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,7 +36,9 @@ async function pooled<T>(items: T[], limit: number, fn: (item: T) => Promise<voi
   await Promise.all(workers);
 }
 
-export async function POST(): Promise<Response> {
+const VALID_SOURCES: AdSource[] = ["meta_ads", "linkedin_ads", "google_ads"];
+
+export async function POST(req: Request): Promise<Response> {
   const session = await getAuthenticatedSession();
   if (!session) return new Response("Unauthorized", { status: 401 });
 
@@ -52,11 +57,19 @@ export async function POST(): Promise<Response> {
     });
   }
 
+  const requestedSource = new URL(req.url).searchParams.get("source") ?? "meta_ads";
+  if (!VALID_SOURCES.includes(requestedSource as AdSource)) {
+    return new Response(JSON.stringify({ error: `source inválido: ${requestedSource}` }), {
+      status: 400,
+      headers: { "content-type": "application/json" },
+    });
+  }
+  const source = requestedSource as AdSource;
+
   const results: Result[] = [];
-  await pooled(MONITORED_COMPETITORS.filter((c) => !c.ownBrand), 3, async (c) => {
+  await pooled(MONITORED_COMPETITORS.filter((c) => !c.ownBrand && c.source === source), 3, async (c) => {
     const r: Result = { competitor: c.name, source: c.source, fetched: 0, upserted: 0, deactivated: 0, analyzed: false };
     try {
-      // Por ahora solo meta_ads tiene conector.
       if (c.source === "meta_ads") {
         const ads = await fetchCompanyAds(c.name, {
           companyName: c.query,
@@ -71,11 +84,18 @@ export async function POST(): Promise<Response> {
         });
         r.fetched = ads.length;
         r.upserted = await upsertAds(ads);
-        r.deactivated = await markInactiveAds(
-          c.name,
-          c.source,
-          new Set(ads.map((a) => a.ad_archive_id)),
-        );
+        r.deactivated = await markInactiveAds(c.name, c.source, new Set(ads.map((a) => a.ad_archive_id)));
+      } else if (c.source === "linkedin_ads") {
+        const ads = await fetchLinkedInAds(c.name, { company: c.query, maxPages: c.maxPages ?? 2 });
+        r.fetched = ads.length;
+        r.upserted = await upsertAds(ads);
+        r.deactivated = await markInactiveAds(c.name, c.source, new Set(ads.map((a) => a.ad_archive_id)));
+      } else if (c.source === "google_ads") {
+        if (!c.googleDomain) throw new Error("Falta googleDomain en la config del competidor");
+        const ads = await fetchGoogleAds(c.name, { domain: c.googleDomain });
+        r.fetched = ads.length;
+        r.upserted = await upsertAds(ads);
+        r.deactivated = await markInactiveAds(c.name, c.source, new Set(ads.map((a) => a.ad_archive_id)));
       }
       // Análisis IA (no rompe el refresh si falla, pero el error se reporta).
       try {
