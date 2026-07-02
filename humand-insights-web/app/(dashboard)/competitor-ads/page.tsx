@@ -13,6 +13,9 @@ export default async function Page() {
   const [roles, email] = await Promise.all([getServerUserRoles(), getServerUserEmail()]);
   const admin = isAdmin(roles as AppRole[]);
   const canRefreshWipSources = admin && isAdSourceWipEnabled(email);
+  // Botón temporal de debug (reintentar solo los competidores de la última
+  // tanda) — visible solo para mí, independiente de la lista WIP general.
+  const showRetryPending = admin && email?.toLowerCase() === "salvador.castrobay@humand.co";
 
   const [stored, dbInsights, refreshedAt, organicPosts, organicInsights, organicProfiles] = await Promise.all([
     loadStoredAds(),
@@ -33,6 +36,7 @@ export default async function Page() {
       refreshedAt={refreshedAt ?? insights[0]?.generated_at ?? null}
       canRefresh={admin}
       canRefreshWipSources={canRefreshWipSources}
+      showRetryPending={showRetryPending}
       organicPosts={organicPosts}
       organicInsights={organicInsights}
       organicProfiles={organicProfiles}
