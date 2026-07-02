@@ -99,6 +99,17 @@ type Group = {
 const SOURCE_ORDER: AdSource[] = ["meta_ads", "linkedin_ads", "google_ads"];
 const SOURCE_LABEL: Record<AdSource, string> = { meta_ads: "Meta", linkedin_ads: "LinkedIn", google_ads: "Google Ads" };
 
+// Parsea JSON de forma segura: si el body no es JSON (ej. una página de error
+// de infraestructura en texto plano por un timeout/upstream), devuelve un
+// mensaje legible en vez de que reviente con un SyntaxError genérico.
+function parseJsonResponse<T extends { error?: string }>(rawText: string, fallback: string): T {
+  try {
+    return JSON.parse(rawText) as T;
+  } catch {
+    return { error: rawText.trim().slice(0, 180) || fallback } as T;
+  }
+}
+
 const campaignKey = (a: StoredAd) => a.collation_id ?? a.ad_archive_id;
 
 /** URL a la ad library de origen (Meta/LinkedIn/Google), según `source`. */
@@ -348,12 +359,13 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, canR
     const qs = new URLSearchParams({ source });
     if (competitors?.length) qs.set("competitors", competitors.join(","));
     const res = await fetch(`/api/competitor-ads/refresh?${qs}`, { method: "POST" });
-    const json = (await res.json()) as {
+    const rawText = await res.text();
+    const json = parseJsonResponse<{
       totalUpserted?: number;
       error?: string;
       results?: Array<{ competitor: string; error?: string; analyzeError?: string; analyzed?: boolean }>;
-    };
-    if (!res.ok) return json.error ?? `Error ${res.status}`;
+    }>(rawText, `Error ${res.status}`);
+    if (!res.ok || json.error) return json.error ?? `Error ${res.status}`;
     const results = json.results ?? [];
     const fetchErrs = results.filter((r) => r.error);
     const analyzeErrs = results.filter((r) => r.analyzeError);
@@ -448,14 +460,6 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, canR
   };
   type OrganicJobResponse = { job?: OrganicJob; error?: string };
 
-  const parseOrganicJobResponse = (rawText: string, fallback: string): OrganicJobResponse => {
-    try {
-      return JSON.parse(rawText) as OrganicJobResponse;
-    } catch {
-      return { error: rawText.trim().slice(0, 180) || fallback };
-    }
-  };
-
   const organicJobMessage = (job: OrganicJob): string => {
     const results = job.results ?? [];
     const fetched = results.reduce((acc, item) => acc + (item.fetched ?? 0), 0);
@@ -487,7 +491,7 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, canR
         cache: "no-store",
       });
       const rawText = await res.text();
-      const json = parseOrganicJobResponse(rawText, `Error ${res.status}`);
+      const json = parseJsonResponse<OrganicJobResponse>(rawText, `Error ${res.status}`);
       if (!res.ok || !json.job) throw new Error(json.error ?? `Error ${res.status}`);
       setOrganicMsg(organicJobMessage(json.job));
       if (json.job.state === "completed" || json.job.state === "failed") {
@@ -504,7 +508,7 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, canR
     try {
       const res = await fetch("/api/competitor-ads/organic-refresh", { method: "POST" });
       const rawText = await res.text();
-      const json = parseOrganicJobResponse(rawText, `Error ${res.status}`);
+      const json = parseJsonResponse<OrganicJobResponse>(rawText, `Error ${res.status}`);
       if (!res.ok || !json.job) {
         setOrganicMsg(json.error ?? `Error ${res.status}`);
         return;
