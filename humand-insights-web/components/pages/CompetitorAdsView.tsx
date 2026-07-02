@@ -178,7 +178,7 @@ function ageBucketOf(iso: string | null | undefined): string | null {
   return "<1 mes";
 }
 
-type AdFilter = { kind: "goal" | "content_type" | "module" | "persona" | "age" | "format"; value: string };
+type AdFilter = { kind: "goal" | "content_type" | "module" | "persona" | "age" | "format" | "source"; value: string };
 
 function campaignMatches(c: Campaign, cls: PerAd | null, f: AdFilter): boolean {
   switch (f.kind) {
@@ -188,6 +188,7 @@ function campaignMatches(c: Campaign, cls: PerAd | null, f: AdFilter): boolean {
     case "persona":     return cls?.persona === f.value;
     case "age":         return ageBucketOf(c.lead.ad_start_date) === f.value;
     case "format":      return f.value === "video" ? Boolean(c.lead.media?.videos?.[0]) : !c.lead.media?.videos?.[0];
+    case "source":      return c.lead.source === f.value;
   }
 }
 
@@ -320,6 +321,12 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, canR
     [allFlatCampaigns],
   );
 
+  const aggSource = useMemo(() => {
+    const m = new Map<AdSource, number>();
+    for (const { campaign } of allFlatCampaigns) m.set(campaign.lead.source, (m.get(campaign.lead.source) ?? 0) + 1);
+    return SOURCE_ORDER.filter((s) => m.has(s)).map((key) => ({ key, count: m.get(key)! }));
+  }, [allFlatCampaigns]);
+
   const pick = (kind: AdFilter["kind"], value: string) =>
     setFilter((f) => (f && f.kind === kind && f.value === value ? null : { kind, value }));
 
@@ -327,6 +334,7 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, canR
     if (f.kind === "goal") return goalLabel(f.value);
     if (f.kind === "content_type") return contentLabel(f.value);
     if (f.kind === "format") return f.value === "video" ? t("video") : t("static");
+    if (f.kind === "source") return SOURCE_LABEL[f.value as AdSource] ?? f.value;
     return f.value;
   };
 
@@ -627,6 +635,7 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, canR
               aggContent={aggContent}
               aggFormat={aggFormat}
               aggAge={aggAge}
+              aggSource={aggSource}
               onPick={pick}
               goalLabel={goalLabel}
               contentLabel={contentLabel}
@@ -802,6 +811,7 @@ function CreativosView({
   aggContent,
   aggFormat,
   aggAge,
+  aggSource,
   onPick,
   goalLabel,
   contentLabel,
@@ -815,6 +825,7 @@ function CreativosView({
   aggContent: Tally[];
   aggFormat: { key: string; label: string; count: number }[];
   aggAge: TimeBucket[];
+  aggSource: { key: AdSource; count: number }[];
   onPick: (kind: AdFilter["kind"], value: string) => void;
   goalLabel: (k: string) => string;
   contentLabel: (k: string) => string;
@@ -827,7 +838,20 @@ function CreativosView({
     <div className="space-y-4">
       {/* Global filter chips */}
       <div className="rounded-[var(--radius-m)] border border-[var(--color-neutral-200)] bg-[var(--color-bg-card)] p-4">
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
+          <div>
+            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">
+              Plataforma
+            </p>
+            <div className="flex flex-wrap gap-1">
+              {aggSource.length ? aggSource.map(({ key, count }) => (
+                <Chip key={key} active={filter?.kind === "source" && filter.value === key} onClick={() => onPick("source", key)}>
+                  {SOURCE_LABEL[key]} <span className="font-semibold">{count}</span>
+                </Chip>
+              )) : <span className="text-[11px] text-[var(--color-text-secondary)]">—</span>}
+            </div>
+          </div>
+
           <div>
             <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">
               Objetivo
