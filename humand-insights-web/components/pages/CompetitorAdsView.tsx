@@ -355,13 +355,18 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, canR
     };
     if (!res.ok) return json.error ?? `Error ${res.status}`;
     const results = json.results ?? [];
-    const fetchErr = results.find((r) => r.error)?.error;
-    const analyzeErr = results.find((r) => r.analyzeError)?.analyzeError;
+    const fetchErrs = results.filter((r) => r.error);
+    const analyzeErrs = results.filter((r) => r.analyzeError);
     const analyzedOk = results.filter((r) => r.analyzed).length;
     const parts = [`Actualizado: ${json.totalUpserted ?? 0} avisos`];
-    if (fetchErr) parts.push(`fetch falló: ${fetchErr}`);
-    if (analyzeErr) parts.push(`análisis falló: ${analyzeErr}`);
-    else parts.push(`análisis OK (${analyzedOk})`);
+    if (fetchErrs.length) {
+      parts.push(`fetch falló (${fetchErrs.map((r) => r.competitor).join(", ")}): ${fetchErrs[0].error}`);
+    }
+    if (analyzeErrs.length) {
+      parts.push(`análisis falló (${analyzeErrs.map((r) => r.competitor).join(", ")}): ${analyzeErrs[0].analyzeError}`);
+    } else {
+      parts.push(`análisis OK (${analyzedOk})`);
+    }
     return parts.join(" · ");
   }
 
