@@ -215,6 +215,7 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, canR
   const router = useRouter();
   const t = useTranslations("competitorAds");
   const [loadingSource, setLoadingSource] = useState<"meta_ads" | "linkedin_ads" | "google_ads" | null>(null);
+  const [loadingAll, setLoadingAll] = useState(false);
   const [organicLoading, setOrganicLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [organicMsg, setOrganicMsg] = useState<string | null>(null);
@@ -338,35 +339,57 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, canR
     return f.value;
   };
 
+  async function fetchSourceRefresh(source: "meta_ads" | "linkedin_ads" | "google_ads"): Promise<string> {
+    const res = await fetch(`/api/competitor-ads/refresh?source=${source}`, { method: "POST" });
+    const json = (await res.json()) as {
+      totalUpserted?: number;
+      error?: string;
+      results?: Array<{ competitor: string; error?: string; analyzeError?: string; analyzed?: boolean }>;
+    };
+    if (!res.ok) return json.error ?? `Error ${res.status}`;
+    const results = json.results ?? [];
+    const fetchErr = results.find((r) => r.error)?.error;
+    const analyzeErr = results.find((r) => r.analyzeError)?.analyzeError;
+    const analyzedOk = results.filter((r) => r.analyzed).length;
+    const parts = [`Actualizado: ${json.totalUpserted ?? 0} avisos`];
+    if (fetchErr) parts.push(`fetch falló: ${fetchErr}`);
+    if (analyzeErr) parts.push(`análisis falló: ${analyzeErr}`);
+    else parts.push(`análisis OK (${analyzedOk})`);
+    return parts.join(" · ");
+  }
+
   async function refresh(source: "meta_ads" | "linkedin_ads" | "google_ads") {
     setLoadingSource(source);
     setMsg(null);
     try {
-      const res = await fetch(`/api/competitor-ads/refresh?source=${source}`, { method: "POST" });
-      const json = (await res.json()) as {
-        totalUpserted?: number;
-        error?: string;
-        results?: Array<{ competitor: string; error?: string; analyzeError?: string; analyzed?: boolean }>;
-      };
-      if (!res.ok) {
-        setMsg(json.error ?? `Error ${res.status}`);
-      } else {
-        const results = json.results ?? [];
-        const fetchErr = results.find((r) => r.error)?.error;
-        const analyzeErr = results.find((r) => r.analyzeError)?.analyzeError;
-        const analyzedOk = results.filter((r) => r.analyzed).length;
-        const parts = [`Actualizado: ${json.totalUpserted ?? 0} avisos`];
-        if (fetchErr) parts.push(`fetch falló: ${fetchErr}`);
-        if (analyzeErr) parts.push(`análisis falló: ${analyzeErr}`);
-        else parts.push(`análisis OK (${analyzedOk})`);
-        setMsg(parts.join(" · "));
-        router.refresh();
-      }
+      setMsg(await fetchSourceRefresh(source));
+      router.refresh();
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "Error al actualizar");
     } finally {
       setLoadingSource(null);
     }
+  }
+
+  async function refreshAll() {
+    const sources: Array<"meta_ads" | "linkedin_ads" | "google_ads"> = canRefreshWipSources
+      ? ["meta_ads", "linkedin_ads", "google_ads"]
+      : ["meta_ads"];
+    setLoadingAll(true);
+    setMsg(null);
+    const summaries: string[] = [];
+    for (const source of sources) {
+      setLoadingSource(source);
+      try {
+        summaries.push(`${SOURCE_LABEL[source]}: ${await fetchSourceRefresh(source)}`);
+      } catch (e) {
+        summaries.push(`${SOURCE_LABEL[source]}: ${e instanceof Error ? e.message : "error"}`);
+      }
+    }
+    setMsg(summaries.join(" | "));
+    setLoadingSource(null);
+    setLoadingAll(false);
+    router.refresh();
   }
 
   type OrganicJobResult = {
@@ -469,13 +492,27 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, canR
             <div className="flex flex-wrap justify-end gap-2">
               <button
                 type="button"
-                onClick={() => refresh("meta_ads")}
-                disabled={loadingSource !== null}
+                onClick={refreshAll}
+                disabled={loadingSource !== null || loadingAll}
                 className={cn(
                   "inline-flex items-center gap-1.5 rounded-[var(--radius-s)] px-3.5 py-2 text-[13px] font-semibold transition",
-                  loadingSource !== null
+                  loadingSource !== null || loadingAll
                     ? "cursor-not-allowed bg-[var(--color-neutral-100)] text-[var(--color-text-secondary)]"
                     : "bg-[var(--color-brand-500)] text-white hover:opacity-90",
+                )}
+              >
+                {loadingAll ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                {loadingAll ? t("refreshingAll") : t("refreshAll")}
+              </button>
+              <button
+                type="button"
+                onClick={() => refresh("meta_ads")}
+                disabled={loadingSource !== null || loadingAll}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] px-3.5 py-2 text-[13px] font-semibold transition",
+                  loadingSource !== null || loadingAll
+                    ? "cursor-not-allowed bg-[var(--color-neutral-100)] text-[var(--color-text-secondary)]"
+                    : "bg-white text-[var(--color-text-default)] hover:bg-[var(--color-neutral-100)]",
                 )}
               >
                 {loadingSource === "meta_ads" ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
@@ -486,10 +523,10 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, canR
                   <button
                     type="button"
                     onClick={() => refresh("linkedin_ads")}
-                    disabled={loadingSource !== null}
+                    disabled={loadingSource !== null || loadingAll}
                     className={cn(
                       "inline-flex items-center gap-1.5 rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] px-3.5 py-2 text-[13px] font-semibold transition",
-                      loadingSource !== null
+                      loadingSource !== null || loadingAll
                         ? "cursor-not-allowed bg-[var(--color-neutral-100)] text-[var(--color-text-secondary)]"
                         : "bg-white text-[var(--color-text-default)] hover:bg-[var(--color-neutral-100)]",
                     )}
@@ -500,10 +537,10 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, canR
                   <button
                     type="button"
                     onClick={() => refresh("google_ads")}
-                    disabled={loadingSource !== null}
+                    disabled={loadingSource !== null || loadingAll}
                     className={cn(
                       "inline-flex items-center gap-1.5 rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] px-3.5 py-2 text-[13px] font-semibold transition",
-                      loadingSource !== null
+                      loadingSource !== null || loadingAll
                         ? "cursor-not-allowed bg-[var(--color-neutral-100)] text-[var(--color-text-secondary)]"
                         : "bg-white text-[var(--color-text-default)] hover:bg-[var(--color-neutral-100)]",
                     )}
