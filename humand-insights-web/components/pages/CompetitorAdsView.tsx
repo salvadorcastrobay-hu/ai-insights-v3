@@ -339,8 +339,13 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, canR
     return f.value;
   };
 
-  async function fetchSourceRefresh(source: "meta_ads" | "linkedin_ads" | "google_ads"): Promise<string> {
-    const res = await fetch(`/api/competitor-ads/refresh?source=${source}`, { method: "POST" });
+  async function fetchSourceRefresh(
+    source: "meta_ads" | "linkedin_ads" | "google_ads",
+    competitors?: string[],
+  ): Promise<string> {
+    const qs = new URLSearchParams({ source });
+    if (competitors?.length) qs.set("competitors", competitors.join(","));
+    const res = await fetch(`/api/competitor-ads/refresh?${qs}`, { method: "POST" });
     const json = (await res.json()) as {
       totalUpserted?: number;
       error?: string;
@@ -369,6 +374,30 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, canR
     } finally {
       setLoadingSource(null);
     }
+  }
+
+  // Competidores agregados en la última tanda: por si un refresh masivo se
+  // corta a mitad de camino (timeout), se pueden reintentar solo estos sin
+  // repetir toda la corrida ni gastar créditos de más en los que ya andaban.
+  const PENDING_RETRY_COMPETITORS = ["Naaloo HR", "Mandü HR", "Tu Recibo", "Crehana", "Rankmi", "PeopleForce"];
+  const [loadingPending, setLoadingPending] = useState(false);
+
+  async function retryPending() {
+    setLoadingPending(true);
+    setMsg(null);
+    const summaries: string[] = [];
+    for (const source of ["meta_ads", "linkedin_ads"] as const) {
+      setLoadingSource(source);
+      try {
+        summaries.push(`${SOURCE_LABEL[source]}: ${await fetchSourceRefresh(source, PENDING_RETRY_COMPETITORS)}`);
+      } catch (e) {
+        summaries.push(`${SOURCE_LABEL[source]}: ${e instanceof Error ? e.message : "error"}`);
+      }
+    }
+    setMsg(summaries.join(" | "));
+    setLoadingSource(null);
+    setLoadingPending(false);
+    router.refresh();
   }
 
   async function refreshAll() {
@@ -493,10 +522,10 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, canR
               <button
                 type="button"
                 onClick={refreshAll}
-                disabled={loadingSource !== null || loadingAll}
+                disabled={loadingSource !== null || loadingAll || loadingPending}
                 className={cn(
                   "inline-flex items-center gap-1.5 rounded-[var(--radius-s)] px-3.5 py-2 text-[13px] font-semibold transition",
-                  loadingSource !== null || loadingAll
+                  loadingSource !== null || loadingAll || loadingPending
                     ? "cursor-not-allowed bg-[var(--color-neutral-100)] text-[var(--color-text-secondary)]"
                     : "bg-[var(--color-brand-500)] text-white hover:opacity-90",
                 )}
@@ -507,10 +536,10 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, canR
               <button
                 type="button"
                 onClick={() => refresh("meta_ads")}
-                disabled={loadingSource !== null || loadingAll}
+                disabled={loadingSource !== null || loadingAll || loadingPending}
                 className={cn(
                   "inline-flex items-center gap-1.5 rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] px-3.5 py-2 text-[13px] font-semibold transition",
-                  loadingSource !== null || loadingAll
+                  loadingSource !== null || loadingAll || loadingPending
                     ? "cursor-not-allowed bg-[var(--color-neutral-100)] text-[var(--color-text-secondary)]"
                     : "bg-white text-[var(--color-text-default)] hover:bg-[var(--color-neutral-100)]",
                 )}
@@ -523,10 +552,10 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, canR
                   <button
                     type="button"
                     onClick={() => refresh("linkedin_ads")}
-                    disabled={loadingSource !== null || loadingAll}
+                    disabled={loadingSource !== null || loadingAll || loadingPending}
                     className={cn(
                       "inline-flex items-center gap-1.5 rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] px-3.5 py-2 text-[13px] font-semibold transition",
-                      loadingSource !== null || loadingAll
+                      loadingSource !== null || loadingAll || loadingPending
                         ? "cursor-not-allowed bg-[var(--color-neutral-100)] text-[var(--color-text-secondary)]"
                         : "bg-white text-[var(--color-text-default)] hover:bg-[var(--color-neutral-100)]",
                     )}
@@ -537,16 +566,31 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, canR
                   <button
                     type="button"
                     onClick={() => refresh("google_ads")}
-                    disabled={loadingSource !== null || loadingAll}
+                    disabled={loadingSource !== null || loadingAll || loadingPending}
                     className={cn(
                       "inline-flex items-center gap-1.5 rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] px-3.5 py-2 text-[13px] font-semibold transition",
-                      loadingSource !== null || loadingAll
+                      loadingSource !== null || loadingAll || loadingPending
                         ? "cursor-not-allowed bg-[var(--color-neutral-100)] text-[var(--color-text-secondary)]"
                         : "bg-white text-[var(--color-text-default)] hover:bg-[var(--color-neutral-100)]",
                     )}
                   >
                     {loadingSource === "google_ads" ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
                     {loadingSource === "google_ads" ? t("refreshingGoogle") : t("refreshGoogle")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={retryPending}
+                    disabled={loadingSource !== null || loadingAll || loadingPending}
+                    title="Reintenta Meta + LinkedIn solo para los 6 competidores agregados en la última tanda"
+                    className={cn(
+                      "inline-flex items-center gap-1.5 rounded-[var(--radius-s)] border border-dashed border-[var(--color-neutral-300)] px-3.5 py-2 text-[13px] font-semibold transition",
+                      loadingSource !== null || loadingAll || loadingPending
+                        ? "cursor-not-allowed bg-[var(--color-neutral-100)] text-[var(--color-text-secondary)]"
+                        : "bg-white text-[var(--color-text-default)] hover:bg-[var(--color-neutral-100)]",
+                    )}
+                  >
+                    {loadingPending ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                    {loadingPending ? "Reintentando pendientes…" : "Reintentar pendientes"}
                   </button>
                 </>
               ) : null}

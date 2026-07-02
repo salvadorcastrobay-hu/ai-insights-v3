@@ -66,6 +66,13 @@ export async function POST(req: Request): Promise<Response> {
   }
   const source = requestedSource as AdSource;
 
+  // Filtro opcional para reintentar solo algunos competidores (ej. después de
+  // un timeout parcial) sin repetir toda la corrida ni gastar créditos de más.
+  const competitorsParam = new URL(req.url).searchParams.get("competitors");
+  const competitorFilter = competitorsParam
+    ? new Set(competitorsParam.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean))
+    : null;
+
   if (source !== "meta_ads") {
     const email = await getServerUserEmail();
     if (!isAdSourceWipEnabled(email)) {
@@ -77,7 +84,10 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   const results: Result[] = [];
-  await pooled(MONITORED_COMPETITORS.filter((c) => !c.ownBrand && c.source === source), 3, async (c) => {
+  const targets = MONITORED_COMPETITORS.filter(
+    (c) => !c.ownBrand && c.source === source && (!competitorFilter || competitorFilter.has(c.name.toLowerCase())),
+  );
+  await pooled(targets, 3, async (c) => {
     const r: Result = { competitor: c.name, source: c.source, fetched: 0, upserted: 0, deactivated: 0, analyzed: false };
     try {
       if (c.source === "meta_ads") {
