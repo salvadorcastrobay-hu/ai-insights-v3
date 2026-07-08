@@ -30,14 +30,12 @@ type ChatApiResponse = {
   search_query?: string | null;
   search_filters?: string | null;
   search_sql?: string | null;
-  raw_data?: DataTablePayload | null;
-  quant_data?: DataTablePayload | null;
-  qual_data?: DataTablePayload | null;
-  search_sql_data?: DataTablePayload | null;
+  table?: DataTablePayload | null;
+  quant_table?: DataTablePayload | null;
+  qual_table?: DataTablePayload | null;
+  search_sql_table?: DataTablePayload | null;
   search_data?: SearchResult[];
-  auto_chart?: ChartPayload | null;
-  quant_chart?: ChartPayload | null;
-  search_sql_chart?: ChartPayload | null;
+  chart?: ChartPayload | null;
   warnings?: string[];
   filters_applied?: Record<string, unknown> | null;
 };
@@ -73,11 +71,11 @@ function buildAssistantMessage(response: ChatApiResponse): ChatMessageModel {
     search_query: response.search_query ?? null,
     search_filters: response.search_filters ?? null,
     search_sql: response.search_sql ?? null,
-    table: response.raw_data ?? null,
-    quant_table: response.quant_data ?? null,
-    qual_table: response.qual_data ?? null,
-    search_sql_table: response.search_sql_data ?? null,
-    chart: response.auto_chart ?? response.quant_chart ?? response.search_sql_chart ?? null,
+    table: response.table ?? null,
+    quant_table: response.quant_table ?? null,
+    qual_table: response.qual_table ?? null,
+    search_sql_table: response.search_sql_table ?? null,
+    chart: response.chart ?? null,
     search_results: response.search_data ?? undefined,
     filters_applied: response.filters_applied ?? null,
   };
