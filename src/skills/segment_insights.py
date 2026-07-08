@@ -187,7 +187,7 @@ def _get_top_pains(cur, where: str, params: list, n: int) -> list[dict]:
 def _get_top_faqs(cur, where: str, params: list, n: int) -> list[dict]:
     """Retorna las N preguntas frecuentes más repetidas del segmento."""
     sql = f"""
-        SELECT COALESCE(insight_subtype_display, faq_topic, insight_subtype) AS subtype_display,
+        SELECT COALESCE(insight_subtype_display, insight_subtype) AS subtype_display,
                COUNT(*) AS count
         FROM v_insights_dashboard
         WHERE insight_type = 'faq' AND {where}

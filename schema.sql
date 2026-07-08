@@ -25,19 +25,37 @@ CREATE TABLE IF NOT EXISTS tax_pain_subtypes (
     description  TEXT,
     theme        TEXT NOT NULL,
     module       TEXT REFERENCES tax_modules(code),
-    sort_order   INTEGER DEFAULT 0
+    sort_order   INTEGER DEFAULT 0,
+    is_seed      BOOLEAN DEFAULT TRUE,
+    created_at   TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS tax_deal_friction_subtypes (
     code         TEXT PRIMARY KEY,
     display_name TEXT NOT NULL,
-    description  TEXT
+    description  TEXT,
+    is_seed      BOOLEAN DEFAULT TRUE,
+    created_at   TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS tax_faq_subtypes (
     code         TEXT PRIMARY KEY,
     display_name TEXT NOT NULL,
-    description  TEXT
+    description  TEXT,
+    is_seed      BOOLEAN DEFAULT TRUE,
+    created_at   TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS tax_roadmap_features (
+    id             TEXT PRIMARY KEY,
+    es_feature     TEXT,
+    en_feature     TEXT,
+    es_description TEXT,
+    en_description TEXT,
+    status_raw     TEXT,
+    status_bucket  TEXT,
+    tribe          TEXT,
+    created_at     TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS tax_competitive_relationships (
@@ -201,6 +219,9 @@ CREATE TABLE IF NOT EXISTS transcript_insights (
     gap_description         TEXT,
     gap_priority            TEXT,
     faq_topic               TEXT,
+    faq_answer              TEXT,
+    speaker_role            TEXT,
+    roadmap_match_id        TEXT,
     model_used              TEXT NOT NULL,
     prompt_version          TEXT NOT NULL,
     batch_id                TEXT,

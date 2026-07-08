@@ -164,7 +164,8 @@
     "thTopicCol": "Topic",
     "thConfCol": "Conf.",
     "thQuestionCol": "Question",
-    "thQuoteCol": "Verbatim quote"
+    "thQuoteCol": "Verbatim quote",
+    "thAnswerCol": "AE's answer"
   },
   "productIntelligence": {
     "title": "Product Intelligence",
@@ -631,6 +632,8 @@
     "segmentPriorityTitle": "Gap Priority by Segment (%)",
     "featureSegmentTitle": "Feature Gaps by Segment (Top 15)",
     "moduleStatusTitle": "Modules: Existing vs. Missing",
+    "roadmapStatusTitle": "Gaps vs. real Notion roadmap (feature-level match)",
+    "roadmapStatusDesc": "Same idea as the module chart, but matched against the ~2700 individual features in the Notion roadmap. \"No roadmap match\" means no similar feature was found in the product backlog -- more precise than the module-level status.",
     "detailTitle": "Gap Detail",
     "detailDesc": "Filter by priority to isolate Dealbreakers. Red rows correspond to dealbreaker-type gaps.",
     "searchGap": "Search in summary…",

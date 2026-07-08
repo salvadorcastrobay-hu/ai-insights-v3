@@ -17,7 +17,7 @@ export default async function Page({ searchParams }: PageProps) {
   const params = await searchParams;
   const filters = parseFiltersFromSearchParams(params);
   const [rows, totalTranscripts] = await Promise.all([
-    loadInsights(process.env.NEXT_PUBLIC_PROMPT_VERSION ?? "v3.0"),
+    loadInsights(process.env.NEXT_PUBLIC_PROMPT_VERSION ?? "v3.1"),
     loadTotalTranscriptsCount(),
   ]);
   const data = buildComparativePayload(rows, filters);

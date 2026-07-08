@@ -127,6 +127,7 @@ def run_qa(
 
     # Step 4: Generate report
     report = _generate_report(all_results)
+    report["auto_created_codes"] = get_auto_created_subtype_codes(supabase)
     with open(QA_REPORT_PATH, "w", encoding="utf-8") as f:
         json.dump(report, f, ensure_ascii=False, indent=2)
     logger.info(f"QA report saved to {QA_REPORT_PATH}")
@@ -159,7 +160,8 @@ def _evaluate_single(
             "feature_name": ins.get("feature_name"),
             "gap_description": ins.get("gap_description"),
             "gap_priority": ins.get("gap_priority"),
-            "faq_topic": ins.get("faq_topic"),
+            "faq_answer": ins.get("faq_answer"),
+            "speaker_role": ins.get("speaker_role"),
         })
 
     user_prompt = build_qa_user_prompt(transcript_text, simplified_insights, taxonomy_summary)
@@ -233,6 +235,46 @@ def _generate_report(results: list[dict]) -> dict:
     }
 
     return report
+
+
+# Tables that support is_seed (pain/friction/faq codes auto-created by
+# normalize_subtype() when the LLM's code doesn't match any known taxonomy
+# entry or alias -- see parser.py._register_new_subtype). Surfaced here so
+# someone reviews and either promotes them to a permanent alias or an
+# official taxonomy code, instead of letting them accumulate unreviewed.
+_SUBTYPE_TABLES = ["tax_pain_subtypes", "tax_deal_friction_subtypes", "tax_faq_subtypes"]
+
+
+def get_auto_created_subtype_codes(supabase: SupabaseClient) -> list[dict]:
+    """Report non-seed (is_seed=False) pain/deal_friction/faq codes with usage counts."""
+    auto_created = []
+    for table in _SUBTYPE_TABLES:
+        try:
+            resp = supabase.table(table).select("code,display_name,created_at").eq("is_seed", False).execute()
+        except Exception as e:
+            logger.warning(f"Could not fetch non-seed codes from {table}: {e}")
+            continue
+        for row in resp.data or []:
+            try:
+                count_resp = (
+                    supabase.table("transcript_insights")
+                    .select("id", count="exact")
+                    .eq("insight_subtype", row["code"])
+                    .limit(1)
+                    .execute()
+                )
+                usage_count = count_resp.count or 0
+            except Exception:
+                usage_count = None
+            auto_created.append({
+                "table": table,
+                "code": row["code"],
+                "display_name": row["display_name"],
+                "created_at": row.get("created_at"),
+                "usage_count": usage_count,
+            })
+    auto_created.sort(key=lambda r: r.get("usage_count") or 0, reverse=True)
+    return auto_created
 
 
 def _find_common_issues(
@@ -394,6 +436,18 @@ def print_report() -> None:
             print(f"  [{category}]")
             for item in items:
                 print(f"    - {item['code']}: {item['display_name']} ({item.get('reason', '')})")
+
+    # Auto-created (non-seed) pain/deal_friction/faq codes -- fidelity
+    # mechanism keeps the insight instead of dropping it, but someone needs
+    # to review these periodically so they don't just accumulate as
+    # fragmented one-off codes (promote to an alias or an official code).
+    auto_created = report.get("auto_created_codes", [])
+    if auto_created:
+        print(f"\n--- Codigos Auto-creados (is_seed=False), revisar y promover ({len(auto_created)}) ---")
+        for item in auto_created:
+            usage = item.get("usage_count")
+            usage_str = f"{usage} usos" if usage is not None else "usos: ?"
+            print(f"  [{item['table']}] {item['code']}: {item['display_name']} ({usage_str})")
 
     # Sample missing insights
     missing = report.get("all_missing", [])

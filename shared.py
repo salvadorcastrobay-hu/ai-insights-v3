@@ -65,6 +65,11 @@ DASHBOARD_COLUMNS = [
     "acquisition_channel",
     "inbound_source",
     "partner_name",
+    "speaker_role",
+    "faq_answer",
+    "roadmap_match_id",
+    "roadmap_status_display",
+    "roadmap_feature_display",
 ]
 
 # Columns fetched from v_insights_dashboard.
@@ -104,6 +109,11 @@ LOAD_DATA_COLUMNS = [
     "feature_display",
     "feature_is_seed",
     "competitor_relationship_display",
+    "speaker_role",
+    "faq_answer",
+    "roadmap_match_id",
+    "roadmap_status_display",
+    "roadmap_feature_display",
 ]
 LOAD_DATA_SELECT = ",".join(LOAD_DATA_COLUMNS)
 

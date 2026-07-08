@@ -464,7 +464,7 @@ export async function POST(req: Request) {
     // real language instead of hedging.
     if (chartCtx.dimension) {
       try {
-        const allRows = await loadInsights(process.env.NEXT_PUBLIC_PROMPT_VERSION ?? "v3.0");
+        const allRows = await loadInsights(process.env.NEXT_PUBLIC_PROMPT_VERSION ?? "v3.1");
         const filtered = applyFilters(allRows, filters);
         const scoped = chartCtx.scopeType
           ? filtered.filter((r) => r.insight_type === chartCtx.scopeType)
@@ -530,7 +530,7 @@ export async function POST(req: Request) {
     scopeHint = `el gráfico "${chartCtx.chartTitle}"`;
   } else {
     // Dashboard-scoped: compute whole-page summary.
-    const allRows = await loadInsights(process.env.NEXT_PUBLIC_PROMPT_VERSION ?? "v3.0");
+    const allRows = await loadInsights(process.env.NEXT_PUBLIC_PROMPT_VERSION ?? "v3.1");
     const filtered = applyFilters(allRows, filters);
     context = buildContext(filtered, pathname, filters);
     scopeHint = `el dashboard actual`;

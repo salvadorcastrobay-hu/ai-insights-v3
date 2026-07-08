@@ -96,7 +96,7 @@ export function FaqDetailView({ data, filteredRows }: Props) {
         </div>
         <div className="max-h-[420px] overflow-auto">
           <Table>
-            <Thead><Tr><Th>{t("thTopicCol")}</Th><Th>{t("thConfCol")}</Th><Th>{t("thQuestionCol")}</Th><Th>{t("thQuoteCol")}</Th></Tr></Thead>
+            <Thead><Tr><Th>{t("thTopicCol")}</Th><Th>{t("thConfCol")}</Th><Th>{t("thQuestionCol")}</Th><Th>{t("thQuoteCol")}</Th><Th>{t("thAnswerCol")}</Th></Tr></Thead>
             <Tbody>
               {tableRows.map((row) => (
                 <Tr key={row.id}>
@@ -104,6 +104,7 @@ export function FaqDetailView({ data, filteredRows }: Props) {
                   <Td><ConfidenceBadge value={row.confidence} /></Td>
                   <Td>{row.summary}</Td>
                   <Td>{row.verbatim_quote}</Td>
+                  <Td>{row.faq_answer}</Td>
                 </Tr>
               ))}
             </Tbody>

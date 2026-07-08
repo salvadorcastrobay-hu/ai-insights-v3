@@ -20,7 +20,7 @@ export default async function Page({ searchParams }: PageProps) {
   const params = await searchParams;
   const filters = parseFiltersFromSearchParams(params);
   const [rows, userRoles, totalTranscripts] = await Promise.all([
-    loadInsights(process.env.NEXT_PUBLIC_PROMPT_VERSION ?? "v3.0"),
+    loadInsights(process.env.NEXT_PUBLIC_PROMPT_VERSION ?? "v3.1"),
     getServerUserRoles(),
     loadTotalTranscriptsCount(),
   ]);

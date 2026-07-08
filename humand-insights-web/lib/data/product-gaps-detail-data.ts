@@ -73,6 +73,7 @@ export type ProductGapsDetailData = {
   };
   moduleStatus: ModuleStatusRow[];
   existingModulePct: number;
+  roadmapStatus: ModuleStatusRow[];
   gapTypes: string[];
   priorities: string[];
   priorityLabelByKey: Record<string, string>;
@@ -236,6 +237,25 @@ export function buildProductGapsDetailData(
   const existingRow = moduleStatus.find((r) => /xist/i.test(r.name));
   const existingModulePct = existingRow?.pct ?? 0;
 
+  // Roadmap status (matched against the real ~2700-feature Notion roadmap,
+  // per-feature -- more precise than module_status, which is per-module).
+  const roadmapCounts = new Map<string, number>();
+  for (const row of gaps) {
+    const label =
+      row.roadmap_status_display === "existing" ? "Existente"
+      : row.roadmap_status_display === "roadmap" ? "En roadmap"
+      : "Sin match en roadmap";
+    roadmapCounts.set(label, (roadmapCounts.get(label) ?? 0) + 1);
+  }
+  const roadmapTotal = [...roadmapCounts.values()].reduce((a, b) => a + b, 0);
+  const roadmapStatus: ModuleStatusRow[] = [...roadmapCounts.entries()]
+    .map(([name, value]) => ({
+      name,
+      value,
+      pct: roadmapTotal > 0 ? Math.round((value / roadmapTotal) * 1000) / 10 : 0,
+    }))
+    .sort((a, b) => b.value - a.value);
+
   const distinctDeals = new Set(gaps.map((r) => r.deal_id).filter(Boolean)).size;
   const perDemo = distinctDeals > 0 ? (totalGaps / distinctDeals).toFixed(1) : "0.0";
 
@@ -281,6 +301,7 @@ export function buildProductGapsDetailData(
     },
     moduleStatus,
     existingModulePct,
+    roadmapStatus,
     gapTypes,
     priorities,
     priorityLabelByKey,

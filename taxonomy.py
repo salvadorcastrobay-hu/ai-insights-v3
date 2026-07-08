@@ -5,6 +5,10 @@ Fuente unica de verdad para categorias, modulos, pains, features, competidores.
 
 from __future__ import annotations
 
+import csv
+import os
+import re
+
 # ──────────────────────────────────────────────
 # HR Categories
 # ──────────────────────────────────────────────
@@ -282,10 +286,20 @@ COMPETITORS = {
     "Talento Cloud": "latam", "Connecto": "latam", "Solides": "latam",
     "Dialog": "latam", "Convenia": "latam", "Beehome": "latam",
     "Alest": "latam", "Comunitive": "latam", "Hywork": "latam",
+    "Guudjob": "latam", "StarMeUp OS": "latam", "Uaaloo": "latam", "JobSmile": "latam",
+    "TuRecibo (Visma)": "latam", "ArandaSoft Corp": "latam", "Alana": "latam",
+    "OfficeNet": "latam", "Slikpro": "latam", "HOLMES HR": "latam", "Lernit": "latam",
+    "Talana": "latam", "Workbeat": "latam", "Acsendo (Crehana)": "latam",
+    "NAALOO": "latam", "MANDÜ": "latam",
+    "Senior": "latam", "Feedz": "latam", "Totvs": "latam", "Odoo": "latam",
     # EMEA
     "Beekeeper": "emea", "Flip": "emea", "Staffbase": "emea", "Sage": "emea",
     "Bizneo": "emea", "Sesame": "emea", "Blink": "emea", "Sociabble": "emea",
     "Zucchetti": "emea", "Yoobic": "emea", "Personio": "emea",
+    "Happydonia": "emea", "TalkSpirit": "emea", "FichAp": "emea", "Actimo": "emea",
+    "SAP Jam": "emea", "SAP Fiori": "emea", "Intrasites": "emea", "HumHub": "emea",
+    "RewardGateway": "emea", "Smarp": "emea", "Panion": "emea", "Happeo": "emea",
+    "Humaans": "emea", "Quinyx": "emea", "Swile": "emea", "Bitrix24": "emea",
     # North America
     "Simpplr": "north_america", "Firstup": "north_america",
     "Igloo Software": "north_america", "LumApps": "north_america",
@@ -300,8 +314,46 @@ COMPETITORS = {
     "Microsoft Teams": "north_america", "Slack": "north_america",
     "Google Workspace": "north_america", "SharePoint": "north_america",
     "Speakapp": "north_america", "Workable": "north_america",
+    "CrewApp": "north_america", "HR Cloud": "north_america", "Google Currents": "north_america",
+    "Microsoft Viva": "north_america", "Workia": "north_america", "Limeade": "north_america",
+    "Rimeto (Slack)": "north_america", "Jive": "north_america", "Mighty Networks": "north_america",
+    "Namely": "north_america", "Salesforce Chatter": "north_america", "Tibbr": "north_america",
+    "Intouchr": "north_america", "Mattermost": "north_america", "Microsoft Kaizala": "north_america",
+    "AxeroSolutions": "north_america", "ThoughtFarmer": "north_america", "Threads": "north_america",
+    "Gusto": "north_america", "Zenefits": "north_america", "Achievers": "north_america",
+    "Fond": "north_america", "TeamGather": "north_america", "Clickup": "north_america",
+    "ADP": "north_america",
     # APAC
     "Workjam": "apac", "Lark": "apac", "Simplrr": "apac", "Weconnect": "apac",
+    "XoxoDay": "apac", "inFeedo": "apac",
+}
+
+# ──────────────────────────────────────────────
+# Competitor Aliases (typos / phonetic transcription variants → canonical name)
+# Mirrors humand-insights-web/lib/data/normalizers.ts COMPETITOR_ALIASES so the
+# extraction pipeline and the dashboard agree on the same canonical spelling.
+# Keys are matched lowercase. Excludes own-brand aliases (humand/human/human d)
+# since those are a display-layer filter, not a competitor to normalize into.
+# ──────────────────────────────────────────────
+COMPETITOR_ALIASES = {
+    "nalu": "NAALOO",
+    "nalú": "NAALOO",
+    "book": "Buk",
+    "buk hr": "Buk",
+    "bukhr": "Buk",
+    "buc": "Buk",
+    "senior": "Senior",
+    "solides": "Solides",
+    "solids": "Solides",
+    "fids": "Feedz",
+    "feedz": "Feedz",
+    "totus": "Totvs",
+    "tots": "Totvs",
+    "totvs": "Totvs",
+    "sesame": "Sesame",
+    "cesame": "Sesame",
+    "odu": "Odoo",
+    "odoo": "Odoo",
 }
 
 # ──────────────────────────────────────────────
@@ -457,6 +509,37 @@ MODULE_ALIASES = {
 }
 
 # ──────────────────────────────────────────────
+# Pain / Deal Friction / FAQ Aliases (paraphrases → canonical code)
+# Same purpose as MODULE_ALIASES: catch common LLM paraphrasing before
+# falling back to auto-creating a new (non-seed) code.
+# ──────────────────────────────────────────────
+PAIN_ALIASES = {
+    "planillas de excel": "manual_processes", "todo en excel": "manual_processes",
+    "procesos manuales": "manual_processes", "sin automatizacion": "manual_processes",
+    "managers saturados": "manager_overload", "sobrecarga de managers": "manager_overload",
+    "herramientas desconectadas": "fragmented_tools", "muchas herramientas distintas": "fragmented_tools",
+    "chat lleno de mensajes": "chat_saturation", "chat saturado": "chat_saturation",
+    "falta de comunicacion": "communication_gap", "brecha de comunicacion": "communication_gap",
+}
+
+FRICTION_ALIASES = {
+    "muy caro": "budget", "no tienen presupuesto": "budget", "restriccion presupuestaria": "budget",
+    "resistencia al cambio": "change_management", "no quieren cambiar": "change_management",
+    "falta de alineacion interna": "internal_alignment", "no se ponen de acuerdo": "internal_alignment",
+    "necesita justificar el retorno": "roi_justification", "justificar la inversion": "roi_justification",
+}
+
+FAQ_ALIASES = {
+    "costos": "pricing", "cuanto cuesta": "pricing", "cuanto sale": "pricing",
+    "precio por usuario": "pricing", "costo por licencia": "pricing", "costo mensual": "pricing",
+    "tiempo de implementacion": "implementation", "cuanto tarda la implementacion": "implementation",
+    "integraciones con otros sistemas": "integration", "conexion con otras herramientas": "integration",
+    "app movil": "mobile", "aplicacion movil": "mobile",
+    "soporte tecnico": "support", "sla de soporte": "support",
+    "migracion de datos": "migration", "importar datos de otra herramienta": "migration",
+}
+
+# ──────────────────────────────────────────────
 # Helpers
 # ──────────────────────────────────────────────
 
@@ -485,14 +568,213 @@ def get_module_for_pain(pain_code: str) -> str | None:
     pain = PAIN_SUBTYPES.get(pain_code)
     return pain["module"] if pain else None
 
+def _to_slug(text: str) -> str:
+    """Convert free text to a valid slug code (mirrors parser.py's _to_slug)."""
+    slug = text.lower().strip()
+    slug = re.sub(r"[^a-z0-9_]", "_", slug)
+    slug = re.sub(r"_+", "_", slug)
+    return slug.strip("_")
+
+
+def normalize_module(name: str) -> str:
+    """Try to match a module name/phrase to a canonical module code.
+
+    Connects MODULE_ALIASES (previously only used to build prompt hints for
+    the LLM, never applied programmatically) so paraphrased module mentions
+    stop being silently dropped.
+    """
+    lower = name.lower().strip()
+    if lower in MODULES:
+        return name
+    for canonical in MODULES:
+        if canonical.lower() == lower:
+            return canonical
+    if lower in MODULE_ALIASES:
+        return MODULE_ALIASES[lower]
+    return name  # Return as-is if no match; caller decides what to do
+
+
+_SUBTYPE_TAXONOMY = {
+    "pain": PAIN_SUBTYPES,
+    "deal_friction": DEAL_FRICTION_SUBTYPES,
+    "faq": FAQ_SUBTYPES,
+}
+
+_SUBTYPE_ALIASES = {
+    "pain": PAIN_ALIASES,
+    "deal_friction": FRICTION_ALIASES,
+    "faq": FAQ_ALIASES,
+}
+
+
+def normalize_subtype(insight_type: str, subtype: str) -> tuple[str, bool]:
+    """Normalize a pain/deal_friction/faq subtype code.
+
+    Returns (canonical_code, is_new_code). Never drops the insight: if the
+    code doesn't match any known taxonomy entry or alias, a new slug code is
+    generated from the LLM's text so the insight is preserved (is_new_code
+    is True in that case, letting the caller register it as a non-seed code
+    instead of silently discarding the insight).
+    """
+    taxonomy = _SUBTYPE_TAXONOMY[insight_type]
+    aliases = _SUBTYPE_ALIASES[insight_type]
+
+    lower = subtype.lower().strip()
+    for canonical in taxonomy:
+        if canonical.lower() == lower:
+            return canonical, False
+    if lower in aliases:
+        return aliases[lower], False
+
+    return _to_slug(subtype), True
+
+
+def _competitor_key(text: str) -> str:
+    """Normalize for comparison: lowercase, strip accents/diacritics, collapse
+    spaces. Catches variants like "Mandú" vs "MANDÜ" (different accented
+    character) or "Tu Recibo" vs "TuRecibo" (missing space) that plain
+    .lower() comparison misses.
+    """
+    return re.sub(r"\s+", "", _strip_accents(text.lower().strip()))
+
+
 def normalize_competitor(name: str) -> str | None:
     """Try to match a competitor name case-insensitively."""
     lower = name.lower().strip()
+    if lower in COMPETITOR_ALIASES:
+        return COMPETITOR_ALIASES[lower]
     for canonical in COMPETITORS:
         if canonical.lower() == lower:
             return canonical
+
+    key = _competitor_key(name)
+    for canonical in COMPETITORS:
+        canonical_key = _competitor_key(canonical)
+        if canonical_key == key or key in canonical_key or canonical_key in key:
+            return canonical
+
     # Fuzzy: check if input is contained in any canonical name
     for canonical in COMPETITORS:
         if lower in canonical.lower() or canonical.lower() in lower:
             return canonical
     return name  # Return as-is if no match
+
+
+# ──────────────────────────────────────────────
+# Roadmap (real Notion export, ~2700 features) — matching, not prompt content.
+# See scripts/import_roadmap_csv.py to (re)generate data/roadmap_features.csv.
+# ──────────────────────────────────────────────
+
+_ROADMAP_CSV_PATH = os.path.join(os.path.dirname(__file__), "data", "roadmap_features.csv")
+
+_roadmap_features_cache: dict[str, dict] | None = None
+_roadmap_word_index_cache: dict[str, set[str]] | None = None
+
+_STOPWORDS = {
+    "de", "la", "el", "los", "las", "en", "y", "a", "que", "para", "por",
+    "con", "un", "una", "del", "al", "es", "se", "su", "the", "of", "to",
+    "and", "for", "on", "in", "an",
+}
+
+
+def _strip_accents(text: str) -> str:
+    import unicodedata
+    normalized = unicodedata.normalize("NFKD", text)
+    return "".join(c for c in normalized if not unicodedata.combining(c))
+
+
+def _tokenize(text: str) -> set[str]:
+    words = re.findall(r"[a-z0-9]+", _strip_accents(text.lower()))
+    return {w for w in words if len(w) > 2 and w not in _STOPWORDS}
+
+
+def get_roadmap_features() -> dict[str, dict]:
+    """Load the roadmap reference (id -> row) from data/roadmap_features.csv.
+
+    Cached after first load. Returns an empty dict if the file doesn't exist
+    yet (e.g. before scripts/import_roadmap_csv.py has been run).
+    """
+    global _roadmap_features_cache
+    if _roadmap_features_cache is None:
+        features: dict[str, dict] = {}
+        if os.path.exists(_ROADMAP_CSV_PATH):
+            with open(_ROADMAP_CSV_PATH, encoding="utf-8") as f:
+                for row in csv.DictReader(f):
+                    features[row["id"]] = row
+        _roadmap_features_cache = features
+    return _roadmap_features_cache
+
+
+def _roadmap_word_index() -> dict[str, set[str]]:
+    """Cheap keyword index used to shortlist candidates before fuzzy matching."""
+    global _roadmap_word_index_cache
+    if _roadmap_word_index_cache is None:
+        index: dict[str, set[str]] = {}
+        for fid, feat in get_roadmap_features().items():
+            text = f"{feat.get('es_feature', '')} {feat.get('en_feature', '')}"
+            for word in _tokenize(text):
+                index.setdefault(word, set()).add(fid)
+        _roadmap_word_index_cache = index
+    return _roadmap_word_index_cache
+
+
+def match_feature_to_roadmap(feature_name: str | None, gap_description: str | None = None) -> str | None:
+    """Fuzzy-match a feature_name/gap_description against the real Notion roadmap.
+
+    Returns the matched feature's `id` (e.g. "PRO-1234"), or None if no
+    reasonable match was found (i.e. the feature is genuinely new to
+    product, not yet in the ~2700-row roadmap dataset, or the wording is too
+    different to tell).
+
+    Requires FULL containment of a candidate's words within the query (all of
+    the candidate's tokens must appear somewhere in feature_name/
+    gap_description), not just partial overlap. This went through three
+    iterations during calibration against real extracted data:
+      1. difflib.SequenceMatcher.ratio() on raw strings -- false positives
+         (short slugs vs long titles score misleadingly high/low by chance).
+      2. Jaccard (shared / union) -- real gap_description text is verbose,
+         so the union balloons and even perfect keyword matches score low.
+      3. Overlap coefficient (shared / min size) -- flips the other way:
+         short 1-2 word candidate titles ("Pulso", "Calendario") match
+         almost anything that happens to share one generic word.
+    Full containment (candidate ⊆ query) avoids both failure modes and, in
+    testing against ~200 real feature_name/gap_description pairs, only
+    matched cases that were genuinely correct on manual review -- at the
+    cost of a low match rate (most product_gap mentions don't have a
+    single clearly corresponding Notion ticket, which is an honest result,
+    not a bug). Candidates with fewer than 2 words are skipped entirely to
+    avoid single-generic-word matches. A two-pass keyword prefilter keeps
+    this fast enough to run as a backfill over thousands of historical
+    insights.
+    """
+    features = get_roadmap_features()
+    if not features:
+        return None
+
+    query_text = f"{feature_name or ''} {gap_description or ''}".replace("_", " ").strip()
+    query_words = _tokenize(query_text)
+    if not query_words:
+        return None
+
+    index = _roadmap_word_index()
+    candidate_ids: set[str] = set()
+    for word in query_words:
+        candidate_ids.update(index.get(word, ()))
+    if not candidate_ids:
+        return None
+
+    best_id = None
+    best_word_count = 0
+    for fid in candidate_ids:
+        feat = features[fid]
+        for name in (feat.get("es_feature", ""), feat.get("en_feature", "")):
+            if not name:
+                continue
+            candidate_words = _tokenize(name)
+            if len(candidate_words) < 2:
+                continue
+            if candidate_words <= query_words and len(candidate_words) > best_word_count:
+                best_word_count = len(candidate_words)
+                best_id = fid
+
+    return best_id

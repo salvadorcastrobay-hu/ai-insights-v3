@@ -75,10 +75,32 @@ def build_user_prompt(transcript_text: str, metadata: dict) -> str:
 
     context_str = "\n".join(context_parts) if context_parts else "- Sin contexto CRM disponible"
 
+    humand_speakers = []
+    if metadata.get("deal_owner"):
+        humand_speakers.append(f"{metadata['deal_owner']} (AE)")
+    if metadata.get("cx_owner") and metadata.get("cx_owner") != metadata.get("deal_owner"):
+        humand_speakers.append(f"{metadata['cx_owner']} (CX)")
+
+    if humand_speakers:
+        speaker_note = (
+            "## Identificacion de hablantes\n\n"
+            f"En esta llamada, las personas de Humand son: {', '.join(humand_speakers)}. "
+            "Cualquier otro hablante en el transcript es el prospecto (Lead). "
+            "Usa esto para completar 'speaker_role' en cada insight (quien dijo el summary/verbatim_quote). "
+            "Si no podes determinarlo con certeza, usa 'unknown' — nunca adivines.\n"
+        )
+    else:
+        speaker_note = (
+            "## Identificacion de hablantes\n\n"
+            "No hay info de quien es el AE/CX en este deal. Usa 'unknown' en 'speaker_role' "
+            "salvo que el rol de un hablante sea obvio por el contenido — nunca adivines.\n"
+        )
+
     return f"""## Contexto del Deal
 
 {context_str}
 
+{speaker_note}
 ## Transcript
 
 {transcript_text}"""
@@ -239,7 +261,8 @@ Responde con un JSON que contenga una lista de insights. Cada insight tiene esto
       "feature_name": "<código feature o null>",
       "gap_description": "<descripción del gap o null>",
       "gap_priority": "must_have|nice_to_have|dealbreaker|null",
-      "faq_topic": "<código FAQ topic o null>"
+      "faq_answer": "<respuesta del AE a la pregunta, si la contestó explícitamente, o null>",
+      "speaker_role": "ae|lead|unknown"
     }
   ]
 }
@@ -250,7 +273,9 @@ Campos obligatorios por tipo:
 - **product_gap**: insight_subtype="product_gap_identified", module (OBLIGATORIO), feature_name, gap_description, gap_priority
 - **competitive_signal**: insight_subtype=<relationship code>, competitor_name, competitor_relationship
 - **deal_friction**: insight_subtype, summary, confidence
-- **faq**: insight_subtype=<faq topic code>, faq_topic, summary"""
+- **faq**: insight_subtype=<código FAQ topic>, summary, faq_answer (la respuesta del AE, si la dio; null si no)
+
+`speaker_role` aplica a todos los tipos: quién dijo el summary/verbatim_quote (el AE/CX de Humand, el lead, o "unknown" si no se puede determinar con certeza — nunca adivinar)."""
 
 
 def _load_refinements() -> str | None:
@@ -279,7 +304,11 @@ def _few_shot_examples() -> str:
 
 ## Ejemplo 1: Transcript con múltiples insights
 
-Transcript: "...necesitamos algo para comunicarnos con la gente de planta que no tiene email. Hoy usamos WhatsApp pero es un desastre, no hay control. También estamos evaluando Buk para nómina pero su módulo de comunicación es muy básico. ¿Ustedes tienen app móvil? Nuestra principal preocupación es el presupuesto, este año está muy ajustado..."
+Transcript (el AE de Humand en esta llamada se llama Marina Gómez):
+
+"Lead: ...necesitamos algo para comunicarnos con la gente de planta que no tiene email. Hoy usamos WhatsApp pero es un desastre, no hay control. También estamos evaluando Buk para nómina pero su módulo de comunicación es muy básico. ¿Ustedes tienen app móvil?
+Marina Gómez: Sí, tenemos app nativa para iOS y Android, disponible desde el plan Growth en adelante.
+Lead: Nuestra principal preocupación es el presupuesto, este año está muy ajustado..."
 
 Respuesta esperada:
 ```json
@@ -297,7 +326,8 @@ Respuesta esperada:
       "feature_name": null,
       "gap_description": null,
       "gap_priority": null,
-      "faq_topic": null
+      "faq_answer": null,
+      "speaker_role": "lead"
     },
     {
       "insight_type": "pain",
@@ -311,7 +341,8 @@ Respuesta esperada:
       "feature_name": null,
       "gap_description": null,
       "gap_priority": null,
-      "faq_topic": null
+      "faq_answer": null,
+      "speaker_role": "lead"
     },
     {
       "insight_type": "competitive_signal",
@@ -325,7 +356,8 @@ Respuesta esperada:
       "feature_name": null,
       "gap_description": null,
       "gap_priority": null,
-      "faq_topic": null
+      "faq_answer": null,
+      "speaker_role": "lead"
     },
     {
       "insight_type": "faq",
@@ -339,7 +371,8 @@ Respuesta esperada:
       "feature_name": null,
       "gap_description": null,
       "gap_priority": null,
-      "faq_topic": "mobile"
+      "faq_answer": "Sí, tenemos app nativa para iOS y Android, disponible desde el plan Growth en adelante.",
+      "speaker_role": "lead"
     },
     {
       "insight_type": "deal_friction",
@@ -353,7 +386,8 @@ Respuesta esperada:
       "feature_name": null,
       "gap_description": null,
       "gap_priority": null,
-      "faq_topic": null
+      "faq_answer": null,
+      "speaker_role": "lead"
     }
   ]
 }

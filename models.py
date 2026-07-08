@@ -6,7 +6,7 @@ These models define the JSON schema that OpenAI must return.
 from __future__ import annotations
 
 from enum import Enum
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -77,9 +77,17 @@ class InsightItem(BaseModel):
     )
 
     # FAQ fields
-    faq_topic: Optional[str] = Field(
+    faq_answer: Optional[str] = Field(
         default=None,
-        description="FAQ topic code from taxonomy"
+        description="The AE's answer to the FAQ, if they answered it explicitly in the call. "
+                    "Only applies when insight_type is 'faq'. Leave null if there was no clear answer."
+    )
+
+    # Speaker attribution (applies to all insight types)
+    speaker_role: Optional[Literal["ae", "lead", "unknown"]] = Field(
+        default=None,
+        description="Who said the quote/summary: 'ae' (Humand sales/CX rep), 'lead' (prospect), "
+                    "or 'unknown' if it can't be determined. Never guess."
     )
 
 

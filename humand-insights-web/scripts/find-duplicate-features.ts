@@ -48,7 +48,7 @@ async function main() {
   }
   console.log(`Total features: ${all.length}`);
 
-  const rows = await loadInsights(process.env.NEXT_PUBLIC_PROMPT_VERSION ?? "v3.0");
+  const rows = await loadInsights(process.env.NEXT_PUBLIC_PROMPT_VERSION ?? "v3.1");
   const counts = new Map<string, number>();
   for (const r of rows) if (r.feature_name) counts.set(r.feature_name, (counts.get(r.feature_name) ?? 0) + 1);
 

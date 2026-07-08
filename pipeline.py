@@ -127,6 +127,7 @@ def run_pipeline(
             "amount": t.get("amount"),
             "deal_stage": t.get("deal_stage"),
             "deal_owner": t.get("deal_owner"),
+            "cx_owner": t.get("cx_owner"),
             "call_date": str(t.get("call_date", "")) if t.get("call_date") else None,
         }
 
@@ -215,6 +216,14 @@ def _process_direct(
     return stats
 
 
+# OpenAI's Batch API rejects files above its upload size limit. Each request
+# duplicates the full system prompt (~7k tokens / ~30KB), so a few thousand
+# chunks can produce a JSONL file in the hundreds of MB. Split into
+# sub-batches instead of guessing a per-run chunk cap -- keeps each file
+# comfortably small regardless of prompt size drift over time.
+MAX_CHUNKS_PER_SUBBATCH = 1000
+
+
 def _process_batch(
     supabase: SupabaseClient,
     openai_client: OpenAI,
@@ -222,7 +231,41 @@ def _process_batch(
     model: str,
     stats: dict,
 ) -> dict:
-    """Process all chunks via Batch API."""
+    """Process all chunks via Batch API, splitting into sub-batches if needed."""
+    if len(chunks) <= MAX_CHUNKS_PER_SUBBATCH:
+        sub_batches = [chunks]
+    else:
+        sub_batches = [
+            chunks[i : i + MAX_CHUNKS_PER_SUBBATCH]
+            for i in range(0, len(chunks), MAX_CHUNKS_PER_SUBBATCH)
+        ]
+        logger.info(
+            f"Splitting {len(chunks)} chunks into {len(sub_batches)} sub-batches "
+            f"of up to {MAX_CHUNKS_PER_SUBBATCH} requests each (avoids OpenAI's file size limit)."
+        )
+
+    for i, sub_chunks in enumerate(sub_batches, 1):
+        logger.info(f"[Sub-batch {i}/{len(sub_batches)}] {len(sub_chunks)} requests")
+        sub_stats = _submit_and_process_one_batch(supabase, openai_client, sub_chunks, model)
+        for key in ("insights_parsed", "insights_inserted", "errors"):
+            stats[key] = stats.get(key, 0) + sub_stats.get(key, 0)
+        if sub_stats.get("failed_batch"):
+            logger.error(f"Sub-batch {i}/{len(sub_batches)} did not complete -- stopping here.")
+            stats["errors"] = stats.get("errors", 0) + 1
+            return stats
+
+    _log_summary(stats)
+    return stats
+
+
+def _submit_and_process_one_batch(
+    supabase: SupabaseClient,
+    openai_client: OpenAI,
+    chunks: list[dict],
+    model: str,
+) -> dict:
+    """Submit one sub-batch, poll to completion, and load its results."""
+    stats = {"insights_parsed": 0, "insights_inserted": 0, "errors": 0}
     logger.info(f"Creating batch with {len(chunks)} requests ({model})...")
 
     # Create JSONL
@@ -261,6 +304,7 @@ def _process_batch(
             for err in errors[:10]:
                 logger.error(f"  Batch error: {err}")
         stats["errors"] = result.get("failed", 0)
+        stats["failed_batch"] = True
         save_state({**state, "batch_status": result["status"]})
         return stats
 

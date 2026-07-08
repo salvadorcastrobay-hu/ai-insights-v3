@@ -169,7 +169,7 @@ export async function POST(req: Request) {
   }
 
   const filters: Filters = { ...EMPTY_FILTERS, ...(inFilters ?? {}) };
-  const all = await loadInsights(process.env.NEXT_PUBLIC_PROMPT_VERSION ?? "v3.0");
+  const all = await loadInsights(process.env.NEXT_PUBLIC_PROMPT_VERSION ?? "v3.1");
   const filtered = applyFilters(all, filters);
 
   const scope = scopeType ? filtered.filter((r) => r.insight_type === scopeType) : filtered;

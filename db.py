@@ -271,13 +271,19 @@ def get_processed_transcript_ids(client: Client, prompt_version: str | None = No
 # ── Write insights ──
 
 def compute_content_hash(insight: dict, transcript_id: str, chunk: int) -> str:
-    """SHA256 hash of the core insight fields for dedup."""
+    """SHA256 hash of the core insight fields for dedup.
+
+    Includes prompt_version so identical content extracted under different
+    prompt versions doesn't collide on upsert(on_conflict="content_hash") and
+    silently overwrite the older version's row.
+    """
     key_parts = [
         transcript_id,
         str(chunk),
         insight.get("insight_type", ""),
         insight.get("insight_subtype", ""),
         insight.get("summary", ""),
+        insight.get("prompt_version", ""),
     ]
     raw = "|".join(key_parts)
     return hashlib.sha256(raw.encode()).hexdigest()
@@ -392,20 +398,31 @@ def insert_qa_results(client: Client, rows: list[dict]) -> int:
     return inserted
 
 
-# ── Extend feature names ──
+# ── Extend taxonomy tables with codes discovered by the LLM ──
+
+def insert_new_subtype(
+    client: Client,
+    table: str,
+    code: str,
+    display_name: str,
+    extra_fields: dict | None = None,
+) -> None:
+    """Insert a new (non-seed) taxonomy code discovered by the LLM.
+
+    Generalizes the feature-name registration pattern to any taxonomy table
+    that has `code`, `display_name`, `is_seed` columns (tax_feature_names,
+    tax_pain_subtypes, tax_deal_friction_subtypes, tax_faq_subtypes).
+    """
+    row = {"code": code, "display_name": display_name, "is_seed": False}
+    if extra_fields:
+        row.update(extra_fields)
+    try:
+        client.table(table).upsert(row, on_conflict="code").execute()
+        logger.info(f"New {table} code registered: {code}")
+    except Exception as e:
+        logger.warning(f"Could not insert {table} code {code}: {e}")
+
 
 def insert_new_feature(client: Client, code: str, display_name: str, module: str | None) -> None:
     """Insert a new (non-seed) feature name discovered by the LLM."""
-    try:
-        client.table("tax_feature_names").upsert(
-            {
-                "code": code,
-                "display_name": display_name,
-                "suggested_module": module,
-                "is_seed": False,
-            },
-            on_conflict="code",
-        ).execute()
-        logger.info(f"New feature registered: {code}")
-    except Exception as e:
-        logger.warning(f"Could not insert feature {code}: {e}")
+    insert_new_subtype(client, "tax_feature_names", code, display_name, {"suggested_module": module})

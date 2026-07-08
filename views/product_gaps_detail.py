@@ -406,6 +406,44 @@ else:
     )
     st.plotly_chart(fig, use_container_width=True)
 
+# ── B6. Feature gaps vs. roadmap real de Notion (match a nivel feature, no módulo) ──
+if "roadmap_status_display" in gaps.columns and gaps["roadmap_status_display"].notna().any():
+    roadmap_status = gaps.copy()
+    roadmap_status["roadmap_status_display"] = roadmap_status["roadmap_status_display"].map(humanize)
+    roadmap_status["roadmap_status_display"] = roadmap_status["roadmap_status_display"].fillna("Sin match en roadmap")
+    roadmap_counts = (
+        roadmap_status.groupby("roadmap_status_display")
+        .size()
+        .reset_index(name="Gaps")
+    )
+    total_roadmap = roadmap_counts["Gaps"].sum()
+    roadmap_counts["Porcentaje"] = (roadmap_counts["Gaps"] / total_roadmap * 100).round(1)
+    roadmap_counts["Etiqueta"] = roadmap_counts.apply(
+        lambda r: f"{r['Gaps']:,} ({r['Porcentaje']}%)", axis=1
+    )
+    fig = px.bar(
+        roadmap_counts,
+        x="Gaps",
+        y="roadmap_status_display",
+        orientation="h",
+        text="Etiqueta",
+        title="Gaps vs. Roadmap real (Notion) — match por feature",
+        color="roadmap_status_display",
+        color_discrete_sequence=DS["palette"],
+    )
+    fig.update_traces(textposition="outside")
+    fig.update_layout(
+        yaxis_title="",
+        showlegend=False,
+        yaxis=dict(autorange="reversed"),
+    )
+    fig = apply_ds_layout(fig, "Gaps vs. Roadmap real (Notion) — match por feature")
+    chart_tooltip(
+        "Igual que el gráfico de módulos, pero matcheado contra las ~2700 features individuales del roadmap de Notion.",
+        "'Sin match en roadmap' significa que no se encontró ninguna feature parecida en el backlog de producto — más preciso que el status a nivel módulo.",
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
 # ── C. Tabla de Detalle (con filtros) ─────────────────────────────────────────
 ds_sub("Detalle de Gaps")
 

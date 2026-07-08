@@ -252,6 +252,7 @@ def _build_chunks(transcripts: list[dict]) -> list[dict]:
             "amount": transcript.get("amount"),
             "deal_stage": transcript.get("deal_stage"),
             "deal_owner": transcript.get("deal_owner"),
+            "cx_owner": transcript.get("cx_owner"),
             "call_date": str(transcript.get("call_date", "")) if transcript.get("call_date") else None,
         }
 

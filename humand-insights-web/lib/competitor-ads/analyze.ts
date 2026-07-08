@@ -151,7 +151,7 @@ async function loadPainVocab(): Promise<string[]> {
     const rows = await sql<{ pain: string }[]>`
       SELECT DISTINCT insight_subtype_display AS pain
       FROM mv_insights_norm
-      WHERE insight_type = 'pain' AND prompt_version = 'v3.0'
+      WHERE insight_type = 'pain' AND prompt_version = 'v3.1'
         AND insight_subtype_display IS NOT NULL
       LIMIT 60
     `;

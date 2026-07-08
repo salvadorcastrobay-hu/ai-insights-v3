@@ -33,6 +33,11 @@ export const LOAD_DATA_COLUMNS = [
   "feature_display",
   "feature_is_seed",
   "competitor_relationship_display",
+  "speaker_role",
+  "faq_answer",
+  "roadmap_match_id",
+  "roadmap_status_display",
+  "roadmap_feature_display",
 ] as const;
 
 export type InsightType =
@@ -51,6 +56,8 @@ export type AcquisitionChannel =
   | "Partner / Referral"
   | "Otros"
   | null;
+export type SpeakerRole = "ae" | "lead" | "unknown" | null;
+export type RoadmapStatus = "existing" | "roadmap" | null;
 
 export type InsightRow = {
   id: string;
@@ -93,6 +100,11 @@ export type InsightRow = {
   inbound_source?: string | null;
   partner_name?: string | null;
   is_own_brand_competitor?: boolean;
+  speaker_role?: SpeakerRole;
+  faq_answer?: string | null;
+  roadmap_match_id?: string | null;
+  roadmap_status_display?: RoadmapStatus;
+  roadmap_feature_display?: string | null;
 };
 
 export type DealSourceFields = {

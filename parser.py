@@ -13,7 +13,7 @@ from typing import Any
 from pydantic import ValidationError
 
 import config
-from db import compute_content_hash, insert_new_feature
+from db import compute_content_hash, insert_new_feature, insert_new_subtype
 from models import TranscriptInsightsResponse, InsightItem
 from taxonomy import (
     get_valid_pain_codes,
@@ -24,10 +24,20 @@ from taxonomy import (
     get_valid_feature_codes,
     get_competitor_names,
     normalize_competitor,
+    normalize_module,
+    normalize_subtype,
+    match_feature_to_roadmap,
     PAIN_SUBTYPES,
     MODULES,
     SEED_FEATURE_NAMES,
 )
+
+# Maps insight_type -> tax_* table name, for auto-registering new (non-seed) codes
+_SUBTYPE_TABLE = {
+    "pain": "tax_pain_subtypes",
+    "deal_friction": "tax_deal_friction_subtypes",
+    "faq": "tax_faq_subtypes",
+}
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +52,9 @@ _known_competitors = get_competitor_names()
 
 # Track new features discovered in this run
 _new_features: dict[str, dict] = {}
+
+# Track new (non-seed) pain/deal_friction/faq codes discovered in this run
+_new_subtype_codes: set[tuple[str, str]] = set()
 
 
 def parse_response(
@@ -79,6 +92,10 @@ def parse_response(
     for insight in response.insights:
         row = _normalize_insight(insight, transcript_id, chunk_index, metadata, model_used, batch_id)
         if row:
+            new_subtype_code = row.pop("_new_subtype_code", None)
+            if new_subtype_code and supabase_client:
+                _register_new_subtype(supabase_client, *new_subtype_code)
+
             # Register new features if needed
             if (
                 row.get("feature_name")
@@ -110,12 +127,17 @@ def _normalize_insight(
     itype = insight.insight_type.value
     subtype = insight.insight_subtype
     module = insight.module
+    new_subtype_code: str | None = None  # set if normalize_subtype had to auto-create a code
 
     # ── Validate subtype by insight type ──
+    # Never drop the insight for pain/deal_friction/faq on a taxonomy mismatch:
+    # normalize_subtype() maps known aliases to the canonical code, and falls
+    # back to a new slug code (registered as non-seed) instead of discarding
+    # the insight.
     if itype == "pain":
-        if subtype not in _valid_pains:
-            logger.warning(f"Unknown pain subtype: {subtype}")
-            return None
+        subtype, is_new = normalize_subtype("pain", subtype)
+        if is_new:
+            new_subtype_code = subtype
         # Auto-assign module from taxonomy if not provided
         if not module:
             pain_data = PAIN_SUBTYPES.get(subtype)
@@ -123,14 +145,14 @@ def _normalize_insight(
                 module = pain_data["module"]
 
     elif itype == "deal_friction":
-        if subtype not in _valid_frictions:
-            logger.warning(f"Unknown deal_friction subtype: {subtype}")
-            return None
+        subtype, is_new = normalize_subtype("deal_friction", subtype)
+        if is_new:
+            new_subtype_code = subtype
 
     elif itype == "faq":
-        if subtype not in _valid_faqs:
-            logger.warning(f"Unknown faq subtype: {subtype}")
-            return None
+        subtype, is_new = normalize_subtype("faq", subtype)
+        if is_new:
+            new_subtype_code = subtype
 
     elif itype == "competitive_signal":
         # For competitive signals, subtype is the relationship code
@@ -152,6 +174,11 @@ def _normalize_insight(
             insight.feature_name = _to_slug(insight.feature_name)
 
     # ── Validate module ──
+    # Connect MODULE_ALIASES (previously only used to build prompt hints,
+    # never applied programmatically) so paraphrased module mentions get
+    # resolved instead of dropped.
+    if module:
+        module = normalize_module(module)
     if module and module not in _valid_modules:
         logger.warning(f"Unknown module: {module}, dropping from insight")
         if itype == "product_gap":
@@ -163,9 +190,19 @@ def _normalize_insight(
     if competitor_name:
         competitor_name = normalize_competitor(competitor_name)
 
+    # ── Match against the real roadmap (product_gap only) ──
+    roadmap_match_id = None
+    if itype == "product_gap":
+        roadmap_match_id = match_feature_to_roadmap(insight.feature_name, insight.gap_description)
+
     # ── Build row ──
     content_hash = compute_content_hash(
-        {"insight_type": itype, "insight_subtype": subtype, "summary": insight.summary},
+        {
+            "insight_type": itype,
+            "insight_subtype": subtype,
+            "summary": insight.summary,
+            "prompt_version": config.PROMPT_VERSION,
+        },
         transcript_id,
         chunk_index,
     )
@@ -194,13 +231,17 @@ def _normalize_insight(
         "competitor_name": competitor_name,
         "competitor_relationship": insight.competitor_relationship,
         "feature_name": insight.feature_name,
+        "roadmap_match_id": roadmap_match_id,
         "gap_description": insight.gap_description,
         "gap_priority": insight.gap_priority.value if insight.gap_priority else None,
-        "faq_topic": insight.faq_topic,
+        "faq_answer": insight.faq_answer,
+        "speaker_role": insight.speaker_role,
         "model_used": model_used,
         "prompt_version": config.PROMPT_VERSION,
         "batch_id": batch_id,
         "content_hash": content_hash,
+        # Internal marker, popped by parse_response before insertion.
+        "_new_subtype_code": (itype, new_subtype_code) if new_subtype_code else None,
     }
 
     return row
@@ -226,3 +267,24 @@ def _register_new_feature(client, code: str, module: str | None) -> None:
 def get_new_features() -> dict[str, dict]:
     """Return all new features discovered in this run."""
     return dict(_new_features)
+
+
+def _register_new_subtype(client, itype: str, code: str) -> None:
+    """Register a new (non-seed) pain/deal_friction/faq code discovered by the LLM.
+
+    Mirrors _register_new_feature: never drops the insight, just makes the
+    new code visible (is_seed=False) for QA review instead of silently
+    fragmenting or losing data.
+    """
+    cache_key = (itype, code)
+    if cache_key in _new_subtype_codes:
+        return
+    table = _SUBTYPE_TABLE[itype]
+    display_name = code.replace("_", " ").title()
+    insert_new_subtype(client, table, code, display_name)
+    _new_subtype_codes.add(cache_key)
+
+
+def get_new_subtype_codes() -> set[tuple[str, str]]:
+    """Return all new (insight_type, code) pairs discovered in this run."""
+    return set(_new_subtype_codes)

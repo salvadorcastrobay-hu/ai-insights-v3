@@ -177,7 +177,7 @@ function truncateField(value: unknown): string | null {
 }
 
 export async function loadInsightsImpl(
-  promptVersion = "v3.0",
+  promptVersion = "v3.1",
   _pageSize = 1000,
   _client?: SupabaseClient,
 ): Promise<InsightRow[]> {
@@ -269,7 +269,7 @@ async function memoize<T>(key: string, loader: () => Promise<T>): Promise<T> {
 
 // Preserve per-request React.cache() dedupe on top of the cross-request cache.
 export const loadInsights = cache(
-  async (promptVersion = "v3.0"): Promise<InsightRow[]> =>
+  async (promptVersion = "v3.1"): Promise<InsightRow[]> =>
     memoize(`insights:${promptVersion}`, () => loadInsightsImpl(promptVersion)),
 );
 

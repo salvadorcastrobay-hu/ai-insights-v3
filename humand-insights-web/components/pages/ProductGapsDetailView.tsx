@@ -38,6 +38,7 @@ export function ProductGapsDetailView({ data, filteredRows }: Props) {
     featureSegmentHeatmap,
     moduleStatus,
     existingModulePct,
+    roadmapStatus,
     priorityLabelByKey,
     gapTableRows,
   } = data;
@@ -220,6 +221,22 @@ export function ProductGapsDetailView({ data, filteredRows }: Props) {
           <HorizontalBarChart
             data={moduleStatus.map((r) => ({ name: `${r.name} (${r.pct}%)`, value: r.value }))}
             height={Math.max(200, moduleStatus.length * 60)}
+            multicolor
+          />
+        )}
+      </ChartCard>
+
+      <SectionHeader
+        title={t("roadmapStatusTitle")}
+        description={t("roadmapStatusDesc")}
+      />
+      <ChartCard>
+        {roadmapStatus.length === 0 ? (
+          <p className="text-[13px] text-[var(--color-text-secondary)]">{t("noModuleStatus")}</p>
+        ) : (
+          <HorizontalBarChart
+            data={roadmapStatus.map((r) => ({ name: `${r.name} (${r.pct}%)`, value: r.value }))}
+            height={Math.max(200, roadmapStatus.length * 60)}
             multicolor
           />
         )}

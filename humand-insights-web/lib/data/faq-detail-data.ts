@@ -14,6 +14,7 @@ export type FaqTableRow = {
   summary: string;
   verbatim_quote: string | null;
   confidence: number | null;
+  faq_answer: string | null;
 };
 
 export type FaqDetailData = {
@@ -60,6 +61,7 @@ export function buildFaqDetailData(
     summary: row.summary,
     verbatim_quote: row.verbatim_quote,
     confidence: row.confidence ?? null,
+    faq_answer: row.faq_answer ?? null,
   }));
 
   return {

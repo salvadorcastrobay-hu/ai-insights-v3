@@ -80,7 +80,7 @@ function analyze(rows: InsightRow[], dim: DrillDimension, label: string) {
 }
 
 function main() {
-  return loadInsights(process.env.NEXT_PUBLIC_PROMPT_VERSION ?? "v3.0").then((all) => {
+  return loadInsights(process.env.NEXT_PUBLIC_PROMPT_VERSION ?? "v3.1").then((all) => {
     const filtered = applyFilters(all, { ...EMPTY_FILTERS });
     console.log(`Loaded ${all.length} rows; filtered=${filtered.length}`);
 

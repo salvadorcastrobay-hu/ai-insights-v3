@@ -91,7 +91,7 @@ function buildRowEvidence(rows: InsightRow[], dim: DrillDimension, label: string
 }
 
 async function main() {
-  const all = await loadInsights(process.env.NEXT_PUBLIC_PROMPT_VERSION ?? "v3.0");
+  const all = await loadInsights(process.env.NEXT_PUBLIC_PROMPT_VERSION ?? "v3.1");
   const filtered = applyFilters(all, { ...EMPTY_FILTERS });
 
   const pains = filtered.filter((r) => r.insight_type === "pain");

@@ -9,7 +9,7 @@ import { loadInsights } from "../lib/supabase/queries";
 
 const TARGETS = ["payroll_integration", "digital_signature", "biometric_clocks_integration", "api_access", "performance_review", "ats_module"];
 
-loadInsights(process.env.NEXT_PUBLIC_PROMPT_VERSION ?? "v3.0").then((rows) => {
+loadInsights(process.env.NEXT_PUBLIC_PROMPT_VERSION ?? "v3.1").then((rows) => {
   for (const t of TARGETS) {
     const matches = rows
       .filter((r) => r.insight_type === "product_gap" && r.feature_name === t && r.verbatim_quote && r.verbatim_quote.length > 70 && r.verbatim_quote.length < 350)

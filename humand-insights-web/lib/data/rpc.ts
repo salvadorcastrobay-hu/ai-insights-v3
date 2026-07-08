@@ -43,7 +43,7 @@ function getServiceClient() {
 
 export function filtersToJsonb(filters: Filters): Record<string, unknown> {
   return {
-    prompt_version: process.env.NEXT_PUBLIC_PROMPT_VERSION ?? "v3.0",
+    prompt_version: process.env.NEXT_PUBLIC_PROMPT_VERSION ?? "v3.1",
     types: filters.types ?? [],
     regions: filters.regions ?? [],
     segments: filters.segments ?? [],

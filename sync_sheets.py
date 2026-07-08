@@ -90,7 +90,7 @@ COLUMNS = [
     "competitor_name", "competitor_relationship", "competitor_relationship_display",
     "feature_name", "feature_name_display",
     "gap_description", "gap_priority", "gap_priority_display",
-    "faq_topic",
+    "faq_answer", "speaker_role", "roadmap_status_display",
     "processed_at",
 ]
 

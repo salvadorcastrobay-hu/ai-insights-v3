@@ -164,7 +164,8 @@
     "thTopicCol": "Topic",
     "thConfCol": "Conf.",
     "thQuestionCol": "Pregunta",
-    "thQuoteCol": "Cita textual"
+    "thQuoteCol": "Cita textual",
+    "thAnswerCol": "Respuesta del AE"
   },
   "productIntelligence": {
     "title": "Product Intelligence",
@@ -631,6 +632,8 @@
     "segmentPriorityTitle": "Prioridad de Gaps por Segmento (%)",
     "featureSegmentTitle": "Feature Gaps por Segmento (Top 15)",
     "moduleStatusTitle": "Módulos: Existentes vs. Faltantes",
+    "roadmapStatusTitle": "Gaps vs. roadmap real de Notion (match por feature)",
+    "roadmapStatusDesc": "Igual que el gráfico de módulos, pero matcheado contra las ~2700 features individuales del roadmap de Notion. \"Sin match en roadmap\" significa que no se encontró ninguna feature parecida en el backlog de producto -- más preciso que el status a nivel módulo.",
     "detailTitle": "Detalle de Gaps",
     "detailDesc": "Filtrá por prioridad para aislar los Dealbreakers. Las filas rojas corresponden a gaps tipo dealbreaker.",
     "searchGap": "Buscar en resumen…",
