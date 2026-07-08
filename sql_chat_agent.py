@@ -749,7 +749,7 @@ def set_requested_model(model: str | None) -> None:
 
 
 def _get_chat_model() -> str:
-    return _requested_model.get() or os.getenv("OPENAI_CHAT_AGENT_MODEL", "gpt-4o")
+    return _requested_model.get() or os.getenv("OPENAI_CHAT_AGENT_MODEL", "gpt-4o-mini")
 
 
 def _get_openai_client() -> OpenAI:
@@ -1035,7 +1035,7 @@ def generate_response(client: OpenAI, question: str, history: list[dict]) -> tup
         model=_get_chat_model(),
         messages=messages,
         temperature=0,
-        max_tokens=2000,
+        max_completion_tokens=2000,
     )
     raw = response.choices[0].message.content.strip()
     return _parse_response(raw)
@@ -1073,7 +1073,7 @@ def summarize_results(
             {"role": "user", "content": user_msg},
         ],
         temperature=0.3,
-        max_tokens=1024,
+        max_completion_tokens=1024,
     )
     return response.choices[0].message.content.strip()
 
@@ -1119,7 +1119,7 @@ def summarize_hybrid_results(
             {"role": "user", "content": user_msg},
         ],
         temperature=0.3,
-        max_tokens=2048,
+        max_completion_tokens=2048,
     )
     return response.choices[0].message.content.strip()
 
@@ -1171,7 +1171,7 @@ def summarize_search_results(
             {"role": "user", "content": user_msg},
         ],
         temperature=0.3,
-        max_tokens=2048,
+        max_completion_tokens=2048,
     )
     return response.choices[0].message.content.strip()
 
@@ -1213,7 +1213,7 @@ def _generate_search_keywords(client: OpenAI, search_query: str) -> list[str]:
                 "content": search_query,
             }],
             temperature=0,
-            max_tokens=100,
+            max_completion_tokens=100,
         )
         raw = response.choices[0].message.content.strip()
         keywords = [k.strip().strip("'\"") for k in raw.split(",") if k.strip()]
