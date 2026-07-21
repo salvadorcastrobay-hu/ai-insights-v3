@@ -257,7 +257,8 @@ if "deal_owner" in df.columns:
             .rename(columns={"insight_subtype_display": "top_friction"})
         )
         # Top competitor per AE
-        ae_comp_base = ae_data[ae_data["insight_type"] == "competitive_signal"].copy()
+        # Competidor top por AE contando menciones en TODOS los tipos de insight.
+        ae_comp_base = ae_data[ae_data["competitor_name"].notna() & (ae_data["competitor_name"] != "Humand")].copy()
         if "is_own_brand_competitor" in ae_comp_base.columns:
             ae_comp_base = ae_comp_base[~ae_comp_base["is_own_brand_competitor"].fillna(False)]
         ae_comp = (

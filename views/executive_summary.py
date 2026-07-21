@@ -440,7 +440,9 @@ with col_gap_rev:
 
 ds_section("¿Qué competidores se mencionan más?")
 
-comp = df[df["insight_type"] == "competitive_signal"].copy()
+# Cuenta competidores nombrados en TODOS los tipos de insight (no solo
+# competitive_signal): incumbentes citados en pain/friction/gap tambien suman.
+comp = df[df["competitor_name"].notna() & (df["competitor_name"] != "Humand")].copy()
 if "is_own_brand_competitor" in comp.columns:
     comp = comp[~comp["is_own_brand_competitor"].fillna(False)]
 if not comp.empty:

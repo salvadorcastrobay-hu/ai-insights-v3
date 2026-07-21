@@ -2,6 +2,6 @@ import { CustomDashboardsClient } from "@/components/pages/CustomDashboardsClien
 import { loadInsights } from "@/lib/supabase/queries";
 
 export default async function Page() {
-  const rows = await loadInsights(process.env.NEXT_PUBLIC_PROMPT_VERSION ?? "v3.1");
+  const rows = await loadInsights(process.env.NEXT_PUBLIC_PROMPT_VERSION ?? "v3.2");
   return <CustomDashboardsClient rows={rows} />;
 }

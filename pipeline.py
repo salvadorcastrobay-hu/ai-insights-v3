@@ -107,6 +107,8 @@ def run_pipeline(
 
     # ── Step 4: Chunk transcripts ──
     all_chunks = []
+    seen_custom_ids: set[str] = set()
+    dupe_chunks = 0
     for t in transcripts:
         tid = t.get("transcript_id") or t.get("id", "unknown")
         text = t.get("transcript_text") or t.get("text") or t.get("content", "")
@@ -134,6 +136,13 @@ def run_pipeline(
         chunks = chunk_transcript(tid, text)
         for c in chunks:
             custom_id = f"{tid}__{c['chunk_index']}"
+            # v_transcripts returns a transcript once per associated deal, so the
+            # same (transcript_id, chunk_index) can recur. OpenAI rejects a batch
+            # with duplicate custom_ids, and each chunk only needs extracting once.
+            if custom_id in seen_custom_ids:
+                dupe_chunks += 1
+                continue
+            seen_custom_ids.add(custom_id)
             all_chunks.append({
                 "custom_id": custom_id,
                 "transcript_id": tid,
@@ -144,7 +153,7 @@ def run_pipeline(
             })
 
     stats["chunks"] = len(all_chunks)
-    logger.info(f"Total chunks to process: {len(all_chunks)}")
+    logger.info(f"Total chunks to process: {len(all_chunks)} (skipped {dupe_chunks} duplicate custom_ids)")
 
     if not all_chunks:
         logger.info("Nothing to process")

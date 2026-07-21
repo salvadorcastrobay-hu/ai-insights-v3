@@ -338,6 +338,8 @@ COMPETITORS = {
 COMPETITOR_ALIASES = {
     "nalu": "NAALOO",
     "nalú": "NAALOO",
+    "nalu hr": "NAALOO",
+    "naaloo hr": "NAALOO",
     "book": "Buk",
     "buk hr": "Buk",
     "bukhr": "Buk",
@@ -527,6 +529,11 @@ FRICTION_ALIASES = {
     "resistencia al cambio": "change_management", "no quieren cambiar": "change_management",
     "falta de alineacion interna": "internal_alignment", "no se ponen de acuerdo": "internal_alignment",
     "necesita justificar el retorno": "roi_justification", "justificar la inversion": "roi_justification",
+    # QA consolidation 2026-07 (v3.2 auto-created codes)
+    "pricing": "budget", "price": "budget",
+    "implementation": "technical", "migration": "technical",
+    "integration": "technical", "integration_issues": "technical",
+    "contractual": "legal",
 }
 
 FAQ_ALIASES = {
@@ -537,6 +544,17 @@ FAQ_ALIASES = {
     "app movil": "mobile", "aplicacion movil": "mobile",
     "soporte tecnico": "support", "sla de soporte": "support",
     "migracion de datos": "migration", "importar datos de otra herramienta": "migration",
+    # QA consolidation 2026-07 (v3.2 auto-created codes)
+    "users": "customization", "scorm_support": "integration",
+    "prebuilt_courses": "content_management", "authentication": "security",
+    "training_compliance": "compliance", "payment_terms": "contract_terms",
+    "api_access": "integration", "payment_methods": "pricing",
+    "legal": "contract_terms", "sso_integration": "integration",
+    "data_privacy": "data_ownership", "billing": "pricing",
+    "storage": "data_ownership", "human_support": "support",
+    "multi_language_content": "languages", "payroll_integration": "integration",
+    "permissions": "customization", "privacy": "data_ownership",
+    "roles_permissions": "customization", "visibility": "customization",
 }
 
 # ──────────────────────────────────────────────

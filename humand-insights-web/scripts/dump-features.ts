@@ -40,7 +40,7 @@ async function main() {
   console.log(`Pulled ${all.length} features`);
 
   // 2. Count insights per feature_name from the dataset
-  const rows = await loadInsights(process.env.NEXT_PUBLIC_PROMPT_VERSION ?? "v3.1");
+  const rows = await loadInsights(process.env.NEXT_PUBLIC_PROMPT_VERSION ?? "v3.2");
   const counts = new Map<string, number>();
   const dealCounts = new Map<string, Set<string>>();
   for (const r of rows) {

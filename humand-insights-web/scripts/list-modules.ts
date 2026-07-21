@@ -9,7 +9,7 @@ for (const l of fs.readFileSync(envPath, "utf8").split("\n")) {
 import { loadInsights } from "../lib/supabase/queries";
 
 (async () => {
-  const all = await loadInsights(process.env.NEXT_PUBLIC_PROMPT_VERSION ?? "v3.1");
+  const all = await loadInsights(process.env.NEXT_PUBLIC_PROMPT_VERSION ?? "v3.2");
   const byStatus = new Map<string, Map<string, number>>();
   for (const r of all) {
     const mod = r.module_display?.trim();

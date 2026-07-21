@@ -135,7 +135,7 @@ async function main() {
   }
 
   // Insight counts
-  const insights = await loadInsights(process.env.NEXT_PUBLIC_PROMPT_VERSION ?? "v3.1");
+  const insights = await loadInsights(process.env.NEXT_PUBLIC_PROMPT_VERSION ?? "v3.2");
   const useCounts = new Map<string, number>();
   for (const r of insights) {
     if (r.feature_name) useCounts.set(r.feature_name, (useCounts.get(r.feature_name) ?? 0) + 1);

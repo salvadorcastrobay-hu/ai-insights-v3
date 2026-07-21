@@ -14,7 +14,7 @@ export const maxDuration = 300;
  */
 export async function GET() {
   try {
-    const rows = await loadInsights(process.env.NEXT_PUBLIC_PROMPT_VERSION ?? "v3.1");
+    const rows = await loadInsights(process.env.NEXT_PUBLIC_PROMPT_VERSION ?? "v3.2");
     return NextResponse.json({ ok: true, rows: rows.length });
   } catch (error) {
     return NextResponse.json(

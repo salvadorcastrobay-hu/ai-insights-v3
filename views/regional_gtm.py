@@ -200,7 +200,8 @@ if not mod_region.empty:
         st.plotly_chart(fig, use_container_width=True)
 
 # Competitors by country — with country filter and fixed column widths
-comp = df[df["insight_type"] == "competitive_signal"].copy()
+# Competidores nombrados en TODOS los tipos de insight, no solo competitive_signal.
+comp = df[df["competitor_name"].notna() & (df["competitor_name"] != "Humand")].copy()
 if "is_own_brand_competitor" in comp.columns:
     comp = comp[~comp["is_own_brand_competitor"].fillna(False)]
 

@@ -82,9 +82,23 @@ export function buildCompetitiveIntelligenceData(
   filters: Filters,
 ): CompetitiveIntelligenceData {
   const filteredRows = applyFilters(rows, filters);
-  const comp = filterByType(filteredRows, "competitive_signal").filter(
-    (row) => !row.is_own_brand_competitor,
-  );
+  // Cuenta competidores nombrados en TODOS los tipos de insight (no solo
+  // competitive_signal): un incumbente citado en un pain / friction / gap
+  // también suma. Las filas sin relación competitiva explícita se muestran
+  // bajo "Mencionado"; el filtro de relaciones fuertes (relevantRows) las
+  // excluye naturalmente.
+  const comp = filteredRows
+    .filter(
+      (row) =>
+        row.competitor_name &&
+        row.competitor_name !== "Humand" &&
+        !row.is_own_brand_competitor,
+    )
+    .map((row) => ({
+      ...row,
+      competitor_relationship_display:
+        row.competitor_relationship_display ?? "Mencionado",
+    }));
 
   const relevantRows = comp.filter(
     (row) =>

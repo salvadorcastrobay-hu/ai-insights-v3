@@ -285,9 +285,23 @@ export function buildExecutiveSummaryData(
 
   const painRows = filterByType(filteredRows, "pain");
   const gaps = filterByType(filteredRows, "product_gap");
-  const comp = filterByType(filteredRows, "competitive_signal").filter(
-    (r) => !r.is_own_brand_competitor,
-  );
+  // "Competidores mencionados": cuenta menciones de competidores en TODOS los
+  // tipos de insight (no solo competitive_signal), para que un incumbente
+  // nombrado dentro de un pain / friction / gap también sume. Las filas sin
+  // relación competitiva explícita (las que no son competitive_signal) se
+  // muestran bajo el bucket "Mencionado".
+  const comp = filteredRows
+    .filter(
+      (r) =>
+        r.competitor_name &&
+        r.competitor_name !== "Humand" &&
+        !r.is_own_brand_competitor,
+    )
+    .map((r) => ({
+      ...r,
+      competitor_relationship_display:
+        r.competitor_relationship_display ?? "Mencionado",
+    }));
   const frictions = filterByType(filteredRows, "deal_friction");
   const faqs = filterByType(filteredRows, "faq");
 

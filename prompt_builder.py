@@ -201,6 +201,22 @@ def _taxonomy_faq() -> str:
     lines.append("|---|---|")
     for code, f in FAQ_SUBTYPES.items():
         lines.append(f"| `{code}` | {f['display_name']} |")
+    lines.append(
+        "\n**IMPORTANTE — cómo clasificar una `faq`:** el `insight_subtype` de una `faq` "
+        "DEBE ser SIEMPRE uno de los tópicos transversales de la tabla de arriba "
+        "(por ejemplo: `adoption`, `analytics`, `compliance`, `content_management`, "
+        "`contract_terms`, `customization`, `data_ownership`, `implementation`, `integration`, "
+        "`languages`, `migration`, `mobile`, `pricing`, `roi`, `scalability`, `security`, `support`). "
+        "NUNCA uses un nombre de módulo/feature/producto (como `payroll`, `ats_module`, `recruitment`, "
+        "`chat`, `learning`, `onboarding`, `surveys`, `time_off`, `performance_review`, "
+        "`video_conferencing`, `geofencing`, `org_chart`, etc.) como `insight_subtype` de una `faq`. "
+        "El módulo/feature específico sobre el que se pregunta va SIEMPRE en el campo `module`, "
+        "NUNCA en `insight_subtype`."
+    )
+    lines.append(
+        "\nEjemplo del split correcto: la pregunta \"¿el módulo de nómina se integra con nuestro ERP?\" "
+        "→ `insight_subtype`=`integration` (el tópico transversal) y `module`=`payroll` (el módulo consultado)."
+    )
     return "\n".join(lines)
 
 
@@ -256,7 +272,7 @@ Responde con un JSON que contenga una lista de insights. Cada insight tiene esto
       "summary": "<resumen en español, 1-2 oraciones>",
       "verbatim_quote": "<cita textual del transcript o null>",
       "confidence": 0.0-1.0,
-      "competitor_name": "<nombre normalizado o null>",
+      "competitor_name": "<competidor nombrado en la evidencia de ESTE insight (cualquier tipo) o null>",
       "competitor_relationship": "<código relación o null>",
       "feature_name": "<código feature o null>",
       "gap_description": "<descripción del gap o null>",
@@ -275,7 +291,14 @@ Campos obligatorios por tipo:
 - **deal_friction**: insight_subtype, summary, confidence
 - **faq**: insight_subtype=<código FAQ topic>, summary, faq_answer (la respuesta del AE, si la dio; null si no)
 
-`speaker_role` aplica a todos los tipos: quién dijo el summary/verbatim_quote (el AE/CX de Humand, el lead, o "unknown" si no se puede determinar con certeza — nunca adivinar)."""
+`speaker_role` aplica a todos los tipos: quién dijo el summary/verbatim_quote (el AE/CX de Humand, el lead, o "unknown" si no se puede determinar con certeza — nunca adivinar).
+
+`competitor_name` NO es exclusivo de `competitive_signal`. Complétalo en CUALQUIER tipo de insight —
+`pain`, `deal_friction`, `product_gap`, `faq` o `competitive_signal`— siempre que el prospecto nombre
+explícitamente a un competidor/proveedor en la evidencia de ESE insight (por ejemplo, un `pain` como
+"Nalu tenía fricciones de uso" o un `deal_friction` como "se inclinó por Nalu por costos" deben llevar
+`competitor_name`="Nalu"). Normaliza el nombre al de la lista de competidores conocidos cuando aparezca ahí.
+Déjalo en null cuando NO se nombre ningún competidor — nunca lo inventes."""
 
 
 def _load_refinements() -> str | None:
@@ -382,6 +405,35 @@ Respuesta esperada:
       "verbatim_quote": "Nuestra principal preocupación es el presupuesto, este año está muy ajustado",
       "confidence": 0.9,
       "competitor_name": null,
+      "competitor_relationship": null,
+      "feature_name": null,
+      "gap_description": null,
+      "gap_priority": null,
+      "faq_answer": null,
+      "speaker_role": "lead"
+    }
+  ]
+}
+```
+
+## Ejemplo 2: competitor_name en un insight que NO es competitive_signal
+
+Transcript:
+
+"Lead: Veníamos usando Nalu pero tenía muchas fricciones de uso, la gente de planta no lo adoptaba..."
+
+Respuesta esperada (un `pain` que nombra a un competidor lleva `competitor_name`):
+```json
+{
+  "insights": [
+    {
+      "insight_type": "pain",
+      "insight_subtype": "low_adoption",
+      "module": null,
+      "summary": "La herramienta previa (Nalu) tenía fricciones de uso y baja adopción del personal de planta.",
+      "verbatim_quote": "Veníamos usando Nalu pero tenía muchas fricciones de uso, la gente de planta no lo adoptaba",
+      "confidence": 0.9,
+      "competitor_name": "Nalu",
       "competitor_relationship": null,
       "feature_name": null,
       "gap_description": null,

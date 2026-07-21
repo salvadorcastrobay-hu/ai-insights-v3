@@ -382,7 +382,7 @@ def get_supabase():
 
 def get_dashboard_prompt_version() -> str:
     """Return the prompt version the dashboard should display."""
-    return os.environ.get("PROMPT_VERSION", "v3.0")
+    return os.environ.get("PROMPT_VERSION", "v3.2")
 
 
 def get_dashboard_data_version() -> str:

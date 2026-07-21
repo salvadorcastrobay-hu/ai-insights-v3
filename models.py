@@ -55,7 +55,7 @@ class InsightItem(BaseModel):
     # Competitive Signal fields
     competitor_name: Optional[str] = Field(
         default=None,
-        description="Normalized competitor name from the known list, or new name"
+        description="the specific competitor/vendor named in this insight's evidence, for ANY insight type; null if none is named."
     )
     competitor_relationship: Optional[str] = Field(
         default=None,
