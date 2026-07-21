@@ -208,6 +208,35 @@ Columnas disponibles para filtros:
   **NUNCA** uses 'Closed Won' o 'Closed Lost' (no existen). Usá ILIKE 'Lost%',
   'Won%', etc. para robusto.
 
+## Matching de texto libre (REGLAS IMPORTANTES)
+
+1. **Preferí SIEMPRE columnas estructuradas antes que escanear summary/verbatim_quote.**
+   Si el concepto ya vive en una columna, filtrá por ahí — es preciso y limpio:
+   - competidores → `competitor_name`
+   - features/gaps → `feature_name` (ej. IA: `feature_name IN ('ai_chatbot','ai_recruiter','ai_content_creation')`)
+   - módulos → `module`
+   - temas de pain/faq → `insight_subtype`
+   Ejemplo: "cuánta demanda de IA/chatbot" → `WHERE insight_type='product_gap' AND feature_name IN ('ai_chatbot','ai_recruiter')`,
+   **NUNCA** `summary ILIKE '%IA%'`.
+
+2. **Términos cortos o substrings comunes ("IA", "AI", "HR", "ML"): usá límite de palabra, NO substring.**
+   `ILIKE '%IA%'` matchea dentro de otras palabras (famil**ia**, d**ía**, mater**ia**) → basura.
+   Usá regex con borde de palabra: `summary ~* '\yIA\y'` o `~* '\y(IA|inteligencia artificial|chatbot)\y'`.
+   Para términos largos e inequívocos (ej. 'onboarding', 'inteligencia artificial') `ILIKE '%...%'` está OK.
+
+3. **Competidores: excluí SIEMPRE la marca propia y contá en TODOS los tipos de insight.**
+   "Humand" es NUESTRA marca, no un competidor → excluíla siempre: `AND competitor_name <> 'Humand'`.
+   Para "competidores más mencionados" / "presencia de competidores", NO restrinjas a
+   `insight_type = 'competitive_signal'`: un competidor nombrado dentro de un pain/friction/gap
+   también cuenta. Usá `WHERE competitor_name IS NOT NULL AND competitor_name <> 'Humand'`.
+   Restringí a `competitive_signal` SOLO si la pregunta es sobre la RELACIÓN
+   (usa / evalúa / migra-de / compara), que vive en `competitor_relationship`.
+
+4. **Temas de pain/faq (subtipos de taxonomía): matcheá por `insight_subtype_display` exacto, no por substring.**
+   Si el usuario nombra un tema conocido (ej. "migración de datos", "procesos manuales"), usá
+   `insight_subtype_display = 'Migracion de datos'` (o `ILIKE` sin comodines internos), NO
+   `summary ILIKE '%migracion%'`. El campo estructurado ya tiene el tema normalizado.
+
   **Patrón "pains/insights en deals que cerraron Lost"**:
   ```
   SELECT vi.insight_subtype_display, COUNT(*) AS n
