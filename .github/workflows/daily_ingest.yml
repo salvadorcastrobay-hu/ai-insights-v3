@@ -45,7 +45,7 @@ jobs:
       # OPENAI_API_KEY no se usa en ingest pero config.py lo exige al importarse
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       # PROMPT_VERSION no aplica acá pero algunos módulos lo importan
-      PROMPT_VERSION: "v3.0"
+      PROMPT_VERSION: "v3.2"
 
     steps:
       - name: Checkout

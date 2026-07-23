@@ -46,8 +46,8 @@ jobs:
       SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
       SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      OPENAI_MODEL: ${{ inputs.model || 'gpt-4o-mini' }}
-      PROMPT_VERSION: "v3.0"
+      OPENAI_MODEL: ${{ inputs.model || 'gpt-5.4-mini' }}
+      PROMPT_VERSION: "v3.2"
 
     steps:
       - name: Checkout
