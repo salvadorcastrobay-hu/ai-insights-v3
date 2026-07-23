@@ -106,7 +106,11 @@ export async function POST(req: Request): Promise<Response> {
         r.upserted = await upsertAds(ads);
         r.deactivated = await markInactiveAds(c.name, c.source, new Set(ads.map((a) => a.ad_archive_id)));
       } else if (c.source === "linkedin_ads") {
-        const ads = await fetchLinkedInAds(c.name, { company: c.query, maxPages: c.maxPages ?? 2 });
+        const ads = await fetchLinkedInAds(c.name, {
+          company: c.query,
+          maxPages: c.maxPages ?? 2,
+          matchName: c.linkedinAdvertiserName,
+        });
         r.fetched = ads.length;
         r.upserted = await upsertAds(ads);
         r.deactivated = await markInactiveAds(c.name, c.source, new Set(ads.map((a) => a.ad_archive_id)));

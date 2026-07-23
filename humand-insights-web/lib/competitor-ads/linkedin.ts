@@ -100,13 +100,21 @@ export type LinkedInFetchParams = {
   country?: string;
   /** Máximo de páginas de cursor a traer (1 crédito c/u). Default 2. */
   maxPages?: number;
+  /**
+   * Nombre real del advertiser en LinkedIn, si difiere del `competitor`
+   * canónico (ej. "Senior" se llama "Senior Sistemas" en LinkedIn). Se usa
+   * solo para el filtro de homónimos — los avisos se siguen guardando bajo
+   * `competitor` para no romper el agrupamiento con otras fuentes.
+   */
+  matchName?: string;
 };
 
 /**
  * Trae los avisos de un competidor de la LinkedIn Ad Library vía
  * ScrapeCreators. La búsqueda por nombre es fuzzy (ej. "Buk" también trae
  * "Buket"/"Bukhara") — filtramos por advertiser cuyo nombre normalizado
- * empiece igual que `competitor`, para no guardar avisos de terceros.
+ * empiece igual que `matchName` (o `competitor` si no se especifica), para
+ * no guardar avisos de terceros.
  */
 export async function fetchLinkedInAds(
   competitor: string,
@@ -116,7 +124,7 @@ export async function fetchLinkedInAds(
   if (!key) throw new Error("Falta SCRAPECREATORS_API_KEY");
 
   const maxPages = Math.max(1, params.maxPages ?? 2);
-  const wanted = normalizeName(competitor);
+  const wanted = normalizeName(params.matchName ?? competitor);
 
   const out = new Map<string, CompetitorAd>();
   let cursor: string | null = null;
