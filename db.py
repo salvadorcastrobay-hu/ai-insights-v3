@@ -194,6 +194,19 @@ def fetch_transcripts(
             .range(offset, offset + page_size - 1)
             .execute()
         )
+        # NB: sin ORDER BY la paginacion .range() puede saltear/duplicar filas si
+        # el orden fisico cambia mid-scan. Aceptable aca: es auto-reparable (una
+        # transcripcion salteada la toma el run siguiente, que filtra por
+        # procesadas). No ordenamos por transcript_id porque v_transcripts es una
+        # vista y el sort podria no usar indice -> timeout en el pipeline diario.
+        # Guardia: bajo inestabilidad de Supabase una pagina puede volver como
+        # string crudo (JSON sin parsear); extend() sobre un string lo explota
+        # caracter por caracter. Fallar claro en vez de corromper la lista.
+        if not isinstance(response.data, list):
+            raise RuntimeError(
+                f"fetch_transcripts: pagina en offset={offset} devolvio {type(response.data).__name__}, "
+                f"se esperaba list (posible respuesta malformada de Supabase)."
+            )
         all_data.extend(response.data)
         if len(response.data) < page_size:
             break
@@ -235,37 +248,26 @@ def get_processed_transcript_ids(client: Client, prompt_version: str | None = No
     """
     pv = prompt_version if prompt_version is not None else config.PROMPT_VERSION
 
-    # Fast path: count first. If zero rows for this version, skip the (slow) paged select.
-    # tax tables don't have an index on prompt_version so the full select can timeout.
+    # Una sola query SELECT DISTINCT via psycopg2 (server-side distinct, un
+    # round-trip). Antes se paginaba con PostgREST .range(): sin ORDER BY
+    # sub-contaba (orden no deterministico saltea filas), y con ORDER BY el
+    # OFFSET profundo sobre ~190k filas timeouteaba. El DISTINCT server-side
+    # evita ambos problemas.
+    import psycopg2 as _pg
+    params = dict(config.get_db_connection_params())
+    params.update(keepalives=1, keepalives_idle=30, keepalives_interval=10, keepalives_count=5)
+    conn = _pg.connect(**params, connect_timeout=20)
     try:
-        count_resp = (
-            client.table("transcript_insights")
-            .select("transcript_id", count="exact", head=True)
-            .eq("prompt_version", pv)
-            .execute()
-        )
-        if count_resp.count == 0:
-            return set()
-    except Exception as e:
-        logger.warning(f"prompt_version count check failed, assuming empty: {e}")
-        return set()
-
-    all_ids = set()
-    offset = 0
-    page_size = 1000
-    while True:
-        response = (
-            client.table("transcript_insights")
-            .select("transcript_id")
-            .eq("prompt_version", pv)
-            .range(offset, offset + page_size - 1)
-            .execute()
-        )
-        all_ids.update(row["transcript_id"] for row in response.data)
-        if len(response.data) < page_size:
-            break
-        offset += page_size
-    return all_ids
+        conn.autocommit = True
+        with conn.cursor() as cur:
+            cur.execute("SET statement_timeout = '120s';")
+            cur.execute(
+                "SELECT DISTINCT transcript_id FROM transcript_insights WHERE prompt_version = %s",
+                (pv,),
+            )
+            return {row[0] for row in cur.fetchall()}
+    finally:
+        conn.close()
 
 
 # ── Write insights ──
