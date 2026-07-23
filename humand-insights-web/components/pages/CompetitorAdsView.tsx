@@ -398,7 +398,7 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, canR
   // Competidores agregados en la última tanda: por si un refresh masivo se
   // corta a mitad de camino (timeout), se pueden reintentar solo estos sin
   // repetir toda la corrida ni gastar créditos de más en los que ya andaban.
-  const PENDING_RETRY_COMPETITORS = ["Naaloo HR", "Mandü HR", "Tu Recibo", "Crehana", "Rankmi", "PeopleForce"];
+  const PENDING_RETRY_COMPETITORS = ["Gupy", "Sólides", "Flash", "Senior", "Dialog", "Beehome"];
   const [loadingPending, setLoadingPending] = useState(false);
 
   async function retryPending() {

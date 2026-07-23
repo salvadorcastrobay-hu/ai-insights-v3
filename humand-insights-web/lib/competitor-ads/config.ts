@@ -49,6 +49,12 @@ export const MONITORED_COMPETITORS: MonitoredCompetitor[] = [
   { name: "Crehana",     source: "meta_ads", query: "Crehana",      pageId: "1422292788065754", region: "latam", maxPages: 3, language: "es-AR", instagramHandle: "crehanacom" },
   { name: "Rankmi",      source: "meta_ads", query: "Rankmi",       pageId: "200938459759013", region: "latam", maxPages: 3, language: "es-AR", instagramHandle: "rankmioficial" },
   { name: "PeopleForce", source: "meta_ads", query: "PeopleForce",  pageId: "104448368352333", region: "latam", maxPages: 3, language: "es-AR", instagramHandle: "peopleforce.io" },
+  { name: "Gupy",        source: "meta_ads", query: "Gupy",         pageId: "687070011415505", region: "latam", maxPages: 3, language: "pt-BR" },
+  { name: "Sólides",     source: "meta_ads", query: "Sólides",      pageId: "352629171506262", region: "latam", maxPages: 3, language: "pt-BR" },
+  { name: "Flash",       source: "meta_ads", query: "Flash",        pageId: "2233239346995733", region: "latam", maxPages: 3, language: "pt-BR" },
+  { name: "Senior",      source: "meta_ads", query: "Senior",       pageId: "137415847698", region: "latam", maxPages: 3, language: "pt-BR" },
+  { name: "Dialog",      source: "meta_ads", query: "Dialog",       pageId: "180734166146522", region: "latam", maxPages: 3, language: "pt-BR" },
+  { name: "Beehome",     source: "meta_ads", query: "Beehome",      pageId: "350562291474391", region: "latam", maxPages: 3, language: "pt-BR" },
 
   // LinkedIn Ad Library (ScrapeCreators). La búsqueda por `query` es fuzzy
   // (matchea homónimos, ej. "Buk" también trae "Buket"/"Bukhara") — el
@@ -62,6 +68,12 @@ export const MONITORED_COMPETITORS: MonitoredCompetitor[] = [
   { name: "Crehana",     source: "linkedin_ads", query: "Crehana",      region: "latam", language: "es-AR" },
   { name: "Rankmi",      source: "linkedin_ads", query: "Rankmi",       region: "latam", language: "es-AR" },
   { name: "PeopleForce", source: "linkedin_ads", query: "PeopleForce",  region: "latam", language: "es-AR" },
+  { name: "Gupy",        source: "linkedin_ads", query: "Gupy",         region: "latam", language: "pt-BR" },
+  { name: "Sólides",     source: "linkedin_ads", query: "Sólides",      region: "latam", language: "pt-BR" },
+  { name: "Flash",       source: "linkedin_ads", query: "Flash",        region: "latam", language: "pt-BR" },
+  { name: "Senior",      source: "linkedin_ads", query: "Senior",       region: "latam", language: "pt-BR" },
+  { name: "Dialog",      source: "linkedin_ads", query: "Dialog",       region: "latam", language: "pt-BR" },
+  { name: "Beehome",     source: "linkedin_ads", query: "Beehome",      region: "latam", language: "pt-BR" },
 
   // Google Ads Transparency Center (ScrapeCreators). Se busca por dominio
   // (más preciso que por nombre de empresa — confirmado contra la API real).
@@ -74,4 +86,10 @@ export const MONITORED_COMPETITORS: MonitoredCompetitor[] = [
   { name: "Crehana",     source: "google_ads", query: "Crehana",      googleDomain: "crehana.com",          region: "latam", language: "es-AR" },
   { name: "Rankmi",      source: "google_ads", query: "Rankmi",       googleDomain: "rankmi.com",           region: "latam", language: "es-AR" },
   { name: "PeopleForce", source: "google_ads", query: "PeopleForce",  googleDomain: "peopleforce.io",       region: "latam", language: "es-AR" },
+  { name: "Gupy",        source: "google_ads", query: "Gupy",         googleDomain: "gupy.io",              region: "latam", language: "pt-BR" },
+  { name: "Sólides",     source: "google_ads", query: "Sólides",      googleDomain: "solides.com.br",       region: "latam", language: "pt-BR" },
+  { name: "Flash",       source: "google_ads", query: "Flash",        googleDomain: "flashapp.com.br",      region: "latam", language: "pt-BR" },
+  { name: "Senior",      source: "google_ads", query: "Senior",       googleDomain: "senior.com.br",        region: "latam", language: "pt-BR" },
+  { name: "Dialog",      source: "google_ads", query: "Dialog",       googleDomain: "dialog.ci",            region: "latam", language: "pt-BR" },
+  { name: "Beehome",     source: "google_ads", query: "Beehome",      googleDomain: "beehome.company",      region: "latam", language: "pt-BR" },
 ];
