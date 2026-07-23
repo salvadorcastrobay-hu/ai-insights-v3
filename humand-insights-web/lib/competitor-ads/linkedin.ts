@@ -111,10 +111,12 @@ export type LinkedInFetchParams = {
 
 /**
  * Trae los avisos de un competidor de la LinkedIn Ad Library vía
- * ScrapeCreators. La búsqueda por nombre es fuzzy (ej. "Buk" también trae
- * "Buket"/"Bukhara") — filtramos por advertiser cuyo nombre normalizado
- * empiece igual que `matchName` (o `competitor` si no se especifica), para
- * no guardar avisos de terceros.
+ * ScrapeCreators. La búsqueda por nombre es fuzzy y trae muchísimos
+ * homónimos (ej. "Buk" también trae perfiles personales como "Bukky Osifeso"
+ * o "Buktor", que con un filtro de prefijo pasarían igual porque también
+ * "empiezan con buk" al sacarles los espacios) — por eso exigimos que el
+ * advertiser normalizado sea IGUAL a `matchName` (o `competitor` si no se
+ * especifica), no que solo empiece igual.
  */
 export async function fetchLinkedInAds(
   competitor: string,
@@ -142,7 +144,7 @@ export async function fetchLinkedInAds(
     const json = (await res.json()) as RawResponse;
     for (const raw of json.ads ?? []) {
       const advertiser = normalizeName(raw.advertiser ?? "");
-      if (!advertiser.startsWith(wanted)) continue; // descarta homónimos
+      if (advertiser !== wanted) continue; // descarta homónimos
       const mapped = mapAd(competitor, params.country ?? "ALL", raw);
       if (mapped) out.set(mapped.ad_archive_id, mapped);
     }
