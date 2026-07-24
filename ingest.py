@@ -164,9 +164,9 @@ def _run_matching(supabase: SupabaseClient, stats: dict) -> None:
     logger.info("Loading data for matching...")
 
     transcripts = _fetch_columns(supabase, "raw_transcripts",
-        "recording_id,fathom_crm_matches,call_date,title")
+        "recording_id,fathom_crm_matches,call_date,title", order_col="recording_id")
     deals_raw = _fetch_columns(supabase, "raw_deals",
-        "deal_id,deal_name,deal_stage,create_date,amount,associated_company_ids")
+        "deal_id,deal_name,deal_stage,create_date,amount,associated_company_ids", order_col="deal_id")
 
     logger.info(
         f"Loaded: {len(transcripts)} transcripts, {len(deals_raw)} deals"
@@ -218,15 +218,20 @@ def _run_matching(supabase: SupabaseClient, stats: dict) -> None:
     )
 
 
-def _fetch_all(supabase: SupabaseClient, table: str) -> list[dict]:
+def _fetch_all(supabase: SupabaseClient, table: str, order_col: str) -> list[dict]:
     """Fetch all rows from a table (paginated)."""
-    return _fetch_columns(supabase, table, "*")
+    return _fetch_columns(supabase, table, "*", order_col)
 
 
 def _fetch_columns(
-    supabase: SupabaseClient, table: str, columns: str,
+    supabase: SupabaseClient, table: str, columns: str, order_col: str,
 ) -> list[dict]:
-    """Fetch specific columns from a table (paginated)."""
+    """Fetch specific columns from a table (paginated).
+
+    order_col DEBE ser una columna indexada/PK: sin ORDER BY, .range() pagina
+    en orden fisico no deterministico y saltea/duplica filas entre paginas
+    (net count parecido, pero con deals/transcripts faltantes -> matches perdidos).
+    """
     all_data = []
     offset = 0
     page_size = 1000
@@ -234,9 +239,15 @@ def _fetch_columns(
         response = (
             supabase.table(table)
             .select(columns)
+            .order(order_col)
             .range(offset, offset + page_size - 1)
             .execute()
         )
+        if not isinstance(response.data, list):
+            raise RuntimeError(
+                f"_fetch_columns({table}) offset={offset}: response.data no es list "
+                f"({type(response.data).__name__}); respuesta malformada de Supabase."
+            )
         all_data.extend(response.data)
         if len(response.data) < page_size:
             break
