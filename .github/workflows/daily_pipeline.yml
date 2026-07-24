@@ -75,6 +75,13 @@ jobs:
           echo "Running: python main.py run $ARGS"
           python main.py run $ARGS
 
+      - name: Refresh materialized view
+        # La MV (mv_insights_norm) alimenta el camino de agregacion del dashboard.
+        # Antes no se refrescaba en ningun lado -> quedaba stale. CONCURRENTLY para
+        # no bloquear lecturas.
+        if: github.event.inputs.dry_run != 'true'
+        run: python scripts/refresh_mv.py
+
       - name: Report on failure
         if: failure()
         run: |
