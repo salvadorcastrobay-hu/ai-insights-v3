@@ -183,6 +183,10 @@ def _run_matching(supabase: SupabaseClient, stats: dict) -> None:
         for cid in company_ids:
             deals_by_company.setdefault(str(cid), []).append(d)
 
+    # Indice por nombre para el fallback title->deal_name (demos sin crm_match en Fathom)
+    from deal_matcher import build_deal_name_index
+    deals_by_name = build_deal_name_index(deals_raw)
+
     logger.info(
         f"Indices built: {len(deals_by_id)} deals, "
         f"{len(deals_by_company)} companies with deals"
@@ -191,7 +195,7 @@ def _run_matching(supabase: SupabaseClient, stats: dict) -> None:
     # Match each transcript
     match_rows = []
     for t in transcripts:
-        result = match_call_to_deal(t, deals_by_company, deals_by_id)
+        result = match_call_to_deal(t, deals_by_company, deals_by_id, deals_by_name)
 
         match_row = {
             "recording_id": t["recording_id"],
