@@ -352,44 +352,98 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, canR
     return f.value;
   };
 
-  async function fetchSourceRefresh(
-    source: "meta_ads" | "linkedin_ads" | "google_ads",
-    competitors?: string[],
-  ): Promise<string> {
-    const qs = new URLSearchParams({ source });
-    if (competitors?.length) qs.set("competitors", competitors.join(","));
-    const res = await fetch(`/api/competitor-ads/refresh?${qs}`, { method: "POST" });
-    const rawText = await res.text();
-    const json = parseJsonResponse<{
-      totalUpserted?: number;
-      error?: string;
-      results?: Array<{ competitor: string; error?: string; analyzeError?: string; analyzed?: boolean }>;
-    }>(rawText, `Error ${res.status}`);
-    if (!res.ok || json.error) return json.error ?? `Error ${res.status}`;
-    const results = json.results ?? [];
+  // El refresh de ads pagos ahora corre como job en background (mismo patrón
+  // que el orgánico): antes era una sola request síncrona sobre ~46
+  // competidores × análisis LLM que superaba el timeout de Railway ("upstream
+  // error", solo alcanzaba a procesar los primeros). Ahora arranca el job y se
+  // pollea el estado.
+  type PaidJobResult = {
+    competitor: string;
+    source?: string;
+    fetched?: number;
+    upserted?: number;
+    deactivated?: number;
+    analyzed?: boolean;
+    error?: string;
+    analyzeError?: string;
+  };
+  type PaidJob = {
+    id: string;
+    state: "queued" | "running" | "completed" | "failed";
+    current?: string | null;
+    totalUpserted?: number;
+    results?: PaidJobResult[];
+    error?: string;
+  };
+  type PaidJobResponse = { job?: PaidJob; error?: string };
+
+  const paidJobMessage = (job: PaidJob): string => {
+    const results = job.results ?? [];
+    const analyzedOk = results.filter((r) => r.analyzed).length;
     const fetchErrs = results.filter((r) => r.error);
     const analyzeErrs = results.filter((r) => r.analyzeError);
-    const analyzedOk = results.filter((r) => r.analyzed).length;
-    const parts = [`Actualizado: ${json.totalUpserted ?? 0} avisos`];
+    const stateLabel =
+      job.state === "completed"
+        ? "Completado"
+        : job.state === "failed"
+          ? "Falló"
+          : `Procesando ${job.current ?? "…"}`;
+    const parts = [stateLabel, `Actualizado: ${job.totalUpserted ?? 0} avisos`];
     if (fetchErrs.length) {
       parts.push(`fetch falló (${fetchErrs.map((r) => r.competitor).join(", ")}): ${fetchErrs[0].error}`);
     }
     if (analyzeErrs.length) {
       parts.push(`análisis falló (${analyzeErrs.map((r) => r.competitor).join(", ")}): ${analyzeErrs[0].analyzeError}`);
-    } else {
-      parts.push(`análisis OK (${analyzedOk})`);
     }
+    if (job.state === "completed") parts.push(`análisis OK (${analyzedOk})`);
+    if (job.error) parts.push(job.error);
     return parts.join(" · ");
+  };
+
+  async function pollPaidJob(jobId: string): Promise<void> {
+    for (let attempt = 0; attempt < 240; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, attempt < 3 ? 2000 : 4000));
+      const res = await fetch(`/api/competitor-ads/refresh/status?jobId=${encodeURIComponent(jobId)}`, {
+        cache: "no-store",
+      });
+      const rawText = await res.text();
+      const json = parseJsonResponse<PaidJobResponse>(rawText, `Error ${res.status}`);
+      if (!res.ok || !json.job) throw new Error(json.error ?? `Error ${res.status}`);
+      setMsg(paidJobMessage(json.job));
+      if (json.job.state === "completed" || json.job.state === "failed") {
+        router.refresh();
+        return;
+      }
+    }
+    throw new Error("El refresh tardó demasiado. Revisá más tarde o reintentá.");
+  }
+
+  async function runPaidRefresh(
+    sources: Array<"meta_ads" | "linkedin_ads" | "google_ads">,
+    competitors?: string[],
+  ): Promise<void> {
+    setMsg(null);
+    try {
+      const qs = new URLSearchParams({ sources: sources.join(",") });
+      if (competitors?.length) qs.set("competitors", competitors.join(","));
+      const res = await fetch(`/api/competitor-ads/refresh?${qs}`, { method: "POST" });
+      const rawText = await res.text();
+      const json = parseJsonResponse<PaidJobResponse>(rawText, `Error ${res.status}`);
+      if (!res.ok || !json.job) {
+        setMsg(json.error ?? `Error ${res.status}`);
+        return;
+      }
+      setMsg("Refresh iniciado…");
+      await pollPaidJob(json.job.id);
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "Error al actualizar");
+    }
   }
 
   async function refresh(source: "meta_ads" | "linkedin_ads" | "google_ads") {
     setLoadingSource(source);
-    setMsg(null);
     try {
-      setMsg(await fetchSourceRefresh(source));
-      router.refresh();
-    } catch (e) {
-      setMsg(e instanceof Error ? e.message : "Error al actualizar");
+      await runPaidRefresh([source]);
     } finally {
       setLoadingSource(null);
     }
@@ -403,20 +457,11 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, canR
 
   async function retryPending() {
     setLoadingPending(true);
-    setMsg(null);
-    const summaries: string[] = [];
-    for (const source of ["meta_ads", "linkedin_ads"] as const) {
-      setLoadingSource(source);
-      try {
-        summaries.push(`${SOURCE_LABEL[source]}: ${await fetchSourceRefresh(source, PENDING_RETRY_COMPETITORS)}`);
-      } catch (e) {
-        summaries.push(`${SOURCE_LABEL[source]}: ${e instanceof Error ? e.message : "error"}`);
-      }
+    try {
+      await runPaidRefresh(["meta_ads", "linkedin_ads"], PENDING_RETRY_COMPETITORS);
+    } finally {
+      setLoadingPending(false);
     }
-    setMsg(summaries.join(" | "));
-    setLoadingSource(null);
-    setLoadingPending(false);
-    router.refresh();
   }
 
   async function refreshAll() {
@@ -424,20 +469,11 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, canR
       ? ["meta_ads", "linkedin_ads", "google_ads"]
       : ["meta_ads"];
     setLoadingAll(true);
-    setMsg(null);
-    const summaries: string[] = [];
-    for (const source of sources) {
-      setLoadingSource(source);
-      try {
-        summaries.push(`${SOURCE_LABEL[source]}: ${await fetchSourceRefresh(source)}`);
-      } catch (e) {
-        summaries.push(`${SOURCE_LABEL[source]}: ${e instanceof Error ? e.message : "error"}`);
-      }
+    try {
+      await runPaidRefresh(sources);
+    } finally {
+      setLoadingAll(false);
     }
-    setMsg(summaries.join(" | "));
-    setLoadingSource(null);
-    setLoadingAll(false);
-    router.refresh();
   }
 
   type OrganicJobResult = {
