@@ -42,6 +42,11 @@ FROM node:24-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+# El dashboard carga ~195k filas en memoria y las serializa al cliente para el
+# drill-down (peor caso: filtro "solo validadas" OFF). El default de V8 (~2GB)
+# se quedaba corto -> "Reached heap limit" y crash-loop. Subimos el límite; hay
+# RAM física de sobra (el error era de V8, no del kernel).
+ENV NODE_OPTIONS="--max-old-space-size=4096"
 
 RUN apk add --no-cache ffmpeg
 
