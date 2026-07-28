@@ -20,9 +20,19 @@ type Props = {
   filteredRows: InsightRow[];
 };
 
+function formatPeriod(start: string | null, end: string | null): string {
+  const fmt = (v: string | null) => {
+    if (!v) return "—";
+    const [y, m, d] = v.slice(0, 10).split("-");
+    return d && m && y ? `${d}/${m}/${y}` : v;
+  };
+  if (!start && !end) return "—";
+  return `${fmt(start)} - ${fmt(end)}`;
+}
 
 export function ExecutiveSummaryView({ data, filteredRows }: Props) {
   const t = useTranslations("executiveSummary");
+  const tc = useTranslations("common");
   const { open: drill } = useDrillDown();
   const {
     kpis,
@@ -43,21 +53,11 @@ export function ExecutiveSummaryView({ data, filteredRows }: Props) {
         subtitle={t("subtitle")}
       />
 
-      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-        <MetricCard
-          label={t("insightsPerCall")}
-          value={kpis.insightsPerCall}
-          caption={t("insightsPerCallCaption")}
-        />
+      <section className="grid gap-3 md:grid-cols-3">
         <MetricCard
           label={t("transcripts")}
           value={kpis.totalCalls.toLocaleString()}
           caption={t("transcriptsCaption")}
-        />
-        <MetricCard
-          label={t("dealsMatched")}
-          value={kpis.dealsMatched.toLocaleString()}
-          caption={t("dealsMatchedCaption")}
         />
         <MetricCard
           label={t("revenueTotal")}
@@ -65,9 +65,10 @@ export function ExecutiveSummaryView({ data, filteredRows }: Props) {
           caption={t("revenueTotalCaption")}
         />
         <MetricCard
-          label={t("callsWithInsights")}
-          value={`${kpis.callsWithInsights}%`}
-          caption={t("callsWithInsightsCaption")}
+          label={tc("period")}
+          value={formatPeriod(kpis.periodStart, kpis.periodEnd)}
+          caption="según filtros aplicados"
+          valueClassName="text-[24px]"
         />
       </section>
 

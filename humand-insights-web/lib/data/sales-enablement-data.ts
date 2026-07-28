@@ -3,7 +3,6 @@ import {
   buildHeatMap,
   distinctCount,
   filterByType,
-  groupDistinctTranscripts,
   stackBy,
 } from "@/lib/data/dashboard-aggregations";
 import { formatCurrency, uniqueDealsRevenue } from "@/lib/data/computations";
@@ -49,6 +48,7 @@ export type SalesEnablementData = {
   kpis: {
     totalFricciones: number;
     affectedDeals: number;
+    affectedDealsPct: string;
     revenueAtRisk: number;
     frictionsPerDeal: string;
   };
@@ -92,7 +92,7 @@ export function buildSalesEnablementData(
   if (frictions.length === 0 && faqs.length === 0) {
     return {
       isEmpty: true,
-      kpis: { totalFricciones: 0, affectedDeals: 0, revenueAtRisk: 0, frictionsPerDeal: "0.0" },
+      kpis: { totalFricciones: 0, affectedDeals: 0, affectedDealsPct: "0.0", revenueAtRisk: 0, frictionsPerDeal: "0.0" },
       topFrictionTypes: [],
       top2Friction: [],
       frictionSegment: { data: [], stackKeys: [] },
@@ -107,6 +107,9 @@ export function buildSalesEnablementData(
 
   const totalFricciones = frictions.length;
   const affectedDeals = distinctCount(frictions, "deal_id");
+  // % de los deals del set filtrado (no del total) que tienen alguna fricción.
+  const dealsInSet = distinctCount(filteredRows, "deal_id");
+  const affectedDealsPct = dealsInSet > 0 ? ((affectedDeals / dealsInSet) * 100).toFixed(1) : "0.0";
   const revenueAtRisk = uniqueDealsRevenue(frictions);
   const frictionsPerDeal = affectedDeals > 0 ? (totalFricciones / affectedDeals).toFixed(1) : "0.0";
 
@@ -245,7 +248,7 @@ export function buildSalesEnablementData(
 
   return {
     isEmpty: frictions.length === 0,
-    kpis: { totalFricciones, affectedDeals, revenueAtRisk, frictionsPerDeal },
+    kpis: { totalFricciones, affectedDeals, affectedDealsPct, revenueAtRisk, frictionsPerDeal },
     topFrictionTypes,
     top2Friction,
     frictionSegment: stackBy(frictions, "insight_subtype_display", "segment", 12, 6),

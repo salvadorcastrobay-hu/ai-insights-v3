@@ -2,15 +2,15 @@ import { applyFilters, type Filters } from "@/lib/data/filters";
 import {
   buildHeatMap,
   filterByType,
-  stackBy,
+  groupDistinctTranscripts,
 } from "@/lib/data/dashboard-aggregations";
 import { formatCurrency } from "@/lib/data/computations";
 import {
   rpcCompetitorsByCountry,
+  rpcGroupDistinct,
   rpcHeatmap,
   rpcPainRegionPct,
   rpcPipelineGrid,
-  rpcStack,
 } from "@/lib/data/rpc";
 import type { InsightRow } from "@/lib/supabase/types";
 
@@ -58,7 +58,7 @@ export type PainRegionPctRow = {
 };
 
 export type RegionalGtmData = {
-  countryInsight: StackData;
+  demosByCountry: NameValue[];
   painRegionHeatPct: {
     rowLabels: string[];
     colLabels: string[];
@@ -273,7 +273,7 @@ export function buildRegionalGtmData(
   const competitorCountries = [...new Set(competitorsByCountry.map((r) => r.country))].sort();
 
   return {
-    countryInsight: stackBy(filteredRows, "country", "insight_type_display", 15, 8),
+    demosByCountry: groupDistinctTranscripts(filteredRows, "country", 15),
     painRegionHeatPct: {
       rowLabels: painRegionPains,
       colLabels: painRegionRegions,
@@ -307,8 +307,8 @@ const OFFICIAL_REGION_ORDER = ["HISPAM", "Brazil", "EMEA", "ANGLO AMERICA", "APA
  * desde Postgres (MV normalizada) sin cargar las ~150K filas a Node.
  */
 export async function buildRegionalGtmDataRpc(filters: Filters): Promise<RegionalGtmData> {
-  const [countryInsight, moduleRegionHeat, gridRows, painRows, compRows] = await Promise.all([
-    rpcStack(filters, "country", "insight_type_display", { n: 15, topStackN: 8 }),
+  const [demosByCountry, moduleRegionHeat, gridRows, painRows, compRows] = await Promise.all([
+    rpcGroupDistinct(filters, "country", { n: 15 }),
     rpcHeatmap(filters, "module_display", "region", { nRows: 15, nCols: 8 }),
     rpcPipelineGrid(filters),
     rpcPainRegionPct(filters),
@@ -398,7 +398,7 @@ export async function buildRegionalGtmDataRpc(filters: Filters): Promise<Regiona
   const competitorCountries = [...new Set(competitorsByCountry.map((r) => r.country))].sort();
 
   return {
-    countryInsight,
+    demosByCountry,
     painRegionHeatPct: { rowLabels: painList, colLabels: painRegions, values, absolute },
     moduleRegionHeat,
     pipelineKpis: {

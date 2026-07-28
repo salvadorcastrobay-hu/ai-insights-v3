@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 
 import { ChartCard } from "@/components/charts/ChartCard";
 import { HeatMap } from "@/components/charts/HeatMap";
-import { StackedBarChart } from "@/components/charts/StackedBar";
+import { HorizontalBarChart } from "@/components/charts/BarChart";
 import { MetricCard } from "@/components/layout/MetricCard";
 import { SectionHeader } from "@/components/layout/SectionHeader";
 import { PageTitle } from "@/components/pages/common";
@@ -17,7 +17,7 @@ type Props = { data: RegionalGtmData };
 export function RegionalGtmView({ data }: Props) {
   const t = useTranslations("regionalGtm");
   const {
-    countryInsight,
+    demosByCountry,
     painRegionHeatPct,
     moduleRegionHeat,
     pipelineKpis,
@@ -94,11 +94,9 @@ export function RegionalGtmView({ data }: Props) {
         description={t("sectionBDesc")}
       />
       <ChartCard title={t("countryInsightType")}>
-        <StackedBarChart
-          data={countryInsight.data}
-          yKey="name"
-          stackKeys={countryInsight.stackKeys}
-          height={Math.max(480, countryInsight.data.length * 34)}
+        <HorizontalBarChart
+          data={demosByCountry}
+          height={Math.max(300, demosByCountry.length * 34)}
         />
       </ChartCard>
 

@@ -36,15 +36,13 @@ export function SalesEnablementView({ data, filteredRows }: Props) {
     <div className="space-y-6">
       <PageTitle title="Sales Enablement" />
 
-      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label={t("totalFrictions")} value={kpis.totalFricciones} />
-        <MetricCard label={t("affectedDeals")} value={kpis.affectedDeals} />
-        <MetricCard label={t("revenueAtRisk")} value={formatCurrency(kpis.revenueAtRisk)} />
+      <section className="grid gap-3 md:grid-cols-2">
         <MetricCard
-          label={t("frictionPerDeal")}
-          value={kpis.frictionsPerDeal}
-          caption={t("frictionPerDealCaption")}
+          label={t("affectedDeals")}
+          value={kpis.affectedDeals}
+          caption={`${kpis.affectedDealsPct}% de los deals del set`}
         />
+        <MetricCard label={t("revenueAtRisk")} value={formatCurrency(kpis.revenueAtRisk)} />
       </section>
 
       <SectionHeader

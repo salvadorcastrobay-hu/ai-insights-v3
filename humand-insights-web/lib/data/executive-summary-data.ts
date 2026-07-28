@@ -44,6 +44,8 @@ export type ExecutiveSummaryData = {
     dealsMatched: number;
     revenue: number;
     callsWithInsights: string;
+    periodStart: string | null;
+    periodEnd: string | null;
   };
   composition: {
     byIndustry: GroupPoint[];
@@ -283,6 +285,14 @@ export function buildExecutiveSummaryData(
   const callsWithInsights =
     totalTranscripts > 0 ? ((totalCalls / totalTranscripts) * 100).toFixed(1) : "0.0";
 
+  // Rango de fechas del set filtrado (call_date es ISO → orden lexicográfico OK).
+  const callDates = filteredRows
+    .map((r) => r.call_date)
+    .filter((d): d is string => Boolean(d))
+    .sort();
+  const periodStart = callDates[0] ?? null;
+  const periodEnd = callDates[callDates.length - 1] ?? null;
+
   const painRows = filterByType(filteredRows, "pain");
   const gaps = filterByType(filteredRows, "product_gap");
   // "Competidores mencionados": cuenta menciones de competidores en TODOS los
@@ -319,6 +329,8 @@ export function buildExecutiveSummaryData(
       dealsMatched,
       revenue,
       callsWithInsights,
+      periodStart,
+      periodEnd,
     },
     composition: {
       byIndustry: groupDistinctTranscripts(filteredRows, "industry", 15),
@@ -471,6 +483,10 @@ export async function buildExecutiveSummaryDataRpc(
       dealsMatched: kpis.deals_matched,
       revenue: kpis.revenue,
       callsWithInsights: t > 0 ? ((kpis.total_calls / t) * 100).toFixed(1) : "0.0",
+      // Variante RPC no usada por la page (esta usa el builder JS); el período
+      // no se computa acá para no sumar una query extra.
+      periodStart: null,
+      periodEnd: null,
     },
     composition: { byIndustry, bySegment, byCountry },
     insightTypes,

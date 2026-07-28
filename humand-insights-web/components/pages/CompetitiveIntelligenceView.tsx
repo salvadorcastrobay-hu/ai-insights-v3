@@ -48,12 +48,7 @@ export function CompetitiveIntelligenceView({ data, filteredRows }: Props) {
     <div className="space-y-6">
       <PageTitle title={t("title")} />
 
-      <section className="grid gap-3 md:grid-cols-3">
-        <MetricCard
-          label={t("relevantCompetitors")}
-          value={kpis.relevantCompetitors}
-          caption={t("relevantCompetitorsCaption")}
-        />
+      <section className="grid gap-3 md:grid-cols-2">
         <MetricCard
           label={t("dealsWithSignal")}
           value={kpis.dealsWithSignal}

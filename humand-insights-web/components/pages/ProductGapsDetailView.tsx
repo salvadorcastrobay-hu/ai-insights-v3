@@ -7,7 +7,6 @@ import { HorizontalBarChart } from "@/components/charts/BarChart";
 import { HeatMap } from "@/components/charts/HeatMap";
 import { StackedBarChart } from "@/components/charts/StackedBar";
 import { useDrillDown } from "@/components/drill-down/DrillDownProvider";
-import { MetricCard } from "@/components/layout/MetricCard";
 import { SectionHeader } from "@/components/layout/SectionHeader";
 import { PageTitle } from "@/components/pages/common";
 import { ConfidenceBadge } from "@/components/ui/ConfidenceBadge";
@@ -31,14 +30,12 @@ export function ProductGapsDetailView({ data, filteredRows }: Props) {
   const tl = useTaxonomyLabel();
   const { open: drill } = useDrillDown();
   const {
-    kpis,
     topFeatures,
     prioritySummary,
     segmentPriority,
     featureSegmentHeatmap,
     moduleStatus,
     existingModulePct,
-    roadmapStatus,
     priorityLabelByKey,
     gapTableRows,
   } = data;
@@ -90,24 +87,6 @@ export function ProductGapsDetailView({ data, filteredRows }: Props) {
   return (
     <div className="space-y-6">
       <PageTitle title={t("title")} subtitle={t("subtitle")} />
-
-      <section className="grid gap-3 md:grid-cols-3">
-        <MetricCard
-          label={t("totalDetections")}
-          value={kpis.total}
-          caption={t("kpisCaption", { deals: kpis.distinctDeals, perDemo: kpis.perDemo })}
-        />
-        <MetricCard
-          label={t("inTaxonomy")}
-          value={kpis.inTaxonomy}
-          caption={t("inTaxonomyCaption")}
-        />
-        <MetricCard
-          label={t("newFeatures")}
-          value={kpis.newFeatures}
-          caption={t("newFeaturesCaption")}
-        />
-      </section>
 
       <SectionHeader
         title={t("topFeaturesTitle")}
@@ -221,22 +200,6 @@ export function ProductGapsDetailView({ data, filteredRows }: Props) {
           <HorizontalBarChart
             data={moduleStatus.map((r) => ({ name: `${r.name} (${r.pct}%)`, value: r.value }))}
             height={Math.max(200, moduleStatus.length * 60)}
-            multicolor
-          />
-        )}
-      </ChartCard>
-
-      <SectionHeader
-        title={t("roadmapStatusTitle")}
-        description={t("roadmapStatusDesc")}
-      />
-      <ChartCard>
-        {roadmapStatus.length === 0 ? (
-          <p className="text-[13px] text-[var(--color-text-secondary)]">{t("noModuleStatus")}</p>
-        ) : (
-          <HorizontalBarChart
-            data={roadmapStatus.map((r) => ({ name: `${r.name} (${r.pct}%)`, value: r.value }))}
-            height={Math.max(200, roadmapStatus.length * 60)}
             multicolor
           />
         )}

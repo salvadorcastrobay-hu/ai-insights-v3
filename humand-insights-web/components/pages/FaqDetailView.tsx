@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 
 import { ChartCard } from "@/components/charts/ChartCard";
 import { HorizontalBarChart } from "@/components/charts/BarChart";
-import { MetricCard } from "@/components/layout/MetricCard";
 import { PageTitle } from "@/components/pages/common";
 import { ConfidenceBadge } from "@/components/ui/ConfidenceBadge";
 import { Input } from "@/components/ui/input";
@@ -18,7 +17,7 @@ type Props = { data: FaqDetailData; filteredRows: import("@/lib/supabase/types")
 export function FaqDetailView({ data, filteredRows }: Props) {
   const t = useTranslations("faq");
   const tl = useTaxonomyLabel();
-  const { kpis, topicCounts, topics, topQuestionsByTopic, faqTableRows } = data;
+  const { topicCounts, topics, topQuestionsByTopic, faqTableRows } = data;
 
   const [topic, setTopic] = useState(topics[0] ?? "");
   const [search, setSearch] = useState("");
@@ -40,15 +39,6 @@ export function FaqDetailView({ data, filteredRows }: Props) {
     <div className="space-y-6">
       <PageTitle title={t("title")} subtitle={t("subtitle")} />
 
-      <section className="grid gap-3 md:grid-cols-3">
-        <MetricCard label={t("total")} value={kpis.totalFaqs} caption={t("totalCaption")} />
-        <MetricCard label={t("uniqueTopics")} value={kpis.uniqueTopics} caption={t("uniqueTopicsCaption")} />
-        <MetricCard
-          label={t("perDemo")}
-          value={kpis.questionsPerDemo}
-          caption={t("perDemoCaption")}
-        />
-      </section>
 
       <p className="text-[12px] text-[var(--color-text-secondary)]">
         {t("highVolumeDesc")}
