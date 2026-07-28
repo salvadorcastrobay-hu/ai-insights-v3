@@ -46,7 +46,7 @@ export default async function Page({ searchParams }: PageProps) {
 
   return (
     <>
-      <OverviewView data={data} coveragePct={coveragePct} validated={validated} />
+      <OverviewView data={data} validated={validated} />
       <DataQualityFooter stats={stats} pageLabel="Overview" />
     </>
   );

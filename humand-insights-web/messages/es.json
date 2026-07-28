@@ -60,7 +60,7 @@
     "mainPains": "Pains principales",
     "mainPainsCaption": "% de demos donde se mencionó",
     "faqs": "Preguntas frecuentes",
-    "faqsCaption": "por cantidad de demos",
+    "faqsCaption": "% de demos donde se mencionó",
     "winRateByPain": "Win-rate por pain",
     "winRateDesc": "De los deals cerrados donde apareció cada pain, qué % ganamos. Comparado con el win-rate general ({baseline}%): por encima 🟢 = ese dolor acompaña deals que cerramos · por debajo 🔴 = ojo.",
     "winRateColPain": "Pain",

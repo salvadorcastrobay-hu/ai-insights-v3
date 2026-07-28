@@ -60,7 +60,7 @@ export type OverviewData = {
     competitorRisers: ShareMover[]; // competidores cuyo share de menciones creció
   };
   topPains: NameValuePct[];
-  topFaqs: NameValue[];
+  topFaqs: NameValuePct[];
   topIndustries: NameValue[];
   topSegments: NameValue[];
   wonLostPains: WonLostPain[];
@@ -235,6 +235,14 @@ export async function buildOverviewData(filters: Filters): Promise<OverviewData>
     pct: callsBasis > 0 ? Math.round((p.value / callsBasis) * 1000) / 10 : 0,
   }));
 
+  // FAQs con el mismo criterio que pains: % de demos donde se mencionó
+  // (demos distintas con esa FAQ / demos analizadas), no el conteo crudo.
+  const topFaqsPct: NameValuePct[] = topFaqs.map((f) => ({
+    name: f.name,
+    value: f.value,
+    pct: callsBasis > 0 ? Math.round((f.value / callsBasis) * 1000) / 10 : 0,
+  }));
+
   const curTotal = curStats?.unique_calls ?? 0;
   const baseTotal = baseStats?.unique_calls ?? 0;
 
@@ -299,7 +307,7 @@ export async function buildOverviewData(filters: Filters): Promise<OverviewData>
       competitorRisers,
     },
     topPains: topPainsPct,
-    topFaqs,
+    topFaqs: topFaqsPct,
     topIndustries,
     topSegments,
     wonLostPains,

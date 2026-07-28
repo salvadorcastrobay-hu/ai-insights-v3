@@ -11,7 +11,6 @@ import type { OverviewData } from "@/lib/data/overview-data";
 
 type Props = {
   data: OverviewData;
-  coveragePct: number;
   validated: boolean;
 };
 
@@ -50,7 +49,7 @@ function DeltaBadge({ deltaPct }: { deltaPct: number | null }) {
   );
 }
 
-export function OverviewView({ data, coveragePct, validated }: Props) {
+export function OverviewView({ data, validated }: Props) {
   const t = useTranslations("overview");
   const tc = useTranslations("common");
   const { kpis, recap, topPains, topFaqs, topIndustries, topSegments, wonLostPains, winRateBaseline } = data;
@@ -163,9 +162,8 @@ export function OverviewView({ data, coveragePct, validated }: Props) {
       </section>
 
       {/* KPIs */}
-      <section className="grid gap-3 md:grid-cols-3">
-        <MetricCard label={t("analyzedCalls")} value={fmt(kpis.uniqueCalls)} caption={t("coveragePct", { pct: coveragePct.toFixed(1) })} />
-        <MetricCard label={tc("deals")} value={fmt(kpis.uniqueDeals)} caption={t("dealsWithInsight")} />
+      <section className="grid gap-3 md:grid-cols-2">
+        <MetricCard label={t("analyzedCalls")} value={fmt(kpis.uniqueCalls)} />
         <MetricCard
           label={tc("period")}
           value={formatPeriod(kpis.periodStart, kpis.periodEnd)}
@@ -202,7 +200,26 @@ export function OverviewView({ data, coveragePct, validated }: Props) {
 
         <ChartCard title={t("faqs")}>
           <p className="mb-2 text-[12px] text-[var(--color-text-secondary)]">{t("faqsCaption")}</p>
-          <TopList rows={topFaqs} />
+          <div className="space-y-2.5">
+            {topFaqs.length === 0 ? (
+              <p className="text-[13px] text-[var(--color-text-secondary)]">{t("noData")}</p>
+            ) : (
+              topFaqs.map((f) => (
+                <div key={f.name} className="grid grid-cols-[1fr_auto] items-center gap-3">
+                  <div className="min-w-0">
+                    <div className="mb-1 truncate text-[13px]">{f.name}</div>
+                    <div className="h-[7px] overflow-hidden rounded-full bg-[var(--color-neutral-100)]">
+                      <div
+                        className="h-full rounded-full bg-[var(--color-brand-500)]"
+                        style={{ width: `${Math.min(f.pct, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                  <span className="text-[13px] font-semibold tabular-nums">{f.pct.toFixed(1)}%</span>
+                </div>
+              ))
+            )}
+          </div>
         </ChartCard>
       </section>
 
