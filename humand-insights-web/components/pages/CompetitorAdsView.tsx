@@ -739,7 +739,7 @@ export function CompetitorAdsView({ ads, insights, refreshedAt, canRefresh, canR
                       : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-default)]",
                   )}
                 >
-                  {tab === "inteligencia" ? "Inteligencia" : tab === "organico" ? "Orgánico" : "Creativos"}
+                  {tab === "inteligencia" ? "Paid" : tab === "organico" ? "Orgánico" : "Creativos"}
                 </button>
               ))}
             </div>

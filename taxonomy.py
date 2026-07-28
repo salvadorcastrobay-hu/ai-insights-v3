@@ -659,6 +659,10 @@ def _competitor_key(text: str) -> str:
 def normalize_competitor(name: str) -> str | None:
     """Try to match a competitor name case-insensitively."""
     lower = name.lower().strip()
+    # "unknown"/vacío = ningún competidor identificado -> None (no ensucia los
+    # charts de competidores; el insight igual queda con su summary/quote).
+    if lower in ("", "unknown", "desconocido", "n/a", "none", "null"):
+        return None
     if lower in COMPETITOR_ALIASES:
         return COMPETITOR_ALIASES[lower]
     for canonical in COMPETITORS:

@@ -21,7 +21,7 @@
       "Chat con IA": "Chat con IA",
       "Glosario": "Glosario",
       "Campaign Advisor": "Campaign Advisor",
-      "Ads de Competidores": "Ads de Competidores"
+      "Ads de Competidores": "Monitoreo de Competidores"
     },
     "signout": "Cerrar sesión",
     "guest": "Invitado"
@@ -236,7 +236,7 @@
     "battleCardsDesc": "Top 5 preguntas por topic, priorizadas por frecuencia. Base para preparar respuestas antes de la próxima demo."
   },
   "competitorAds": {
-    "title": "Ads de Competidores",
+    "title": "Monitoreo de Competidores",
     "subtitle": "Qué están comunicando los competidores en sus avisos (Meta, LinkedIn, Google Ads). Análisis on-demand.",
     "refreshAll": "Actualizar todo",
     "refreshingAll": "Actualizando todo…",
