@@ -66,10 +66,21 @@ export function FaqDetailView({ data, filteredRows }: Props) {
           <p className="mb-2 text-[12px] text-[var(--color-text-secondary)]">
             {t("topByTopicDesc")}
           </p>
-          <select className="mb-2 rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] p-2" value={topic} onChange={(e) => setTopic(e.target.value)}>
+          <select className="mb-3 rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] p-2" value={topic} onChange={(e) => setTopic(e.target.value)}>
             {topics.map((option) => (<option key={option} value={option}>{tl(option)}</option>))}
           </select>
-          <HorizontalBarChart data={topQuestions} height={380} />
+          <ol className="space-y-2.5 text-[13px]">
+            {topQuestions.length === 0 ? (
+              <li className="text-[var(--color-text-secondary)]">{t("noQuestions")}</li>
+            ) : (
+              topQuestions.slice(0, 5).map((q, i) => (
+                <li key={i} className="flex gap-2">
+                  <span className="font-semibold text-[var(--color-brand-500)]">{i + 1}.</span>
+                  <span>{q.name}</span>
+                </li>
+              ))
+            )}
+          </ol>
         </ChartCard>
       </section>
 
