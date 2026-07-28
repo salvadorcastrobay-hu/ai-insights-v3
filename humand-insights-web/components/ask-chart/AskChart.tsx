@@ -116,12 +116,17 @@ function countActiveFilters(f: Record<string, unknown>): number {
 
 // Pages where the floating "Preguntar" launcher is irrelevant — tools that
 // have their own input surface or don't operate on dashboard data.
-const HIDE_LAUNCHER_PATHS = ["/sql-chat", "/campaign-advisor", "/custom-dashboards", "/glossary"];
+const HIDE_LAUNCHER_PATHS = ["/sql-chat", "/campaign-advisor", "/custom-dashboards", "/glossary", "/competitor-ads"];
+
+// Páginas donde "Preguntar" no aplica: sin botón flotante y sin atajo ⌘K.
+function askHiddenOn(pathname: string): boolean {
+  return HIDE_LAUNCHER_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"));
+}
 
 export function AskChartLauncher() {
   const { openGeneric } = useAskChart();
   const pathname = usePathname() ?? "";
-  if (HIDE_LAUNCHER_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
+  if (askHiddenOn(pathname)) {
     return null;
   }
   return (
@@ -176,6 +181,8 @@ export function AskChartSheet() {
         return;
       }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        // No aplica en páginas donde "Preguntar" está oculto.
+        if (askHiddenOn(pathname ?? "")) return;
         // Don't hijack the shortcut while typing into a form field.
         const target = e.target as HTMLElement | null;
         const tag = target?.tagName?.toLowerCase();
@@ -187,7 +194,7 @@ export function AskChartSheet() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [isOpen, close, openGeneric]);
+  }, [isOpen, close, openGeneric, pathname]);
 
   const send = useCallback(
     async (questionArg?: string) => {
