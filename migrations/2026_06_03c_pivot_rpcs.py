@@ -118,8 +118,11 @@ BEGIN
               AND (NOT $3 OR t.is_own_brand = false)
         ),
         y_order AS (
-            SELECT yv, ROW_NUMBER() OVER (ORDER BY COUNT(DISTINCT transcript_id) DESC, yv ASC) rn
-            FROM base WHERE yv IS NOT NULL GROUP BY yv
+            -- Ordenar por el mismo COUNT(*) raw que dibuja la barra (solo filas
+            -- que se apilan, sv NOT NULL) y NO por transcripts distintos, si no
+            -- el orden del eje Y no coincide con el largo visible de las barras.
+            SELECT yv, ROW_NUMBER() OVER (ORDER BY COUNT(*) DESC, yv ASC) rn
+            FROM base WHERE yv IS NOT NULL AND sv IS NOT NULL GROUP BY yv
         ),
         ysel AS (SELECT yv, rn FROM y_order WHERE rn <= $4),
         stack_rows AS (
