@@ -239,10 +239,6 @@ export function FilterControls({
         max={options.date_max}
         onChange={(next) => setFilters({ date_end: next })}
       />
-      <ConfidenceToggle
-        value={filters.min_confidence}
-        onChange={(next) => setFilters({ min_confidence: next })}
-      />
       <BoolToggle
         active={!!filters.clients}
         label={t("onlyClients")}
@@ -289,40 +285,6 @@ function BoolToggle({
         onChange={(e) => onChange(e.target.checked)}
       />
       <span className="font-medium">{label}</span>
-    </label>
-  );
-}
-
-/**
- * Toggle "Solo alta confianza (≥0.7)". Al activarse setea min_confidence=0.7,
- * al desactivarse vuelve a null (sin filtro).
- */
-function ConfidenceToggle({
-  value,
-  onChange,
-}: {
-  value: number | null;
-  onChange: (next: number | null) => void;
-}) {
-  const t = useTranslations("globalFilter");
-  const active = value != null && value > 0;
-  return (
-    <label
-      className={cn(
-        "flex cursor-pointer items-center gap-2 rounded-[var(--radius-s)] border px-2 py-2 text-[12px] transition",
-        active
-          ? "border-[var(--color-brand-400)] bg-[var(--color-brand-50)] text-[var(--color-brand-500)]"
-          : "border-[var(--color-neutral-200)] bg-[var(--color-bg-card)] text-[var(--color-text-secondary)] hover:border-[var(--color-neutral-300)]",
-      )}
-      title={t("highConfidenceTitle")}
-    >
-      <input
-        type="checkbox"
-        className="h-3.5 w-3.5"
-        checked={active}
-        onChange={(e) => onChange(e.target.checked ? 0.7 : null)}
-      />
-      <span className="font-medium">{t("highConfidence")}</span>
     </label>
   );
 }
