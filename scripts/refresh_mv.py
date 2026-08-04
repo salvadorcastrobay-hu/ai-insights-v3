@@ -13,8 +13,15 @@ Reglas aprendidas:
 
 from __future__ import annotations
 
+import os
 import sys
 import time
+
+# scripts/ no es el root: al correr `python scripts/refresh_mv.py`, sys.path[0]
+# es scripts/ y `import config` (en la raiz) falla en un entorno limpio como el
+# de GitHub Actions. Mismo patron que el resto de scripts/.
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT)
 
 import config
 import psycopg2
