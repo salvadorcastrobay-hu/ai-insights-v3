@@ -1,0 +1,289 @@
+"""
+Fase 0.5 del AE Playbook: pack de FAQs con los datos que YA estan extraidos.
+Read-only sobre la DB — solo escribe archivos en artifacts/.
+
+No necesita la pasada AE-side: los insights `faq` ya traen la pregunta textual del
+lead en `verbatim_quote` y, cuando el AE la contesto explicito, la respuesta en
+`faq_answer`. Lo que falta es canonicalizar: hoy el dashboard agrupa por topic de
+taxonomia y por `summary`, y por eso solo se ven "temas generales" en vez de
+preguntas concretas con sus respuestas.
+
+Sirve para validar el FORMATO del entregable con Sales antes de gastar en la
+extraccion AE-side completa.
+
+Como agrupa: embeddings (text-embedding-3-large, igual que embed_transcripts.py)
+dentro de cada topic de la taxonomia. Dentro del topic porque el topic ya es una
+particion buena y barata, y limita que se mezclen preguntas de precio con las de
+seguridad por parecido superficial.
+
+Usage:
+    source .venv/bin/activate
+    python scripts/ae_faq_pack.py                          # HISPAM, todas las demos
+    python scripts/ae_faq_pack.py --validated-only         # solo demos exitosas
+    python scripts/ae_faq_pack.py --min-cluster 3 --synthesize
+    python scripts/ae_faq_pack.py --no-embeddings          # fallback lexico, sin costo
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import sys
+from datetime import datetime
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT)
+
+from src.skills.faq_clustering import cluster_by_tokens, cluster_by_vectors  # noqa: E402
+from src.skills.market_filters import build_region_filter_clause  # noqa: E402
+from taxonomy import FAQ_SUBTYPES  # noqa: E402
+
+# config y psycopg2 se importan dentro de main(): config.py exige variables de
+# entorno al importarse, y asi `--help` funciona sin .env.
+
+ARTIFACTS = os.path.join(ROOT, "artifacts")
+EMBEDDING_MODEL = "text-embedding-3-large"
+EMBEDDING_DIMENSIONS = 2000
+EMBED_BATCH = 100
+SYNTH_MODEL = "gpt-4o"
+
+
+def fetch_faqs(cur, region: str, validated_only: bool, since: str | None) -> list[dict]:
+    """FAQs con la pregunta textual del lead.
+
+    Join MV + transcript_insights porque la MV solo trae los `*_display` y no
+    `verbatim_quote` ni `insight_subtype`. La MV aporta region/country ya
+    normalizados, `is_validated`, y el recorte a la prompt_version activa (v3.2),
+    asi que arrancar por ella evita contar versiones viejas del prompt.
+    """
+    clauses = ["m.insight_type = 'faq'", "NULLIF(TRIM(i.verbatim_quote), '') IS NOT NULL"]
+    params: list = []
+    if region != "all":
+        rc, rp = build_region_filter_clause("m.region", region)
+        if rc:
+            clauses.append(rc)
+            params.extend(rp)
+    if validated_only:
+        clauses.append("m.is_validated = true")
+    if since:
+        clauses.append("m.call_date >= %s")
+        params.append(since)
+
+    cur.execute(
+        f"""
+        SELECT i.insight_subtype, i.verbatim_quote, m.faq_answer, i.summary,
+               m.company_name, m.country, m.segment, m.deal_owner, m.deal_stage,
+               m.is_validated, m.transcript_id, m.confidence
+        FROM mv_insights_norm m
+        JOIN transcript_insights i ON i.id = m.id
+        WHERE {' AND '.join(clauses)}
+        ORDER BY m.call_date DESC NULLS LAST
+        """,
+        params,
+    )
+    cols = [d[0] for d in cur.description]
+    return [dict(zip(cols, r)) for r in cur.fetchall()]
+
+
+def embed(texts: list[str]) -> list[list[float]]:
+    import config
+    from openai import OpenAI
+
+    client = OpenAI(api_key=config.OPENAI_API_KEY)
+    out: list[list[float]] = []
+    for i in range(0, len(texts), EMBED_BATCH):
+        batch = texts[i:i + EMBED_BATCH]
+        resp = client.embeddings.create(
+            model=EMBEDDING_MODEL, dimensions=EMBEDDING_DIMENSIONS, input=batch
+        )
+        out.extend(d.embedding for d in resp.data)
+        print(f"  embeddings {min(i + EMBED_BATCH, len(texts))}/{len(texts)}")
+    return out
+
+
+def redact(text: str | None, company: str | None) -> str:
+    """Saca el nombre de la empresa de la cita.
+
+    El pack lo va a consumir un bot que le habla a leads: no puede filtrarse el
+    nombre de otro cliente. Se saca por reemplazo directo, no se confia en el LLM.
+    """
+    s = text or ""
+    if company and len(company) > 3:
+        s = re.sub(re.escape(company), "[cliente]", s, flags=re.IGNORECASE)
+    return s.strip()
+
+
+def synthesize_answer(client, topic: str, question: str, answers: list[str]) -> str:
+    """Una respuesta recomendada a partir de como contestaron los AEs.
+
+    Explicitamente NO se le permite agregar informacion: solo consolidar. Si los
+    AEs se contradicen, tiene que decirlo en vez de elegir.
+    """
+    resp = client.chat.completions.create(
+        model=SYNTH_MODEL,
+        temperature=0,
+        messages=[
+            {"role": "system", "content":
+             "Sos analista de sales enablement en Humand. Te doy una pregunta frecuente de "
+             "prospectos y como la contestaron distintos AEs en llamadas reales. Escribi UNA "
+             "respuesta recomendada, en español rioplatense neutro, de 2 a 4 oraciones, apta "
+             "para que la use un bot de WhatsApp que califica leads.\n"
+             "Reglas estrictas:\n"
+             "- Solo podes usar informacion que aparezca en las respuestas de los AEs.\n"
+             "- Prohibido inventar precios, plazos, features, integraciones o numeros.\n"
+             "- Si los AEs se contradicen en algo, no elijas: escribi la parte en la que "
+             "coinciden y agrega al final 'REVISAR: los AEs responden distinto sobre X'.\n"
+             "- Si las respuestas no alcanzan para responder, devolve exactamente "
+             "'INSUFICIENTE'."},
+            {"role": "user", "content":
+             f"Topic: {topic}\nPregunta: {question}\n\nRespuestas de AEs:\n" +
+             "\n".join(f"- {a}" for a in answers[:8])},
+        ],
+    )
+    return (resp.choices[0].message.content or "").strip()
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description="Pack de FAQs desde los insights ya extraidos")
+    ap.add_argument("--region", default="HISPAM")
+    ap.add_argument("--validated-only", action="store_true",
+                    help="Solo demos con is_validated = true ('exitosas')")
+    ap.add_argument("--since", default=None, help="YYYY-MM-DD: acotar por fecha de llamada")
+    ap.add_argument("--min-cluster", type=int, default=2,
+                    help="Minimo de apariciones para que una pregunta entre al pack")
+    ap.add_argument("--no-embeddings", action="store_true",
+                    help="Agrupar con Jaccard en vez de embeddings (gratis, peor)")
+    ap.add_argument("--synthesize", action="store_true",
+                    help="Generar una respuesta recomendada por pregunta con gpt-4o")
+    args = ap.parse_args()
+
+    os.makedirs(ARTIFACTS, exist_ok=True)
+
+    import config  # noqa: E402
+    import psycopg2  # noqa: E402
+
+    params = config.get_db_connection_params()
+    conn = psycopg2.connect(**params, connect_timeout=15)
+    cur = conn.cursor()
+    cur.execute("SET TRANSACTION READ ONLY;")
+    cur.execute("SET statement_timeout = '120s';")
+    faqs = fetch_faqs(cur, args.region, args.validated_only, args.since)
+    conn.close()
+
+    if not faqs:
+        print("Sin FAQs para esos filtros.", file=sys.stderr)
+        return 1
+
+    con_answer = sum(1 for f in faqs if (f.get("faq_answer") or "").strip())
+    demos = len({f["transcript_id"] for f in faqs})
+    print(f"{len(faqs)} preguntas | {demos} demos | {con_answer} con respuesta del AE "
+          f"({100 * con_answer / len(faqs):.0f}%)")
+
+    # Agrupar dentro de cada topic de la taxonomia.
+    por_topic: dict[str, list[dict]] = {}
+    for f in faqs:
+        f["question"] = f["verbatim_quote"]
+        por_topic.setdefault(f["insight_subtype"] or "(sin topic)", []).append(f)
+
+    if not args.no_embeddings:
+        print("Generando embeddings de las preguntas...")
+        todos = [f["question"] for f in faqs]
+        vecs = embed(todos)
+        by_q = {id(f): v for f, v in zip(faqs, vecs)}
+
+    packs = []
+    for topic, items in sorted(por_topic.items(), key=lambda kv: -len(kv[1])):
+        if args.no_embeddings:
+            clusters = cluster_by_tokens(items)
+        else:
+            clusters = cluster_by_vectors(items, [by_q[id(i)] for i in items])
+        for c in clusters:
+            if c["size"] < args.min_cluster:
+                continue
+            miembros = c["items"]
+            answers = [redact(m.get("faq_answer"), m.get("company_name"))
+                       for m in miembros if (m.get("faq_answer") or "").strip()]
+            packs.append({
+                "topic": topic,
+                "topic_display": FAQ_SUBTYPES.get(topic, {}).get("display_name") or topic,
+                "question": c["canonical"],
+                "variants": c["variants"][:6],
+                "demos": len({m["transcript_id"] for m in miembros}),
+                "veces": c["size"],
+                "en_demos_validated": len({m["transcript_id"] for m in miembros if m.get("is_validated")}),
+                "answers": answers[:5],
+                "sin_respuesta": c["size"] - len(answers),
+                "paises": sorted({m["country"] for m in miembros if m.get("country")}),
+                "aes": sorted({m["deal_owner"] for m in miembros if m.get("deal_owner")}),
+            })
+
+    packs.sort(key=lambda p: (-p["demos"], -p["veces"]))
+    print(f"\n{len(packs)} preguntas canonicas con >= {args.min_cluster} apariciones")
+
+    if args.synthesize:
+        from openai import OpenAI
+        client = OpenAI(api_key=config.OPENAI_API_KEY)  # noqa: F821 — importado arriba en main
+        print(f"Sintetizando respuestas recomendadas con {SYNTH_MODEL}...")
+        for i, p in enumerate(packs, 1):
+            if not p["answers"]:
+                p["respuesta_recomendada"] = "SIN DATOS — ningun AE la contesto explicito"
+                continue
+            try:
+                p["respuesta_recomendada"] = synthesize_answer(
+                    client, p["topic_display"], p["question"], p["answers"])
+            except Exception as e:
+                p["respuesta_recomendada"] = f"ERROR: {type(e).__name__}"
+            if i % 10 == 0:
+                print(f"  {i}/{len(packs)}")
+
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    suf = "_validated" if args.validated_only else ""
+    json_path = os.path.join(ARTIFACTS, f"faq_pack_{args.region.lower().replace(' ', '')}{suf}_{ts}.json")
+    md_path = json_path.replace(".json", ".md")
+
+    with open(json_path, "w", encoding="utf-8") as f:
+        json.dump({
+            "region": args.region, "validated_only": args.validated_only, "since": args.since,
+            "preguntas_totales": len(faqs), "demos": demos,
+            "cobertura_respuesta": round(100 * con_answer / len(faqs), 1),
+            "agrupado": "tokens" if args.no_embeddings else EMBEDDING_MODEL,
+            "packs": packs,
+        }, f, ensure_ascii=False, indent=2)
+
+    with open(md_path, "w", encoding="utf-8") as f:
+        f.write(f"# FAQs de demos — {args.region}"
+                f"{' (solo demos exitosas)' if args.validated_only else ''}\n\n")
+        f.write(f"{len(faqs)} preguntas en {demos} demos · {100 * con_answer / len(faqs):.0f}% "
+                f"con respuesta del AE · {len(packs)} preguntas canonicas\n\n")
+        f.write("> Borrador generado automaticamente. Las respuestas son citas de AEs en "
+                "llamadas reales, sin validar por producto.\n")
+        actual = None
+        for p in packs:
+            if p["topic"] != actual:
+                f.write(f"\n---\n\n## {p['topic_display']}\n")
+                actual = p["topic"]
+            f.write(f"\n### {p['question']}\n\n")
+            f.write(f"`{p['demos']} demos` · `{p['veces']} veces`"
+                    f" · `{p['en_demos_validated']} en demos exitosas`"
+                    f"{' · ' + ', '.join(p['paises']) if p['paises'] else ''}\n\n")
+            if p.get("respuesta_recomendada"):
+                f.write(f"**Respuesta recomendada:** {p['respuesta_recomendada']}\n\n")
+            if p["variants"][1:]:
+                f.write("Como la preguntan:\n" + "".join(f"- _{v}_\n" for v in p["variants"][1:]) + "\n")
+            if p["answers"]:
+                f.write("Como la contestaron los AEs:\n")
+                for a in p["answers"]:
+                    f.write(f"- {a}\n")
+            else:
+                f.write("_Ningun AE la contesto explicito en los transcripts._\n")
+            if p["sin_respuesta"]:
+                f.write(f"\n<sub>{p['sin_respuesta']} apariciones quedaron sin respuesta registrada.</sub>\n")
+
+    print(f"\n  crudo:    {json_path}")
+    print(f"  legible:  {md_path}   ← esto es lo que se le manda a Dana para validar formato")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
