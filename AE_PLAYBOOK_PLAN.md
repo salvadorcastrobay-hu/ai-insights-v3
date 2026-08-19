@@ -134,15 +134,51 @@ prompt) y `artifacts/ae_test_<ts>.md` (legible, para que lo revise alguien de Sa
 
 **Si no pasa el gate, se itera el prompt. No se corre el batch.**
 
-### Fase 3 — Run completo (pendiente)
-Sobre HISPAM completo, reusando `batch_processor.py` (paralelismo + `content_hash` para
-idempotencia). Escribe en `ae_speech_units` con `is_literal`/`attribution` ya calculados.
+### Fase 3 — Run · `ae_parser.py` + `scripts/ae_extract_run.py`
+**No correr sin haber pasado el gate de la Fase 2.**
 
-### Fase 4 — Canonicalización (pendiente)
-Skills puras en `src/skills/`, resultado cacheado en las tablas derivadas:
-- **Glosario**: términos → normalizar contra `tax_modules`/`tax_feature_names` → canónico + alias reales + cómo lo explican + ejemplo textual + frecuencia.
-- **Pitch patterns**: embeddear las unidades `pitch_*` → clusterizar → redactar por cluster + `validated_lift`.
-- **FAQs**: reusar el clustering de la Fase 0.5, ahora con las respuestas que trae la extracción AE-side.
+```bash
+python scripts/ae_extract_run.py --region HISPAM --dry-run   # cuenta chunks y estima costo
+python scripts/ae_extract_run.py --region HISPAM --limit 20  # arrancar chico
+python scripts/ae_extract_run.py --region HISPAM             # recorte completo
+```
+
+`ae_parser.py` corre el chequeo de fidelidad **antes** de insertar y descarta las citas
+no literales (`--keep-non-literal` para guardarlas igual). Persiste `is_literal` y
+`attribution` para poder filtrar el pack sin releer el transcript.
+
+Idempotente y reanudable: `content_hash` sobre transcript + chunk + `unit_type` + módulo +
+verbatim normalizado + `ae_prompt_version`, con `ON CONFLICT DO NOTHING`. Usa el verbatim
+normalizado y no la `paraphrase` a propósito — la paraphrase varía entre corridas aunque
+la cita sea idéntica, y eso rompería la idempotencia. Por default saltea transcripts que
+ya tienen unidades de esta versión del prompt.
+
+Una transacción por chunk: si algo falla, se pierde ese chunk, no el run. Al final reporta
+la tasa de descarte por cita no literal y avisa si pasa el 15% — señal de que el prompt
+está parafraseando y hay que parar.
+
+### Fase 4 — Canonicalización · `src/skills/ae_aggregation.py`
+Funciones puras, resultado cacheado en las tablas derivadas.
+
+- **Glosario** (`build_glossary`): agrupa por `term_norm`, la grafía más usada queda como
+  canónica y el resto como alias. La definición es la glosa más repetida, **no** una
+  sintetizada: es cómo lo explican, no cómo debería explicarse.
+- **Pitch patterns** (`build_pitch_patterns`): sobre clusters de unidades `pitch_*`, con
+  ejemplos filtrados a citas verificadas como literales. El `label` que sale es un
+  placeholder — la redacción final la escribe un LLM por cluster y la firma una persona.
+- **FAQs**: reusar el clustering de la Fase 0.5, ahora con las respuestas de la extracción AE-side.
+
+**`validated_lift`** es la métrica que responde al pedido de filtrar por demos exitosas:
+la tasa de validated del patrón dividida por la tasa base del recorte. `1.0` = no aporta
+información, `1.4` = aparece 40% más seguido en demos que validaron. Se divide por la base
+porque el `%` crudo sube y baja con la tasa de validación del recorte — si el 70% de las
+demos validaron, cualquier patrón da ~70% y parece bueno.
+
+Dos advertencias que están en el código y conviene repetir: el `baseline` tiene que venir de
+`dataset_baseline()` sobre **todas** las unidades del recorte, no sólo las que traen
+términos (si no, el lift queda sesgado a 1.0 — verificado: 1.0 vs 2.22 en el mismo dato). Y
+el lift **no es causal**: mide co-ocurrencia. Un patrón con lift alto puede ser consecuencia
+de que la demo venía bien, no su causa. Sirve para priorizar qué revisar.
 
 ### Fase 5 — Dos consumidores (pendiente)
 No confundirlos: son entregables distintos.
