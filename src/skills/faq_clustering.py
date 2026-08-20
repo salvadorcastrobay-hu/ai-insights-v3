@@ -75,13 +75,74 @@ def cluster_by_vectors(
     empieza a rechazar la siguiente ("que precio tiene" contra un centroide de
     cuanto+sale+usuario diluye la señal) y se fragmenta justo en los clusters
     grandes, que son los que importan.
+
+    Implementado como componentes conexas del grafo de similitud por encima del
+    umbral, que es exactamente el single-linkage cortado en ese umbral, pero en
+    operaciones de matriz en vez de un doble loop en Python. Con ~39k preguntas
+    el doble loop son horas; esto son segundos.
+
+    Cae al camino en Python puro si no hay numpy — correcto pero lento, solo
+    viable para unos cientos de items.
     """
-    return _agglomerate(
-        items, text_key,
-        score=lambda i, j: cosine(vectors[i], vectors[j]),
-        threshold=threshold,
-        skip=lambda i: not vectors[i],
-    )
+    try:
+        import numpy as np
+    except ImportError:
+        return _agglomerate(
+            items, text_key,
+            score=lambda i, j: cosine(vectors[i], vectors[j]),
+            threshold=threshold,
+            skip=lambda i: not vectors[i],
+        )
+
+    n = len(items)
+    validos = [i for i in range(n) if vectors[i]]
+    if not validos:
+        return [_pack_cluster([it], text_key) for it in items]
+
+    # Normalizar una vez: con vectores unitarios el cosine es el producto punto,
+    # asi que el grafo sale de un solo matmul por bloque.
+    M = np.asarray([vectors[i] for i in validos], dtype=np.float32)
+    normas = np.linalg.norm(M, axis=1, keepdims=True)
+    normas[normas == 0] = 1.0
+    M /= normas
+
+    padre = list(range(len(validos)))
+
+    def find(x):
+        while padre[x] != x:
+            padre[x] = padre[padre[x]]
+            x = padre[x]
+        return x
+
+    def union(a, b):
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            padre[rb] = ra
+
+    # Por bloques de filas: la matriz completa de 39k x 39k no entra en memoria.
+    BLOQUE = 512
+    for ini in range(0, len(validos), BLOQUE):
+        fin = min(ini + BLOQUE, len(validos))
+        sims = M[ini:fin] @ M.T
+        for local, fila in enumerate(sims):
+            i = ini + local
+            # Solo j > i: el grafo es simetrico y asi no se recorre dos veces.
+            vecinos = np.nonzero(fila[i + 1:] >= threshold)[0]
+            for off in vecinos:
+                union(i, i + 1 + int(off))
+
+    grupos: dict[int, list[int]] = {}
+    for local in range(len(validos)):
+        grupos.setdefault(find(local), []).append(validos[local])
+
+    clusters = [[items[i] for i in idxs] for idxs in grupos.values()]
+    # Los items sin vector no participan del grafo: cada uno va solo, para no
+    # inventar agrupaciones que no se midieron.
+    clusters.extend([[items[i]] for i in range(n) if not vectors[i]])
+
+    out = [_pack_cluster(m, text_key) for m in clusters]
+    out.sort(key=lambda c: c["size"], reverse=True)
+    return out
 
 
 def cluster_by_tokens(
@@ -122,18 +183,20 @@ def _agglomerate(items, text_key, score, threshold, skip) -> list[dict]:
         else:
             clusters.append([i])
 
-    out = []
-    for c in clusters:
-        miembros = [items[i] for i in c]
-        textos = [t for t in (str(m.get(text_key) or "").strip() for m in miembros) if t]
-        out.append({
-            "canonical": _pick_canonical(textos),
-            "variants": [t for t, _ in Counter(textos).most_common()],
-            "items": miembros,
-            "size": len(miembros),
-        })
+    out = [_pack_cluster([items[i] for i in c], text_key) for c in clusters]
     out.sort(key=lambda c: c["size"], reverse=True)
     return out
+
+
+def _pack_cluster(miembros: list[dict], text_key: str) -> dict:
+    """Forma comun de un cluster, compartida por el camino numpy y el de Python."""
+    textos = [t for t in (str(m.get(text_key) or "").strip() for m in miembros) if t]
+    return {
+        "canonical": _pick_canonical(textos),
+        "variants": [t for t, _ in Counter(textos).most_common()],
+        "items": miembros,
+        "size": len(miembros),
+    }
 
 
 def _pick_canonical(textos: list[str]) -> str:

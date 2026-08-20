@@ -40,7 +40,7 @@ conviene que mande en el `FROM`.
 
 | Decisión | Elección | Por qué |
 |---|---|---|
-| Definición de "demo exitosa" | `is_validated` (`first_meeting_status = 'Validated'`) como default; Closed Won como filtro secundario | El objetivo del bot es *agendar demo*: lo que importa es que la primera conversación funcione. Closed Won tiene lag de meses y está contaminado por precio y timing, no por cómo se explicó |
+| Definición de "demo exitosa" | **Won** (`deal_stage ILIKE '%won%'`). ~~`is_validated`~~ — corregido con datos, ver abajo | `is_validated` cubre el **78.9%** de HISPAM (6438/8161): no es señal de éxito, es higiene ("la reunión pasó y era real"). Con esa tasa base el `success_lift` máximo posible es 1/0.789 = **1.27**, o sea todo cae entre 0.9 y 1.2 y no distingue nada. Won es 12.7% (1040/8161): base baja, lift con rango real (máx 7.87), y es lo que Dana quiere decir con "las que cierran al cliente" |
 | Filtrar por éxito en la ingesta | **No.** Extraer sobre todo HISPAM y usar `is_validated` como peso/filtro en la agregación | Con pocos transcripts validated, filtrar antes de extraer deja el dataset sin base de comparación — y sin base no se puede decir "esta forma de explicar rinde más" |
 | Dónde vive la capa AE-side | Tablas nuevas (`ae_*`), no más `insight_type` | La MV, sus RPCs y ~14 vistas asumen la forma actual de `transcript_insights`. Meterlo ahí contamina todos los conteos y obliga a rebuildear la MV. Mismo patrón aislado que `competitor_ads` |
 | Modelo de extracción | `gpt-4o` | La fidelidad del verbatim **es** el producto. `gpt-4o-mini` parafrasea |
@@ -168,17 +168,26 @@ Funciones puras, resultado cacheado en las tablas derivadas.
   placeholder — la redacción final la escribe un LLM por cluster y la firma una persona.
 - **FAQs**: reusar el clustering de la Fase 0.5, ahora con las respuestas de la extracción AE-side.
 
-**`validated_lift`** es la métrica que responde al pedido de filtrar por demos exitosas:
-la tasa de validated del patrón dividida por la tasa base del recorte. `1.0` = no aporta
-información, `1.4` = aparece 40% más seguido en demos que validaron. Se divide por la base
-porque el `%` crudo sube y baja con la tasa de validación del recorte — si el 70% de las
-demos validaron, cualquier patrón da ~70% y parece bueno.
+**`success_lift`** es la métrica que responde al pedido de filtrar por demos exitosas:
+la tasa de éxito del patrón dividida por la tasa base del recorte. `1.0` = no aporta
+información, `1.4` = aparece 40% más seguido en las que cerraron. Se divide por la base
+porque el `%` crudo sube y baja con la tasa de éxito del recorte — si el 70% de las
+demos cuentan como exitosas, cualquier patrón da ~70% y parece bueno.
+
+Qué cuenta como exitosa se elige con `metric` (`won` por default, `validated` disponible
+como filtro de higiene). La elección no es cosmética: con `validated` al 78.9% de base, la
+métrica no discrimina nada — por eso el default cambió a Won.
 
 Dos advertencias que están en el código y conviene repetir: el `baseline` tiene que venir de
 `dataset_baseline()` sobre **todas** las unidades del recorte, no sólo las que traen
 términos (si no, el lift queda sesgado a 1.0 — verificado: 1.0 vs 2.22 en el mismo dato). Y
 el lift **no es causal**: mide co-ocurrencia. Un patrón con lift alto puede ser consecuencia
 de que la demo venía bien, no su causa. Sirve para priorizar qué revisar.
+
+El clustering de `faq_clustering.cluster_by_vectors` es componentes conexas del grafo de
+similitud sobre el umbral — matemáticamente el mismo single-linkage, pero en operaciones de
+matriz. El doble loop original asumía "n son cientos" y n resultó ~39k: horas contra
+segundos (medido: 20k items en 7.5s, con salida idéntica al camino en Python puro).
 
 ### Fase 5 — Dos consumidores (pendiente)
 No confundirlos: son entregables distintos.

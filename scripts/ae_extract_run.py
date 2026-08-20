@@ -140,7 +140,10 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Run de extraccion AE-side (escribe en DB)")
     ap.add_argument("--region", default="HISPAM")
     ap.add_argument("--model", default="gpt-4o")
-    ap.add_argument("--validated-only", action="store_true")
+    ap.add_argument("--validated-only", action="store_true",
+                    help="Filtrar la INGESTA a demos validated. Normalmente no conviene: "
+                         "sin las demos que no cerraron no hay base contra la que comparar "
+                         "y el success_lift no se puede calcular")
     ap.add_argument("--since", default=None, help="YYYY-MM-DD")
     ap.add_argument("--limit", type=int, default=None, help="Cuantos transcripts como maximo")
     ap.add_argument("--max-chunks", type=int, default=None,
