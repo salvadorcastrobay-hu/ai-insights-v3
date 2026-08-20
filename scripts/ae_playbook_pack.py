@@ -195,8 +195,10 @@ def main() -> int:
     ap.add_argument("--success", default=SUCCESS_METRIC_DEFAULT, choices=["won", "validated"])
     ap.add_argument("--min-demos", type=int, default=3,
                     help="Minimo de demos distintas para entrar al pack")
-    ap.add_argument("--threshold", type=float, default=0.62,
-                    help="Umbral de cosine para agrupar formas de explicar")
+    ap.add_argument("--threshold", type=float, default=None,
+                    help="Umbral de cosine fijo. Por default no se fija ninguno y se "
+                         "busca automaticamente el que evite pozos (ver faq_clustering). "
+                         "Fijarlo desactiva esa busqueda")
     ap.add_argument("--keep-non-literal", action="store_true",
                     help="Incluir unidades cuya cita no se verifico como literal")
     ap.add_argument("--label", action="store_true",
@@ -299,7 +301,8 @@ def main() -> int:
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump({
             "region": args.region, "version": args.version,
-            "success_metric": args.success, "threshold": args.threshold,
+            "success_metric": args.success,
+            "threshold": args.threshold, "threshold_usado": umbral_usado,
             "min_demos": args.min_demos,
             "demos_total": demos_total, "demos_success": demos_exito,
             "glosario": glosario, "patrones": patrones,

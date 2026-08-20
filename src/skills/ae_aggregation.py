@@ -86,6 +86,71 @@ def dataset_baseline(rows: list[dict], metric: str = SUCCESS_METRIC_DEFAULT) -> 
     return _demo_counts(rows, success_predicate(metric))
 
 
+# Solapamiento de palabras de contenido para considerar que dos glosas hablan de lo
+# mismo. Bajo a proposito: son parafrasis de una oracion, comparten pocas palabras.
+GLOSS_AGREEMENT = 0.25
+
+
+def _resolver_glosa(glosas: Counter) -> tuple[str | None, bool, list[str]]:
+    """(glosa representativa, es_ambiguo, glosas de las otras acepciones).
+
+    Agrupa las glosas en acepciones por componentes conexas de solapamiento lexico,
+    y marca ambiguo cuando la acepcion mayoritaria no llega a la mitad del peso.
+
+    Componentes conexas y no comparacion contra una referencia: tres parafrasis de
+    la misma idea encadenan de a dos y no todas se parecen a la primera. Medido con
+    las glosas reales de "control de asistencia" — "funcionalidad para registrar y
+    gestionar la asistencia", "permite registrar la asistencia del personal" y
+    "registro de asistencia de los colaboradores" son una sola acepcion, pero la
+    primera y la tercera solo comparten la palabra "asistencia". Comparando contra
+    la referencia salian 74 de 79 terminos marcados como ambiguos.
+    """
+    from src.skills.faq_clustering import similarity, tokenize
+
+    if not glosas:
+        return None, False, []
+    items = list(glosas.items())
+    toks = [tokenize(g) for g, _ in items]
+
+    padre = list(range(len(items)))
+
+    def find(x):
+        while padre[x] != x:
+            padre[x] = padre[padre[x]]
+            x = padre[x]
+        return x
+
+    for i in range(len(items)):
+        for j in range(i + 1, len(items)):
+            if similarity(toks[i], toks[j]) >= GLOSS_AGREEMENT:
+                ri, rj = find(i), find(j)
+                if ri != rj:
+                    padre[rj] = ri
+
+    acepciones: dict[int, list[int]] = {}
+    for i in range(len(items)):
+        acepciones.setdefault(find(i), []).append(i)
+
+    # La acepcion mayoritaria por peso (menciones), no por cantidad de redacciones.
+    por_peso = sorted(acepciones.values(),
+                      key=lambda idxs: sum(items[i][1] for i in idxs), reverse=True)
+    mayor = por_peso[0]
+    peso_mayor = sum(items[i][1] for i in mayor)
+    peso_total = sum(n for _, n in items)
+
+    # Dentro de la acepcion mayoritaria, la redaccion mas repetida representa.
+    referencia = max(mayor, key=lambda i: items[i][1])
+    ambiguo = bool(peso_total >= 3 and peso_mayor / peso_total < 0.5)
+
+    otras = []
+    for grupo in por_peso[1:]:
+        i = max(grupo, key=lambda k: items[k][1])
+        otras.append((sum(items[k][1] for k in grupo), items[i][0]))
+    otras.sort(reverse=True)
+
+    return items[referencia][0], ambiguo, [g for _, g in otras]
+
+
 def build_glossary(
     term_rows: list[dict],
     baseline: tuple[int, int] | None = None,
@@ -135,15 +200,15 @@ def build_glossary(
         modulos = Counter(m for m in (r.get("module") for r in group) if m)
         ejemplo = next((r.get("verbatim_quote") for r in group if r.get("verbatim_quote")), None)
 
-        # Terminos polisemicos: si la glosa mas repetida no llega a la mitad de las
-        # glosas, el termino significa cosas distintas segun el contexto y quedarse
-        # con la mayoritaria da una definicion falsa. Paso en la primera corrida:
-        # "permisos" salio como "datos para evaluaciones de desempeño", cuando en
-        # las llamadas es vacaciones o roles. Se marca para que lo resuelva una
-        # persona en vez de publicar la definicion equivocada.
-        total_glosas = sum(glosas.values())
-        top_glosa, top_n = glosas.most_common(1)[0] if glosas else (None, 0)
-        ambiguo = bool(total_glosas >= 3 and top_n / total_glosas < 0.5)
+        # Terminos polisemicos: se marcan para que los resuelva una persona en vez
+        # de publicar la acepcion mayoritaria como si fuera la unica. Paso con
+        # "permisos", definido como "datos para evaluaciones de desempeño" cuando
+        # en las llamadas es vacaciones o roles.
+        #
+        # La comparacion es por solapamiento de palabras y NO por string exacto: el
+        # LLM redacta la glosa distinta en cada mencion, asi que contar strings
+        # iguales marcaba 74 de 79 terminos como ambiguos, o sea nada.
+        top_glosa, ambiguo, disidentes = _resolver_glosa(glosas)
 
         out.append({
             "term_canonical": canonical,
@@ -155,7 +220,7 @@ def build_glossary(
             "ambiguous": ambiguo,
             # Las otras acepciones, para que quien revise vea el conflicto en vez
             # de tener que ir a buscarlo a los transcripts.
-            "other_glosses": [g for g, _ in glosas.most_common()[1:4]] if ambiguo else [],
+            "other_glosses": disidentes[:3] if ambiguo else [],
             "module": modulos.most_common(1)[0][0] if modulos else None,
             "example_quote": ejemplo,
             "usages": len(group),
