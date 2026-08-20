@@ -41,9 +41,9 @@ conviene que mande en el `FROM`.
 | Decisión | Elección | Por qué |
 |---|---|---|
 | Definición de "demo exitosa" | **Won** (`deal_stage ILIKE '%won%'`). ~~`is_validated`~~ — corregido con datos, ver abajo | `is_validated` cubre el **78.9%** de HISPAM (6438/8161): no es señal de éxito, es higiene ("la reunión pasó y era real"). Con esa tasa base el `success_lift` máximo posible es 1/0.789 = **1.27**, o sea todo cae entre 0.9 y 1.2 y no distingue nada. Won es 12.7% (1040/8161): base baja, lift con rango real (máx 7.87), y es lo que Dana quiere decir con "las que cierran al cliente" |
-| Filtrar por éxito en la ingesta | **No.** Extraer sobre todo HISPAM y usar `is_validated` como peso/filtro en la agregación | Con pocos transcripts validated, filtrar antes de extraer deja el dataset sin base de comparación — y sin base no se puede decir "esta forma de explicar rinde más" |
+| Filtrar por éxito en la ingesta | **No.** Extraer sobre todo HISPAM y aplicar el filtro de éxito en la agregación | Sin las demos que no cerraron no hay base contra la que comparar, y sin base no se puede decir "esta forma de explicar rinde más". Con Won al 12.7%, filtrar en la ingesta dejaría ~130 transcripts y ninguna referencia |
 | Dónde vive la capa AE-side | Tablas nuevas (`ae_*`), no más `insight_type` | La MV, sus RPCs y ~14 vistas asumen la forma actual de `transcript_insights`. Meterlo ahí contamina todos los conteos y obliga a rebuildear la MV. Mismo patrón aislado que `competitor_ads` |
-| Modelo de extracción | `gpt-4o` | La fidelidad del verbatim **es** el producto. `gpt-4o-mini` parafrasea |
+| Modelo de extracción | `gpt-4o` | Medido contra el gate: mini dio **84%** de fidelidad y 4o **91.9%**. No era una suposición — el gate determinístico permite comprobarlo por unos centavos, y conviene re-medir cuando cambien los modelos |
 | Gate de calidad | Determinístico, sin juez LLM | Si la cita no aparece literal en el chunk, el modelo la inventó. Es un substring match: corre gratis sobre el 100% de las unidades, no sobre una muestra |
 | Publicación al bot | Sólo filas con `human_status = 'approved'` | Le habla a leads reales. Un borrador de LLM no sale sin que una persona lo firme |
 
@@ -74,7 +74,7 @@ Read-only sobre la DB, escribe sólo en `artifacts/`. Costo: unos centavos de em
 
 ```bash
 python scripts/ae_faq_pack.py --region HISPAM --min-cluster 2
-python scripts/ae_faq_pack.py --region HISPAM --validated-only --synthesize
+python scripts/ae_faq_pack.py --region HISPAM --only-success --synthesize
 python scripts/ae_faq_pack.py --no-embeddings   # fallback sin costo
 ```
 
@@ -105,15 +105,22 @@ python migrations/2026_08_19_ae_speech_units.py
 - `ae_glossary_terms`, `ae_pitch_patterns`, `ae_faq_canonical` — derivadas, se recalculan.
   Las tres llevan `human_status`; el endpoint del bot sirve sólo `approved`.
 
-`ae_pitch_patterns.validated_lift` es el "filtrar por las más exitosas" del pedido:
-cuánto más se usa esa forma de explicar en demos validated que en el resto.
+`ae_pitch_patterns.success_lift` es el "filtrar por las más exitosas" del pedido: cuánto
+más se usa esa forma de explicar en demos que cerraron que en el resto. La columna
+`success_metric` guarda con qué definición se calculó — dos lifts sobre métricas distintas
+no son comparables y sin esa columna no habría forma de saber cuál es cuál después.
+
+> El rename de `validated_lift` → `success_lift` está en
+> `migrations/2026_08_20_ae_success_lift_rename.py`, aparte porque la migración anterior ya
+> está aplicada en producción: editarla sería un no-op y el archivo dejaría de describir el
+> schema real.
 
 ### Fase 2 — Prompt y prueba de extracción · `ae_prompt_builder.py` + `scripts/ae_extract_test.py`
 No escribe en la DB. Costo: unas decenas de centavos.
 
 ```bash
 python scripts/ae_extract_test.py --sample 5 --max-chunks 3
-python scripts/ae_extract_test.py --sample 10 --model gpt-4o --validated-only
+python scripts/ae_extract_test.py --sample 10 --model gpt-4o-mini   # medir el barato
 ```
 
 El prompt `ae_v1` está sesgado a **no extraer** antes que a extraer algo dudoso — al
