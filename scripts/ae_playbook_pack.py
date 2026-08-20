@@ -241,10 +241,14 @@ def main() -> int:
                              min_demos=args.min_demos, metric=args.success)
     print(f"{len(glosario)} terminos con >= {args.min_demos} demos "
           f"(de {len({t['term_norm'] for t in terms})} distintos)")
+    ambiguos = sum(1 for t in glosario if t.get("ambiguous"))
+    if ambiguos:
+        print(f"  {ambiguos} terminos con definiciones en conflicto (marcados ⚠ en el md)")
     for t in glosario[:15]:
         lift = f"lift {t['success_lift']}" if t["success_lift"] else "sin lift"
         print(f"  {t['demos']:>3} demos · {lift:12} · {t['term_canonical']}"
-              f"{'  [' + ', '.join(t['aliases'][:3]) + ']' if t['aliases'] else ''}")
+              f"{'  [' + ', '.join(t['aliases'][:3]) + ']' if t['aliases'] else ''}"
+              f"{'  ⚠ ambiguo' if t.get('ambiguous') else ''}")
 
     print("\n=== FORMAS DE EXPLICAR ===")
     pitch_units = [u for u in units if u["unit_type"] in PITCH_TYPES]
@@ -262,7 +266,16 @@ def main() -> int:
                                   threshold=args.threshold)
     patrones = build_pitch_patterns(clusters, baseline, min_demos=args.min_demos,
                                     metric=args.success)
-    print(f"{len(clusters)} clusters → {len(patrones)} patrones con >= {args.min_demos} demos")
+    umbral_usado = clusters[0].get("threshold") if clusters else None
+    partidos = sum(1 for c in clusters if c.get("split_from_blob"))
+    pozos = sum(1 for c in clusters if c.get("blob_warning"))
+    print(f"{len(clusters)} clusters (umbral {umbral_usado}) → {len(patrones)} patrones "
+          f"con >= {args.min_demos} demos")
+    if partidos:
+        print(f"  {partidos} salieron de partir un pozo por k-means: sus fronteras son "
+              f"convencionales, dos vecinos pueden ser el mismo discurso")
+    if pozos:
+        print(f"  ⚠ {pozos} clusters quedaron como pozo sin poder partirse — no confiar en ellos")
 
     if args.label and patrones:
         from openai import OpenAI
@@ -302,12 +315,21 @@ def main() -> int:
                 f"Metrica de exito: {args.success}.\n")
 
         f.write("\n---\n\n## Glosario — como nombra Sales las cosas\n\n")
+        if ambiguos:
+            f.write(f"\n⚠ {ambiguos} terminos aparecen con definiciones en conflicto segun el "
+                    f"contexto. Estan marcados y necesitan que una persona elija — la "
+                    f"definicion que figura es la mas repetida, no la correcta.\n\n")
         f.write("| Termino | Como lo usan | Tambien le dicen | Demos | Lift |\n")
         f.write("|---|---|---|---|---|\n")
         for t in glosario:
             alias = ", ".join(t["aliases"][:4]) or "—"
-            f.write(f"| **{t['term_canonical']}** | {(t['definition'] or '—')} | {alias} "
+            marca = " ⚠" if t.get("ambiguous") else ""
+            f.write(f"| **{t['term_canonical']}**{marca} | {(t['definition'] or '—')} | {alias} "
                     f"| {t['demos']} | {t['success_lift'] or '—'} |\n")
+        for t in glosario:
+            if t.get("other_glosses"):
+                f.write(f"\n**{t['term_canonical']}** tambien se usa como: "
+                        + "; ".join(t["other_glosses"]) + "\n")
 
         f.write("\n---\n\n## Formas de explicar\n\n")
         actual = None
@@ -323,8 +345,11 @@ def main() -> int:
                 actual = p["unit_type"]
             mod = MODULES.get(p["module"], {}).get("display_name") if p["module"] else None
             f.write(f"\n#### {p['label']}\n\n")
+            coh = p.get("coherence")
             f.write(f"`{p['demos']} demos` · `{p['demos_success']} cerradas` · "
                     f"`lift {p['success_lift'] or '—'}`"
+                    f"{f' · coherencia {coh}' if coh is not None else ''}"
+                    f"{' · *frontera convencional*' if p.get('split_from_blob') else ''}"
                     f"{f' · modulo: {mod}' if mod else ''}"
                     f"{' · ' + ', '.join(p['markets'][:4]) if p['markets'] else ''}\n\n")
             if p.get("description"):

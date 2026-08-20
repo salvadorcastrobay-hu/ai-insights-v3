@@ -36,7 +36,11 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 from src.skills.ae_aggregation import SUCCESS_METRIC_DEFAULT, success_predicate  # noqa: E402
-from src.skills.faq_clustering import cluster_by_tokens, cluster_by_vectors  # noqa: E402
+from src.skills.faq_clustering import (  # noqa: E402
+    cluster_by_tokens,
+    cluster_by_vectors,
+    looks_like_question,
+)
 from src.skills.market_filters import build_region_filter_clause  # noqa: E402
 from taxonomy import FAQ_SUBTYPES  # noqa: E402
 
@@ -181,6 +185,19 @@ def main() -> int:
         print("Sin FAQs para esos filtros.", file=sys.stderr)
         return 1
 
+    # El prompt v3.2 guardo en verbatim_quote tanto preguntas del lead como
+    # afirmaciones del AE. Sin filtrar, el pack lista respuestas bajo "como la
+    # preguntan" y el clustering agrupa preguntas con respuestas.
+    antes = len(faqs)
+    faqs = [f for f in faqs if looks_like_question(f["verbatim_quote"])]
+    descartadas = antes - len(faqs)
+    if descartadas:
+        print(f"{descartadas} de {antes} verbatims no parecen preguntas "
+              f"({100 * descartadas / antes:.0f}%) — descartados")
+    if not faqs:
+        print("Ninguna pregunta quedo despues del filtro.", file=sys.stderr)
+        return 1
+
     con_answer = sum(1 for f in faqs if (f.get("faq_answer") or "").strip())
     demos = len({f["transcript_id"] for f in faqs})
     print(f"{len(faqs)} preguntas | {demos} demos | {con_answer} con respuesta del AE "
@@ -221,12 +238,23 @@ def main() -> int:
                 "en_demos_exitosas": len({m["transcript_id"] for m in miembros if es_exito(m)}),
                 "answers": answers[:5],
                 "sin_respuesta": c["size"] - len(answers),
+                "coherence": c.get("coherence"),
+                "threshold": c.get("threshold"),
+                "split_from_blob": c.get("split_from_blob", False),
                 "paises": sorted({m["country"] for m in miembros if m.get("country")}),
                 "aes": sorted({m["deal_owner"] for m in miembros if m.get("deal_owner")}),
             })
 
     packs.sort(key=lambda p: (-p["demos"], -p["veces"]))
     print(f"\n{len(packs)} preguntas canonicas con >= {args.min_cluster} apariciones")
+    pozos = [p for p in packs if p.get("coherence") is not None and p["coherence"] < 0.6]
+    if pozos:
+        print(f"  ⚠ {len(pozos)} con coherencia < 0.6: son mezclas, no temas. "
+              f"Revisar antes de mostrarlas.")
+    mayor = max((p["demos"] for p in packs), default=0)
+    if demos and mayor / demos > 0.25:
+        print(f"  ⚠ La pregunta mas grande cubre {100 * mayor / demos:.0f}% de las demos "
+              f"— sigue siendo un pozo.")
 
     if args.synthesize:
         from openai import OpenAI
@@ -272,7 +300,9 @@ def main() -> int:
                 f.write(f"\n---\n\n## {p['topic_display']}\n")
                 actual = p["topic"]
             f.write(f"\n### {p['question']}\n\n")
+            coh = p.get("coherence")
             f.write(f"`{p['demos']} demos` · `{p['veces']} veces`"
+                    f"{f' · coherencia {coh}' if coh is not None else ''}"
                     f" · `{p['en_demos_exitosas']} en demos exitosas ({args.success})`"
                     f"{' · ' + ', '.join(p['paises']) if p['paises'] else ''}\n\n")
             if p.get("respuesta_recomendada"):

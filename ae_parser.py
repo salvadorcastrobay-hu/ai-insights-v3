@@ -46,20 +46,60 @@ def compute_unit_hash(unit: dict, transcript_id: str, chunk: int, prompt_version
         str(chunk),
         unit.get("unit_type", ""),
         unit.get("module") or "",
-        normalize_term(unit.get("verbatim_quote") or ""),
+        _normalize_for_hash(unit.get("verbatim_quote") or ""),
         prompt_version,
     ])
     return hashlib.sha256(key.encode()).hexdigest()
 
 
-def normalize_term(text: str | None) -> str:
-    """Clave de agrupacion para terminos y citas: minusculas, sin acentos ni puntuacion."""
+def _normalize_for_hash(text: str | None) -> str:
+    """Normalizacion del verbatim para el content_hash. NO TOCAR.
+
+    Deliberadamente separada de normalize_term: esta define la identidad de las
+    filas ya insertadas. Si cambia, los hashes de todo lo que esta en la DB dejan
+    de coincidir y un re-run inserta duplicados en vez de saltearlos. Cualquier
+    mejora de normalizacion va en normalize_term, que solo agrupa terminos para
+    el glosario y se puede recalcular cuando se quiera.
+    """
     s = (text or "").lower()
     for a, b in (("á", "a"), ("é", "e"), ("í", "i"), ("ó", "o"), ("ú", "u"),
                  ("ñ", "n"), ("ü", "u")):
         s = s.replace(a, b)
     s = re.sub(r"[^\w\s]", " ", s, flags=re.UNICODE)
     return re.sub(r"\s+", " ", s).strip()
+
+
+# Prefijos que los AEs usan indistintamente: "el modulo de chats" y "los chats"
+# son el mismo termino. Sin sacarlos, el glosario los lista como dos entradas.
+_TERM_PREFIXES = re.compile(
+    r"^(el |la |los |las |un |una |modulo de |modulos de |seccion de |"
+    r"funcionalidad de |herramienta de |app de |aplicacion de )+"
+)
+
+
+def normalize_term(text: str | None) -> str:
+    """Clave de agrupacion para terminos y citas.
+
+    Minusculas, sin acentos ni puntuacion, sin articulos ni el prefijo "modulo de",
+    y con el plural simple colapsado. Medido en la primera corrida del glosario:
+    sin esto salian como entradas separadas `chats`/`chat`/`modulo de chats`,
+    `integracion`/`integraciones`, `evaluacion de desempeño`/`evaluaciones de
+    desempeño`, `librerias de conocimiento`/`libreria de conocimiento`.
+    """
+    s = (text or "").lower()
+    for a, b in (("á", "a"), ("é", "e"), ("í", "i"), ("ó", "o"), ("ú", "u"),
+                 ("ñ", "n"), ("ü", "u")):
+        s = s.replace(a, b)
+    s = re.sub(r"[^\w\s]", " ", s, flags=re.UNICODE)
+    s = re.sub(r"\s+", " ", s).strip()
+    s = _TERM_PREFIXES.sub("", s)
+    # Plural solo en palabras suficientemente largas: "chats"->"chat",
+    # "integraciones"->"integracion", pero no "mas"->"ma" ni "api"/"rrhh".
+    palabras = [
+        w[:-2] if len(w) > 7 and w.endswith("es") else (w[:-1] if len(w) > 4 and w.endswith("s") else w)
+        for w in s.split()
+    ]
+    return " ".join(palabras).strip()
 
 
 def parse_ae_response(

@@ -108,9 +108,13 @@ def build_glossary(
     `term_rows` y el `success_lift` queda sesgado hacia 1.0 — sirve para
     inspeccionar, no para priorizar.
     """
+    # Se re-normaliza al leer en vez de confiar en el term_norm guardado: asi una
+    # mejora de normalize_term se aplica al dato existente sin backfill.
+    from ae_parser import normalize_term
+
     por_norm: dict[str, list[dict]] = defaultdict(list)
     for r in term_rows:
-        norm = r.get("term_norm")
+        norm = normalize_term(r.get("term")) or r.get("term_norm")
         if norm:
             por_norm[norm].append(r)
 
@@ -131,13 +135,27 @@ def build_glossary(
         modulos = Counter(m for m in (r.get("module") for r in group) if m)
         ejemplo = next((r.get("verbatim_quote") for r in group if r.get("verbatim_quote")), None)
 
+        # Terminos polisemicos: si la glosa mas repetida no llega a la mitad de las
+        # glosas, el termino significa cosas distintas segun el contexto y quedarse
+        # con la mayoritaria da una definicion falsa. Paso en la primera corrida:
+        # "permisos" salio como "datos para evaluaciones de desempeño", cuando en
+        # las llamadas es vacaciones o roles. Se marca para que lo resuelva una
+        # persona en vez de publicar la definicion equivocada.
+        total_glosas = sum(glosas.values())
+        top_glosa, top_n = glosas.most_common(1)[0] if glosas else (None, 0)
+        ambiguo = bool(total_glosas >= 3 and top_n / total_glosas < 0.5)
+
         out.append({
             "term_canonical": canonical,
             "term_norm": norm,
             "aliases": aliases,
             # La glosa mas repetida, no una sintetizada: es como lo explican, no
             # como deberia explicarse. La sintesis es un paso posterior y humano.
-            "definition": glosas.most_common(1)[0][0] if glosas else None,
+            "definition": top_glosa,
+            "ambiguous": ambiguo,
+            # Las otras acepciones, para que quien revise vea el conflicto en vez
+            # de tener que ir a buscarlo a los transcripts.
+            "other_glosses": [g for g, _ in glosas.most_common()[1:4]] if ambiguo else [],
             "module": modulos.most_common(1)[0][0] if modulos else None,
             "example_quote": ejemplo,
             "usages": len(group),
