@@ -265,6 +265,13 @@ def build_pitch_patterns(
         modulos = Counter(m for m in (i.get("module") for i in items) if m)
         tipos = Counter(t for t in (i.get("unit_type") for i in items) if t)
 
+        # El modulo se asigna solo si hay mayoria real. Sin este chequeo, un cluster
+        # heterogeneo hereda el modulo mas frecuente y queda etiquetado mal: en la
+        # primera corrida el pitch de empresa "Plataforma Todo en Uno" salio con
+        # module=performance_review, que era el modal de un cluster mezclado.
+        mod_top, mod_n = modulos.most_common(1)[0] if modulos else (None, 0)
+        modulo = mod_top if mod_top and mod_n / len(items) >= 0.5 else None
+
         # Ejemplos: los de mayor confianza y verificados como literales. Un
         # ejemplo no literal en el playbook es una cita que el AE nunca dijo.
         candidatos = sorted(
@@ -275,7 +282,7 @@ def build_pitch_patterns(
 
         out.append({
             "unit_type": tipos.most_common(1)[0][0] if tipos else None,
-            "module": modulos.most_common(1)[0][0] if modulos else None,
+            "module": modulo,
             "label": (c.get("canonical") or "")[:120],
             "description": c.get("canonical") or "",
             "example_quotes": [i["verbatim_quote"] for i in candidatos[:max_examples]],
@@ -283,6 +290,13 @@ def build_pitch_patterns(
             "demos": demos,
             "demos_success": demos_val,
             "success_lift": success_lift(demos, demos_val, total_demos, total_success),
+            # Un patron presente en mas de un cuarto de las demos casi nunca es un
+            # patron: es un cajon de sastre que el clustering no separo. Se marca en
+            # vez de descartarlo, porque a veces SI es el pitch dominante — pero
+            # quien lo lea tiene que saber que no lo distingue de nada.
+            "catch_all": bool(total_demos and demos / total_demos > 0.25),
+            "coherence": c.get("coherence"),
+            "split_from_blob": c.get("split_from_blob", False),
             "markets": sorted({i["country"] for i in items if i.get("country")}),
             "aes": sorted({i["deal_owner"] for i in items if i.get("deal_owner")}),
         })

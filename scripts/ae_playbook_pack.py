@@ -288,10 +288,15 @@ def main() -> int:
             if i % 5 == 0:
                 print(f"  {i}/{len(patrones)}")
 
+    cajones = [p for p in patrones if p.get("catch_all")]
+    if cajones:
+        print(f"  ⚠ {len(cajones)} patron(es) cubren mas del 25% de las demos: son "
+              f"cajones de sastre, no patrones distinguibles")
     for p in patrones[:15]:
         lift = f"lift {p['success_lift']}" if p["success_lift"] else "sin lift"
         mod = f" [{p['module']}]" if p["module"] else ""
-        print(f"  {p['demos']:>3} demos · {lift:12} · {p['unit_type']}{mod}: {p['label'][:70]}")
+        marca = "  ⚠ cajon de sastre" if p.get("catch_all") else ""
+        print(f"  {p['demos']:>3} demos · {lift:12} · {p['unit_type']}{mod}: {p['label'][:70]}{marca}")
 
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     base_name = f"playbook_{args.region.lower().replace(' ', '')}_{ts}"
@@ -355,6 +360,10 @@ def main() -> int:
                     f"{' · *frontera convencional*' if p.get('split_from_blob') else ''}"
                     f"{f' · modulo: {mod}' if mod else ''}"
                     f"{' · ' + ', '.join(p['markets'][:4]) if p['markets'] else ''}\n\n")
+            if p.get("catch_all"):
+                f.write("⚠ **Cubre mas de un cuarto de las demos.** Probablemente sea "
+                        "un cajon de sastre que agrupa varias formas de explicar, no un "
+                        "patron unico. Leer las citas antes de usarlo.\n\n")
             if p.get("description"):
                 f.write(f"{p['description']}\n\n")
             if p.get("when_to_use"):
