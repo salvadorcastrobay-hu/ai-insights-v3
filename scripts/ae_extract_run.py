@@ -45,6 +45,15 @@ from src.skills.market_filters import build_region_filter_clause  # noqa: E402
 # config / psycopg2 / openai se importan dentro de main(): ver ae_diag.py.
 
 CONCURRENCY = 8
+
+# USD por millon de tokens de INPUT. Sirve solo para la estimacion del --dry-run:
+# es una constante en el codigo, no un precio consultado a la API, asi que hay que
+# verificar el vigente antes de decidir un gasto. La salida no se estima porque en
+# esta tarea es chica al lado del input (unidades cortas, no texto largo).
+PRECIO_INPUT_POR_MTOK = {
+    "gpt-4o": 2.50,
+    "gpt-4o-mini": 0.15,
+}
 META_COLS = [
     "company_name", "region", "country", "industry", "segment",
     "deal_stage", "deal_owner", "call_date", "is_validated",
@@ -182,10 +191,14 @@ def main() -> int:
         # ~2.3k tokens de system prompt por llamada, cacheados parcialmente por
         # OpenAI pero se cuentan igual. La salida es chica al lado del input.
         total = tokens_in + len(trabajo) * 2300
+        precio = PRECIO_INPUT_POR_MTOK.get(args.model)
         print(f"\nDRY RUN — sin llamadas ni escrituras.")
         print(f"  input estimado (con system prompt): ~{total:,} tokens")
-        print(f"  a precio de gpt-4o input: ~USD {total / 1_000_000 * 2.5:.2f}")
-        print(f"  (verificar el precio vigente antes de decidir)")
+        if precio is None:
+            print(f"  COSTO ESTIMADO: sin precio conocido para {args.model} — verificar a mano")
+        else:
+            print(f"  COSTO ESTIMADO ({args.model}): ~USD {total / 1_000_000 * precio:.2f}")
+            print(f"  (solo input, al precio de la tabla en este script — verificar el vigente)")
         conn.close()
         return 0
 
