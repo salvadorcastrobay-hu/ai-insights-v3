@@ -225,7 +225,8 @@ No confundirlos: son entregables distintos.
 | Se atribuye al AE algo que dijo el lead | Chequeo de atribución contra `deal_owner`, gate al 5% |
 | Los AEs se contradicen entre sí (precios, plazos) | `ae_faq_canonical.has_conflict`; la síntesis tiene instrucción explícita de marcar `REVISAR:` en vez de elegir |
 | Se filtra el nombre de un cliente al bot | Redacción por reemplazo directo, no confiada al LLM |
-| Pocos transcripts validated → conclusiones sobre ruido | No filtrar en la ingesta; `validated_lift` sobre el universo completo, y la Fase 0 avisa si son <30 |
+| Elegir una métrica de éxito que no discrimina | Pasó: `is_validated` al 78.9% acota el lift a 1.27. La Fase 0 imprime la tasa base justamente para detectarlo antes de sacar conclusiones |
+| Lift alto sobre pocas demos leído como señal | `min_demos` y orden por cobertura antes que por lift: 3.0 sobre 2 demos es ruido, 1.3 sobre 40 es señal |
 
 ---
 
