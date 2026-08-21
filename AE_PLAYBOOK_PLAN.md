@@ -196,19 +196,49 @@ similitud sobre el umbral — matemáticamente el mismo single-linkage, pero en 
 matriz. El doble loop original asumía "n son cientos" y n resultó ~39k: horas contra
 segundos (medido: 20k items en 7.5s, con salida idéntica al camino en Python puro).
 
-### Fase 5 — Dos consumidores (pendiente)
+### Fase 5 — Dos consumidores · `scripts/ae_knowledge_pack.py`
 No confundirlos: son entregables distintos.
 
 - **Humanos** — vista "Sales Playbook" en `humand-insights-web` (patrón `GlossaryPage.tsx`
   + `lib/data/*-data.ts` + ruta en `app/(dashboard)/`), 3 tabs, con los filtros globales
   existentes + toggle "sólo demos exitosas".
-- **El bot** — `/api/knowledge-pack?market=hispam&only_successful=true`: markdown compacto
-  versionado, presupuestado a ~3-5k tokens para que entre en el system prompt. Sirve sólo
-  `approved`. Si crece, las FAQs pasan a vector store y el bot hace retrieval. **Esto es
-  lo que Dana necesita — no un dashboard.**
+- **El bot** — `ae_knowledge_pack.py` genera el markdown compacto, presupuestado en tokens
+  para que entre en el system prompt. **Esto es lo que Dana necesita — no un dashboard.**
 
-### Fase 6 — Calidad y refresh (pendiente)
-- Revisión: Dana o un AE senior marca `approved`/`edited`/`rejected`.
+```bash
+python scripts/ae_knowledge_pack.py                    # solo approved + edited
+python scripts/ae_knowledge_pack.py --incluir-pending  # borrador, para probar el bot
+python scripts/ae_knowledge_pack.py --presupuesto 3000 --formato json
+```
+
+El presupuesto se reparte entre las tres secciones (30/40/30) y se cortan los ítems menos
+frecuentes de cada una, en vez de truncar el texto final — truncar dejaría una sección
+entera afuera y otra cortada a mitad de oración. Verificado: con presupuesto 1000 da ~990
+tokens, con 4000 da ~3186.
+
+Dos exclusiones deliberadas: las FAQs con `has_conflict` no salen (si los AEs se
+contradicen, el bot no puede elegir por ellos), y `pending` requiere flag explícito y
+sale con advertencia.
+
+Falta exponerlo como endpoint en `humand-insights-web` para que el bot lo consuma por
+HTTP en vez de por archivo. El contenido ya es el definitivo.
+
+### Fase 6 — Calidad y refresh · `scripts/ae_review.py`
+
+```bash
+python scripts/ae_review.py --export            # CSV de lo pendiente
+python scripts/ae_review.py --import <csv>      # aplica las decisiones
+python scripts/ae_review.py --status            # cuánto falta
+```
+
+La revisión va por planilla y no por CLI a propósito: son cientos de ítems y quien revisa
+es Marketing o un AE senior, que trabaja mucho más rápido en Google Sheets que en una
+terminal. Un texto escrito en `texto_corregido` marca la fila como `edited` aunque hayan
+puesto `approved` — el estado tiene que reflejar que lo publicado no es lo que salió del
+pipeline.
+
+**Este paso no es automatizable.** Nada de lo que produce el pipeline está validado por
+producto, y el consumidor le habla a leads reales.
 - Refresh mensual sobre el workflow de `refresh_mv`: sólo transcripts nuevos, entradas
   nuevas entran como `pending`.
 - Redacción de PII: el pack de FAQs ya saca el `company_name` de cada cita; la vista web

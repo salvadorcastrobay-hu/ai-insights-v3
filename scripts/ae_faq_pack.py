@@ -53,6 +53,17 @@ EMBEDDING_DIMENSIONS = 2000
 EMBED_BATCH = 100
 SYNTH_MODEL = "gpt-4o"
 
+INSERT_FAQ = """
+INSERT INTO ae_faq_canonical (
+    topic, question_canonical, question_variants, ae_answers, answer_recommended,
+    has_conflict, demos, demos_success, unanswered, markets, success_metric, human_status
+) VALUES (
+    %(topic)s, %(question_canonical)s, %(question_variants)s, %(ae_answers)s,
+    %(answer_recommended)s, %(has_conflict)s, %(demos)s, %(demos_success)s,
+    %(unanswered)s, %(markets)s, %(success_metric)s, 'pending'
+);
+"""
+
 
 def fetch_faqs(cur, region: str, only_success: bool, success: str, since: str | None) -> list[dict]:
     """FAQs con la pregunta textual del lead.
@@ -166,6 +177,8 @@ def main() -> int:
                     help="Agrupar con Jaccard en vez de embeddings (gratis, peor)")
     ap.add_argument("--synthesize", action="store_true",
                     help="Generar una respuesta recomendada por pregunta con gpt-4o")
+    ap.add_argument("--write-db", action="store_true",
+                    help="Guardar en ae_faq_canonical con human_status='pending' para revision")
     args = ap.parse_args()
 
     os.makedirs(ARTIFACTS, exist_ok=True)
@@ -180,6 +193,9 @@ def main() -> int:
     cur.execute("SET statement_timeout = '120s';")
     faqs = fetch_faqs(cur, args.region, args.only_success, args.success, args.since)
     conn.close()
+    # Conexion aparte para la escritura: la de lectura se cierra antes de los
+    # embeddings, que tardan minutos y dejarian la transaccion abierta al vicio.
+    conn2 = psycopg2.connect(**params, connect_timeout=15) if args.write_db else None
 
     if not faqs:
         print("Sin FAQs para esos filtros.", file=sys.stderr)
@@ -271,6 +287,38 @@ def main() -> int:
                 p["respuesta_recomendada"] = f"ERROR: {type(e).__name__}"
             if i % 10 == 0:
                 print(f"  {i}/{len(packs)}")
+
+    if args.write_db:
+        # Se reemplazan solo los pending: el clustering puede reagrupar entre
+        # corridas y no hay contraparte estable, pero lo que ya reviso una persona
+        # no se pierde por un recalculo.
+        try:
+            cur2 = conn2.cursor()
+            cur2.execute("DELETE FROM ae_faq_canonical WHERE human_status = 'pending';")
+            for p in packs:
+                cur2.execute(INSERT_FAQ, {
+                    "topic": p["topic"],
+                    "question_canonical": p["question"],
+                    "question_variants": p["variants"],
+                    "ae_answers": p["answers"],
+                    "answer_recommended": p.get("respuesta_recomendada"),
+                    # La sintesis marca REVISAR cuando los AEs se contradicen. Eso
+                    # tiene que viajar como flag y no solo como texto: es lo que
+                    # frena una respuesta contradictoria antes de llegar al bot.
+                    "has_conflict": "REVISAR" in (p.get("respuesta_recomendada") or ""),
+                    "demos": p["demos"],
+                    "demos_success": p["en_demos_exitosas"],
+                    "unanswered": p["sin_respuesta"],
+                    "markets": p["paises"],
+                    "success_metric": args.success,
+                })
+            conn2.commit()
+            print(f"  guardadas {len(packs)} preguntas en ae_faq_canonical (pending)")
+        except Exception as e:
+            conn2.rollback()
+            print(f"  ERROR al guardar, rollback: {type(e).__name__}: {e}", file=sys.stderr)
+        finally:
+            conn2.close()
 
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     suf = f"_{args.success}" if args.only_success else ""
