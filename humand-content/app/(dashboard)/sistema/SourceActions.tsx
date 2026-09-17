@@ -50,7 +50,7 @@ export function RunButtons() {
       <button
         disabled={pending}
         onClick={() => run(() => triggerDiscovery())}
-        className="rounded-lg bg-[var(--brand)] px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
+        className="rounded-lg bg-[var(--brand)] px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
       >
         {pending ? "Lanzando…" : "Actualizar fuentes"}
       </button>

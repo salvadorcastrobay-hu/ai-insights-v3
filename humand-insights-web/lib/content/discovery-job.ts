@@ -24,6 +24,7 @@
  * globalThis: acá el que pollea es otra app, y un redeploy de Railway no puede
  * llevarse el job puesto.
  */
+import { archiveMediaFor } from "./media-archive-batch";
 import { createHash, randomUUID } from "crypto";
 
 import {
@@ -579,6 +580,15 @@ async function runDiscovery(job: RefreshJob, options: DiscoveryOptions): Promise
         const raw = mapped.map((m) => m.raw as RawLinkedInPost);
 
         await upsertPosts(mapped);
+        // Los bytes de las imágenes se guardan acá, en la ingesta, y no cuando
+        // alguien abre la app: las URLs del CDN vienen firmadas y vencen (4,4
+        // días Instagram, 16 LinkedIn). Si esto no corre ahora, la foto se
+        // pierde y no hay proxy que la recupere.
+        //
+        // Va con catch: un CDN caído no puede hacer fallar una corrida entera.
+        await archiveMediaFor(mapped).catch((err) => {
+          console.warn(`[content] no se pudo archivar media de ${label}:`, err);
+        });
         // Solo el scrape de perfil da una muestra cronológica contigua del
         // autor. Los resultados de búsqueda vienen ordenados por relevancia:
         // son el TECHO del autor, y si alimentan su mediana el outlier_factor

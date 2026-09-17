@@ -1,17 +1,61 @@
 @import "tailwindcss";
 
+/*
+ * Tokens del design system de Humand.
+ *
+ * Los valores anteriores eran los grises de Untitled UI (#101828, #667085,
+ * #e4e7ec) con el azul de Humand pegado encima. Estos son los de la marca.
+ */
 :root {
-  --bg: #f7f8fa;
+  /* Superficies */
+  --bg: #f5f6f8;
   --surface: #ffffff;
-  --border: #e4e7ec;
-  --text: #101828;
-  --muted: #667085;
-  --brand: #6f93eb;
-  --brand-soft: #eef2fd;
+  --surface-sunk: #eeeef1;
+  --border: #dfe0e6;
+  --border-strong: #cbcdd6;
+
+  /* Texto */
+  --text: #303036;
+  --muted: #636271;
+  --faint: #8d8c9f;
+
+  /*
+   * Marca. --brand es para acentos y fondos; --brand-ink es el que se usa
+   * sobre blanco. El azul viejo (#6f93eb) daba 2.6:1 de contraste como color
+   * de link, o sea que no pasaba AA; --brand-ink da 6.1:1.
+   */
+  --brand: #496be3;
+  --brand-ink: #3851d8;
+  --brand-deep: #29317f;
+  --brand-solid: #2c35a1;
+  --brand-soft: #f1f4fd;
+  --brand-soft-2: #dee5fb;
+
+  /* Semánticos */
+  --warn-bg: #fcf7ce;
+  --warn-text: #935214;
+  --warn-border: #f8da65;
+  --error: #d42e2e;
+  --success: #249637;
+
+  /* Radios: el DS los elige por altura del elemento. */
+  --r-s: 4px;
+  --r-m: 8px;
+  --r-l: 16px;
+
+  /* Elevación */
+  --shadow-4: -1px 4px 8px 0px rgba(233, 233, 244, 1);
+  --shadow-8: -1px 8px 16px 0px rgba(170, 170, 186, 0.45);
 }
 
 body {
   background: var(--bg);
   color: var(--text);
-  font-feature-settings: "cv11";
+  letter-spacing: 0.2px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* El triangulito nativo del <details> no entra en el sistema. */
+summary::-webkit-details-marker {
+  display: none;
 }

@@ -99,6 +99,29 @@ export type ContentPost = {
   outlier_factor: number | null;
   viral_score: number | null;
   analysis: PostAnalysis | null;
+  /**
+   * Foto de portada. Ojo: las URLs de los CDN vienen firmadas y vencen —Instagram
+   * en menos de una semana, LinkedIn con un `e=` explícito en la query—, así que
+   * una URL guardada hace meses devuelve 403. La UI nunca puede asumir que carga.
+   */
+  display_url: string | null;
+  media: { images: string[]; videos: string[] } | null;
+  /** Paths en nuestro bucket privado. Esto es lo durable. */
+  stored_media: { images: string[]; videos: string[] } | null;
+  /**
+   * URL firmada lista para el `src`, resuelta en la query. No está en la tabla:
+   * se emite por request y vive una hora.
+   */
+  image_url?: string | null;
+  author: PostAuthor | null;
+};
+
+/** Lo que se necesita del autor para pintar una tarjeta. */
+export type PostAuthor = {
+  avatar_url: string | null;
+  full_name: string | null;
+  followers_count: number | null;
+  is_verified: boolean | null;
 };
 
 export type PatternLift = {

@@ -55,7 +55,75 @@ export type PostFilters = {
 
 const POST_COLUMNS =
   "id, platform, post_id, author_handle, post_url, format, caption, posted_at," +
-  " likes_count, comments_count, shares_count, outlier_factor, viral_score, analysis";
+  " likes_count, comments_count, shares_count, outlier_factor, viral_score, analysis," +
+  // display_url y media estaban guardados desde la primera corrida y nunca se
+  // pedían acá: por eso la app no mostraba una sola foto.
+  " display_url, media, stored_media";
+
+/** El bucket de imágenes es privado; la URL firmada se emite por request. */
+const MEDIA_BUCKET = "content-media";
+const SIGNED_URL_TTL = 3600;
+
+/**
+ * Resuelve las imágenes archivadas a URLs firmadas, en una sola llamada.
+ *
+ * No se usa `display_url` para mostrar: esa es la URL del CDN y viene firmada
+ * por ellos con vencimiento corto (4,4 días en Instagram). Sirve para archivar,
+ * no para pintar. Lo que se muestra sale siempre de `stored_media`.
+ */
+async function signMediaFor(posts: ContentPost[]): Promise<void> {
+  const paths = posts.flatMap((p) => p.stored_media?.images?.slice(0, 1) ?? []);
+  if (!paths.length) return;
+
+  const { data, error } = await sb()
+    .storage.from(MEDIA_BUCKET)
+    .createSignedUrls(paths, SIGNED_URL_TTL);
+  // Una firma que falla degrada a tarjeta sin foto, que es un estado previsto.
+  if (error || !data) return;
+
+  const byPath = new Map(
+    data.filter((d) => d.signedUrl).map((d) => [d.path as string, d.signedUrl]),
+  );
+  for (const post of posts) {
+    const path = post.stored_media?.images?.[0];
+    post.image_url = path ? (byPath.get(path) ?? null) : null;
+  }
+}
+
+/**
+ * Trae los autores de un conjunto de posts y los indexa por platform+handle.
+ *
+ * Se une por handle y no por la FK `author_id` porque esa columna está en cero:
+ * la ingesta nunca la llena (el scoring también une por handle). Mientras siga
+ * así, un embed de PostgREST devuelve null para todos.
+ */
+async function loadAuthorsFor(posts: ContentPost[]): Promise<void> {
+  const handles = [...new Set(posts.map((p) => p.author_handle))];
+  if (!handles.length) return;
+
+  const rows: Array<Record<string, unknown>> = [];
+  for (const batch of chunk(handles)) {
+    const { data, error } = await sb()
+      .from("content_authors")
+      .select("platform, handle, avatar_url, full_name, followers_count, is_verified")
+      .in("handle", batch);
+    if (error) throw error;
+    rows.push(...((data ?? []) as Array<Record<string, unknown>>));
+  }
+
+  const byKey = new Map(rows.map((r) => [`${r.platform}:${r.handle}`, r]));
+  for (const post of posts) {
+    const row = byKey.get(`${post.platform}:${post.author_handle}`);
+    post.author = row
+      ? {
+          avatar_url: (row.avatar_url as string) ?? null,
+          full_name: (row.full_name as string) ?? null,
+          followers_count: (row.followers_count as number) ?? null,
+          is_verified: (row.is_verified as boolean) ?? null,
+        }
+      : null;
+  }
+}
 
 /**
  * PostgREST manda los filtros en la URL y el server corta los headers en ~16KB.
@@ -124,7 +192,9 @@ export async function loadRankedPosts(filters: PostFilters = {}): Promise<Conten
   if (!filters.region) {
     const { data, error } = await base().limit(limit);
     if (error) throw error;
-    return (data ?? []) as unknown as ContentPost[];
+    const posts = (data ?? []) as unknown as ContentPost[];
+    await Promise.all([loadAuthorsFor(posts), signMediaFor(posts)]);
+    return posts;
   }
 
   const ids = await postIdsForRegion(filters.region);
@@ -140,10 +210,12 @@ export async function loadRankedPosts(filters: PostFilters = {}): Promise<Conten
     }),
   );
 
-  return batches
+  const posts = batches
     .flat()
     .sort((a, b) => (b.viral_score ?? 0) - (a.viral_score ?? 0))
     .slice(0, limit);
+  await Promise.all([loadAuthorsFor(posts), signMediaFor(posts)]);
+  return posts;
 }
 
 export async function loadSources(): Promise<ContentSource[]> {

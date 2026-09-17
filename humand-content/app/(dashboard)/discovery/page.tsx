@@ -1,10 +1,6 @@
-import { Badge, Card, EmptyState, PageHeader } from "@/components/ui";
+import { EmptyState, PageHeader, SectionLabel } from "@/components/ui";
+import { PostCard } from "@/components/PostCard";
 import { loadRankedPosts } from "@/lib/content/queries";
-import {
-  TARGET_PROFILE_LABELS,
-  type ContentPost,
-  type TargetProfile,
-} from "@/lib/content/types";
 
 export const dynamic = "force-dynamic";
 
@@ -21,52 +17,41 @@ const AUDIENCES = [
   { value: "", label: "Todas" },
 ];
 
-function engagement(post: ContentPost): number {
-  return (post.likes_count ?? 0) + (post.comments_count ?? 0) + (post.shares_count ?? 0);
-}
+const PLATFORMS = [
+  { value: "", label: "Todas" },
+  { value: "linkedin", label: "LinkedIn" },
+  { value: "instagram", label: "Instagram" },
+];
 
-function Filters({ region, audience }: { region: string; audience: string }) {
-  const link = (next: Record<string, string>) => {
-    const params = new URLSearchParams({ region, audience, ...next });
-    for (const [k, v] of [...params.entries()]) if (!v) params.delete(k);
-    const qs = params.toString();
-    return `/discovery${qs ? `?${qs}` : ""}`;
-  };
+type Params = { region?: string; audience?: string; platform?: string };
 
+function FilterGroup({
+  label,
+  options,
+  current,
+  build,
+}: {
+  label: string;
+  options: Array<{ value: string; label: string }>;
+  current: string;
+  build: (value: string) => string;
+}) {
   return (
-    <div className="mb-4 flex flex-wrap items-center gap-4 text-sm">
-      <div className="flex items-center gap-2">
-        <span className="text-xs uppercase tracking-wide text-[var(--muted)]">Mercado</span>
-        {REGIONS.map((r) => (
-          <a
-            key={r.value}
-            href={link({ region: r.value })}
-            className={`rounded-full border px-3 py-1 text-xs ${
-              region === r.value
-                ? "border-[#d4defa] bg-[var(--brand-soft)] text-[#2f4fa3]"
-                : "border-[var(--border)] text-[var(--muted)]"
-            }`}
-          >
-            {r.label}
-          </a>
-        ))}
-      </div>
-      <div className="flex items-center gap-2">
-        <span className="text-xs uppercase tracking-wide text-[var(--muted)]">Audiencia</span>
-        {AUDIENCES.map((a) => (
-          <a
-            key={a.value}
-            href={link({ audience: a.value })}
-            className={`rounded-full border px-3 py-1 text-xs ${
-              audience === a.value
-                ? "border-[#d4defa] bg-[var(--brand-soft)] text-[#2f4fa3]"
-                : "border-[var(--border)] text-[var(--muted)]"
-            }`}
-          >
-            {a.label}
-          </a>
-        ))}
-      </div>
+    <div className="flex shrink-0 items-center gap-1.5">
+      <span className="text-[12px] uppercase leading-[1.4] text-[var(--faint)]">{label}</span>
+      {options.map((option) => (
+        <a
+          key={option.value}
+          href={build(option.value)}
+          className={`rounded-full border px-3 py-1 text-[12px] leading-[1.4] transition-colors ${
+            current === option.value
+              ? "border-transparent bg-[var(--brand-soft-2)] font-semibold text-[var(--brand-deep)]"
+              : "border-[var(--border)] text-[var(--muted)] hover:border-[var(--border-strong)]"
+          }`}
+        >
+          {option.label}
+        </a>
+      ))}
     </div>
   );
 }
@@ -74,10 +59,11 @@ function Filters({ region, audience }: { region: string; audience: string }) {
 export default async function DiscoveryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ region?: string; audience?: string }>;
+  searchParams: Promise<Params>;
 }) {
   const params = await searchParams;
   const region = params.region ?? "";
+  const platform = params.platform ?? "";
   // Por defecto se muestra la audiencia de RRHH: un post que explota entre
   // candidatos enseña formato, pero su tema no sirve para el calendario.
   const audience = params.audience ?? "hr_leader";
@@ -85,6 +71,7 @@ export default async function DiscoveryPage({
   const posts = await loadRankedPosts({
     region: region || undefined,
     audience: audience || undefined,
+    platform: platform || undefined,
     onlyRelevant: true,
     // Solo posts de cuentas con línea base conocida: sin eso no se puede decir
     // que un post haya funcionado, solo que tuvo volumen.
@@ -92,103 +79,76 @@ export default async function DiscoveryPage({
     limit: 40,
   });
 
+  const link = (next: Partial<Params>) => {
+    const merged = { region, audience, platform, ...next };
+    const qs = new URLSearchParams(
+      Object.entries(merged).filter(([, v]) => v) as Array<[string, string]>,
+    ).toString();
+    return `/discovery${qs ? `?${qs}` : ""}`;
+  };
+
+  const podium = posts.slice(0, 3);
+  const rest = posts.slice(3);
+
   return (
     <>
       <PageHeader
         title="Qué funciona"
-        subtitle="Posts de referentes del rubro, ordenados por cuánto superaron el promedio de su propio autor. Solo se listan cuentas con historial suficiente para medirlo."
+        subtitle="Posts de referentes del rubro ordenados por cuánto superaron el promedio de su propio autor. Solo entran cuentas con historial suficiente para medirlo."
       />
-      <Filters region={region} audience={audience} />
+
+      {/* En mobile los filtros scrollean en horizontal: envueltos se comían tres
+          líneas de alto antes de llegar al primer post. */}
+      <div className="-mx-4 mb-6 flex gap-5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
+        <FilterGroup
+          label="Mercado"
+          options={REGIONS}
+          current={region}
+          build={(value) => link({ region: value })}
+        />
+        <FilterGroup
+          label="Audiencia"
+          options={AUDIENCES}
+          current={audience}
+          build={(value) => link({ audience: value })}
+        />
+        <FilterGroup
+          label="Red"
+          options={PLATFORMS}
+          current={platform}
+          build={(value) => link({ platform: value })}
+        />
+      </div>
 
       {!posts.length ? (
         <EmptyState
           title="No hay posts para este corte"
-          hint="Probá sacar filtros, o corré una actualización desde Fuentes."
+          hint="Probá sacar filtros, o corré una actualización desde Sistema."
         />
       ) : (
-        <ul className="space-y-3">
-          {posts.map((post) => (
-            <li key={post.id}>
-              <Card>
-                <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]">
-                  <span className="font-medium text-[var(--text)]">@{post.author_handle}</span>
-                  <Badge tone="muted">{post.platform}</Badge>
-                  {post.analysis?.hook_pattern ? (
-                    <Badge tone="brand">{post.analysis.hook_pattern}</Badge>
-                  ) : null}
-                  {post.analysis?.theme ? <Badge>{post.analysis.theme}</Badge> : null}
-                  {post.outlier_factor ? (
-                    <span className="ml-auto font-medium text-[var(--text)]">
-                      {post.outlier_factor.toFixed(1)}× su promedio
-                    </span>
-                  ) : null}
-                </div>
+        <>
+          {/* El podio le da forma visible al pedido original: "los 5 que más
+              engagement tuvieron". Sin esto el #1 y el #37 se ven idénticos. */}
+          <section className="mb-8">
+            <SectionLabel>Los que más superaron su propio promedio</SectionLabel>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {podium.map((post, index) => (
+                <PostCard key={post.id} post={post} rank={index + 1} hero />
+              ))}
+            </div>
+          </section>
 
-                <p className="mt-2 text-sm font-medium">
-                  {post.analysis?.hook ?? post.caption?.slice(0, 120) ?? "(sin texto)"}
-                </p>
-
-                {post.analysis?.development ? (
-                  <p className="mt-1 text-sm text-[var(--muted)]">{post.analysis.development}</p>
-                ) : null}
-
-                {post.analysis?.why_it_worked ? (
-                  <p className="mt-1 text-sm text-[var(--muted)]">
-                    <span className="font-medium">Por qué funcionó:</span>{" "}
-                    {post.analysis.why_it_worked}
-                  </p>
-                ) : null}
-
-                {post.analysis?.cta ? (
-                  <p className="mt-1 text-sm text-[var(--muted)]">
-                    <span className="font-medium">CTA:</span> {post.analysis.cta}
-                  </p>
-                ) : null}
-
-                {post.analysis?.target_profiles?.length ? (
-                  <div className="mt-2 flex flex-wrap items-center gap-1">
-                    <span className="mr-1 text-xs text-[var(--muted)]">Le interesa a:</span>
-                    {post.analysis.target_profiles.map((profile: TargetProfile) => (
-                      <Badge key={profile} tone="muted">
-                        {TARGET_PROFILE_LABELS[profile] ?? profile}
-                      </Badge>
-                    ))}
-                  </div>
-                ) : null}
-
-                {post.analysis?.humand_angle ? (
-                  <p className="mt-2 rounded-lg bg-[var(--brand-soft)] px-3 py-2 text-sm">
-                    <span className="font-medium">Para Humand:</span> {post.analysis.humand_angle}
-                  </p>
-                ) : null}
-
-                <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-[var(--muted)]">
-                  <span>{engagement(post).toLocaleString("es")} interacciones</span>
-                  {post.analysis?.replicability ? (
-                    <span>replicabilidad {post.analysis.replicability}</span>
-                  ) : null}
-                  {post.analysis?.structure ? <span>{post.analysis.structure}</span> : null}
-                  {post.analysis?.hashtag_strategy ? (
-                    <span>hashtags: {post.analysis.hashtag_strategy.replace(/_/g, " ")}</span>
-                  ) : null}
-                  {post.analysis?.copy_length ? (
-                    <span>{post.analysis.copy_length} caracteres</span>
-                  ) : null}
-                  {post.post_url ? (
-                    <a
-                      href={post.post_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-[var(--brand)] underline"
-                    >
-                      ver el post
-                    </a>
-                  ) : null}
-                </div>
-              </Card>
-            </li>
-          ))}
-        </ul>
+          {rest.length ? (
+            <section>
+              <SectionLabel>El resto del corte · {rest.length} posts</SectionLabel>
+              <div className="grid gap-4 xl:grid-cols-2">
+                {rest.map((post, index) => (
+                  <PostCard key={post.id} post={post} rank={index + 4} />
+                ))}
+              </div>
+            </section>
+          ) : null}
+        </>
       )}
     </>
   );
