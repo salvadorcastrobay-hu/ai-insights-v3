@@ -1,0 +1,65 @@
+name: Content Discovery — chequeo de conexión
+
+# Verifica que la app pueda hablarle al motor, sin disparar trabajo ni gastar
+# créditos de Apify.
+#
+# Existe porque el handshake tiene tres formas distintas de fallar y cada una
+# se ve parecida desde afuera:
+#   307 -> el middleware del motor está interceptando /api/internal
+#   401 -> el CONTENT_ENGINE_TOKEN de acá no coincide con el del motor
+#   200 -> la cadena está sana
+#
+# Solo hace GET. Correrlo no cuesta nada.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Consultar el health del motor
+        env:
+          ENGINE_URL: ${{ secrets.CONTENT_ENGINE_URL }}
+          ENGINE_TOKEN: ${{ secrets.CONTENT_ENGINE_TOKEN }}
+        run: |
+          set -uo pipefail
+
+          if [ -z "${ENGINE_URL}" ] || [ -z "${ENGINE_TOKEN}" ]; then
+            echo "::error::Faltan los secrets CONTENT_ENGINE_URL o CONTENT_ENGINE_TOKEN."
+            exit 1
+          fi
+
+          # Sin -L a propósito: si el motor redirige, queremos VER el 307, no
+          # seguirlo hasta la página de login y recibir un 200 engañoso.
+          RESPONSE=$(curl -sS -w "\n%{http_code}" \
+            -H "Authorization: Bearer ${ENGINE_TOKEN}" \
+            "${ENGINE_URL}/api/internal/content/health")
+
+          STATUS=$(echo "${RESPONSE}" | tail -1)
+          BODY=$(echo "${RESPONSE}" | sed '$d')
+
+          echo "status: ${STATUS}"
+          echo "body: ${BODY}"
+
+          case "${STATUS}" in
+            200)
+              echo "::notice::Conexión sana. La app puede disparar corridas."
+              ;;
+            307|308)
+              echo "::error::El motor redirigió en vez de responder."
+              echo "::warning::Agregá /api/internal a PUBLIC_PATHS en su middleware.ts."
+              exit 1
+              ;;
+            401)
+              echo "::error::El motor rechazó el token."
+              echo "::warning::El CONTENT_ENGINE_TOKEN de este repo no coincide con el"
+              echo "::warning::del servicio del motor en Railway. Tienen que ser idénticos."
+              exit 1
+              ;;
+            *)
+              echo "::error::Respuesta inesperada: ${STATUS}"
+              exit 1
+              ;;
+          esac
