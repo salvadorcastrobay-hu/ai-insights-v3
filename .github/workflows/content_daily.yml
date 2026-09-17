@@ -1,0 +1,64 @@
+name: Content Discovery — ingesta diaria
+
+# Sección 8 del brief: "Ingesta de posts nuevos — Diaria".
+#
+# El trabajo no corre acá: corre en el motor (humand-insights-web en Railway),
+# que es donde están ffmpeg y las API keys. Esto solo lo dispara. El job queda
+# persistido en content_refresh_jobs, así que el resultado se ve en la app aunque
+# este workflow ya haya terminado.
+
+on:
+  schedule:
+    - cron: "0 7 * * *"   # 07:00 UTC (04:00 ART), antes del horario laboral
+  workflow_dispatch:
+    inputs:
+      maxItemsPerSource:
+        description: "Tope de posts por fuente (vacío = el results_limit de cada una)"
+        required: false
+        type: string
+
+concurrency:
+  # Dos corridas en paralelo se pisan: el motor ya devuelve el job en curso en
+  # vez de crear otro, pero mejor no depender de eso.
+  group: content-discovery
+  cancel-in-progress: false
+
+jobs:
+  discovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Disparar discovery
+        env:
+          ENGINE_URL: ${{ secrets.CONTENT_ENGINE_URL }}
+          ENGINE_TOKEN: ${{ secrets.CONTENT_ENGINE_TOKEN }}
+          MAX_ITEMS: ${{ github.event.inputs.maxItemsPerSource }}
+        run: |
+          set -euo pipefail
+          BODY='{"kind":"discovery"}'
+          if [ -n "${MAX_ITEMS}" ]; then
+            BODY="{\"kind\":\"discovery\",\"options\":{\"maxItemsPerSource\":${MAX_ITEMS}}}"
+          fi
+
+          RESPONSE=$(curl -sS -w "\n%{http_code}" -X POST \
+            -H "Authorization: Bearer ${ENGINE_TOKEN}" \
+            -H "content-type: application/json" \
+            -H "x-acting-user: github-actions" \
+            -d "${BODY}" \
+            "${ENGINE_URL}/api/internal/content/runs")
+
+          STATUS=$(echo "${RESPONSE}" | tail -1)
+          echo "${RESPONSE}" | sed '$d'
+
+          # 202 = job nuevo. 200 = ya había uno corriendo, que también está bien.
+          if [ "${STATUS}" != "202" ] && [ "${STATUS}" != "200" ]; then
+            echo "::error::El motor respondió ${STATUS}"
+            exit 1
+          fi
+
+      - name: Reportar fallo
+        if: failure()
+        run: |
+          echo "::error::No se pudo disparar la ingesta diaria."
+          echo "::warning::Revisar que CONTENT_ENGINE_URL/TOKEN estén bien y que"
+          echo "::warning::/api/internal esté en PUBLIC_PATHS del middleware del motor."

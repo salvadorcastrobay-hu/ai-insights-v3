@@ -1,0 +1,61 @@
+name: Content Discovery — análisis y síntesis semanal
+
+# Sección 8 del brief: "Análisis, síntesis de patrones y reporte de insights —
+# Semanal". Corre después de una semana de ingesta diaria.
+#
+# Dos pasos, en orden: primero clasificar lo nuevo, después sintetizar los
+# patrones sobre el corpus ya clasificado. Al revés, la síntesis no vería los
+# posts de la semana.
+
+on:
+  schedule:
+    - cron: "0 9 * * 1"   # lunes 09:00 UTC (06:00 ART)
+  workflow_dispatch:
+    inputs:
+      withCalendar:
+        description: "Regenerar también el calendario del mes que viene"
+        required: false
+        type: boolean
+        default: true
+
+concurrency:
+  group: content-weekly
+  cancel-in-progress: false
+
+jobs:
+  analyze-and-synthesize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      ENGINE_URL: ${{ secrets.CONTENT_ENGINE_URL }}
+      ENGINE_TOKEN: ${{ secrets.CONTENT_ENGINE_TOKEN }}
+    steps:
+      - name: Clasificar posts nuevos
+        run: |
+          set -euo pipefail
+          for platform in linkedin instagram; do
+            echo "── clasificando ${platform}"
+            curl -sS --fail-with-body -X POST \
+              -H "Authorization: Bearer ${ENGINE_TOKEN}" \
+              -H "content-type: application/json" \
+              -H "x-acting-user: github-actions" \
+              -d "{\"kind\":\"analyze\",\"platform\":\"${platform}\",\"limit\":150}" \
+              "${ENGINE_URL}/api/internal/content/runs"
+            echo
+          done
+
+      - name: Sintetizar patrones y regenerar calendario
+        run: |
+          set -euo pipefail
+          WITH_CAL="${{ github.event.inputs.withCalendar || 'true' }}"
+          curl -sS --fail-with-body -X POST \
+            -H "Authorization: Bearer ${ENGINE_TOKEN}" \
+            -H "content-type: application/json" \
+            -H "x-acting-user: github-actions" \
+            -d "{\"kind\":\"synthesize\",\"withCalendar\":${WITH_CAL}}" \
+            "${ENGINE_URL}/api/internal/content/runs"
+          echo
+
+      - name: Reportar fallo
+        if: failure()
+        run: echo "::error::Falló el ciclo semanal de análisis y síntesis."

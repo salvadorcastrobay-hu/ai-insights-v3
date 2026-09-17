@@ -7,7 +7,10 @@ import { applySupabaseCookies, createMiddlewareSupabaseClient } from "@/lib/supa
 const LOGIN_PATH = "/login";
 const DEFAULT_REDIRECT = "/overview";
 // Routes that must be reachable without a session (cache warmup, health, etc).
-const PUBLIC_PATHS = ["/api/prefetch-insights"];
+// /api/internal es service-to-service: se autentica con CONTENT_ENGINE_TOKEN en
+// lib/auth/internal.ts, no con la sesión Supabase. Sin esta excepción el
+// middleware las redirige a /login y el caller recibe HTML donde espera JSON.
+const PUBLIC_PATHS = ["/api/prefetch-insights", "/api/internal"];
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
