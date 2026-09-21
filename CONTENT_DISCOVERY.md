@@ -117,8 +117,23 @@ Cuatro reglas impiden afirmar de más, y cada una salió de un bug real:
 
 ## Costo
 
-Plan Apify **FREE**: USD 5/mes. Con 2 redes y ~75 fuentes el consumo va por
-USD ~4/mes, o sea que está al límite.
+Plan Apify **FREE**: USD 5/mes. **El plan FREE no alcanza para correr esto a
+diario**, y eso ya está medido, no estimado: el ciclo de septiembre se agotó
+(5,10 de 5,00) y el pipeline quedó muerto tres días.
+
+Una corrida diaria completa sobre ~75 fuentes ingesta ~300 posts y cuesta del
+orden de USD 0,70. A ese ritmo el crédito del mes se va en una semana.
+
+Las tres opciones, sin vueltas:
+
+| | Costo | Qué se pierde |
+|---|---|---|
+| Plan Starter de Apify | USD 39/mes | nada — es el costo real de correrlo a diario |
+| Bajar a corridas semanales | USD 0 | frescura: se ve lo de la semana pasada, no lo de ayer |
+| Recortar fuentes activas | USD 0 | cobertura: menos referentes vigilados |
+
+No hay una cuarta. Lo que no funciona es dejarlo diario en el plan FREE: se
+apaga solo a los pocos días de cada ciclo.
 
 Lo caro es Instagram (~USD 0,0054 por cuenta); LinkedIn es marginal
 (~USD 0,00005 por corrida). Antes de sumar fuentes, mirar el gasto en el
@@ -137,6 +152,10 @@ subirlo multiplica el costo diario para siempre.
 | Job en `running` para siempre | El proceso murió; se marca `failed` solo a los 5 min sin heartbeat |
 | Un ranking lleno de cuentas diminutas | El piso de alcance quedó mal calibrado |
 | Handles que "no resuelven" en lote | Un run de validación con muchos perfiles **trunca**. Validar de a pocos |
+| Corridas diarias en `completed` con `upserted: 0` | Casi siempre es el **límite mensual de Apify**. Chequear `content_sources.last_run_status`: si dice `Monthly usage hard limit exceeded`, no hay nada roto, se agotó el crédito. Desde el 21/09 un job con TODAS las fuentes en error se marca `failed`, así que esto debería saltar solo |
+| La semanal muere con 502 clasificando | `analyze` corre **sincrónico** con `maxDuration=300`; un lote grande se pasa de los cinco minutos. Va en tandas de 40 en loop. Si vuelve a pasar, bajar la tanda, no subir el timeout |
+| Las fotos de los posts no cargan | Las URLs de los CDN vienen **firmadas y vencen** (Instagram 4,4 días, LinkedIn 16). Por eso se archivan los bytes al ingestar. Si un post viejo no tiene foto, mirar `media_archive_error` |
+| La tarjeta muestra `@handle` sin avatar ni nombre | El post no tiene `author_id`, o el autor no existe en `content_authors`. Lo llena `linkPostsToAuthors` en cada corrida |
 
 ## Lo que todavía no hace
 
