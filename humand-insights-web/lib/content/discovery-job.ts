@@ -691,15 +691,27 @@ async function runDiscovery(job: RefreshJob, options: DiscoveryOptions): Promise
     const scoreError = scoreErrors.length ? scoreErrors.join(" | ") : null;
     if (scoreError) console.warn("[discovery-job] rescore:", scoreError);
 
+    /*
+     * El error de cada fuente se guardaba solo dentro de `results` y no subía
+     * al estado del job, así que una corrida donde fallaron LAS 73 fuentes se
+     * reportaba como `completed` con `upserted: 0`. Pasaron tres días así
+     * —Apify había cortado por límite mensual— sin que nada lo dijera.
+     *
+     * Ahora: si fallaron todas, el job es `failed`. Si fallaron algunas, sigue
+     * completado pero el motivo queda escrito.
+     */
+    const { allFailed, error: sourceError } = summarizeSourceResults(results);
+    if (sourceError) console.warn("[discovery-job] fuentes:", sourceError);
+
     await updateJob(job.id, {
-      state: "completed",
+      state: allFailed ? "failed" : "completed",
       current_label: null,
       finished_at: new Date().toISOString(),
       results,
       // El error del rescore se reporta aunque la corrida se dé por completada:
       // los posts se trajeron bien, lo que falló fue el ranking. Ocultarlo hacía
       // que un `scored: 0` pareciera un resultado normal.
-      error: scoreError,
+      error: [sourceError, scoreError].filter(Boolean).join(" | ") || null,
       progress: {
         done: sources.length,
         total: sources.length,
@@ -718,6 +730,25 @@ async function runDiscovery(job: RefreshJob, options: DiscoveryOptions): Promise
   } finally {
     clearInterval(heartbeat);
   }
+}
+
+/**
+ * Decide si una corrida fracasó mirando el resultado de cada fuente.
+ *
+ * Existe separado y exportado para poder testearlo: el bug que arregla no se
+ * ve en ningún test de integración porque el job igual termina.
+ */
+export function summarizeSourceResults(
+  results: Array<{ error?: string | null }>,
+): { allFailed: boolean; error: string | null } {
+  const failed = results.filter((r) => r.error);
+  if (!failed.length) return { allFailed: false, error: null };
+  return {
+    // Con cero fuentes no hay nada que fallar: eso es una corrida vacía, no una
+    // fallida.
+    allFailed: results.length > 0 && failed.length === results.length,
+    error: `${failed.length}/${results.length} fuentes fallaron · ${failed[0].error}`,
+  };
 }
 
 async function getCancelState(jobId: string): Promise<boolean> {
