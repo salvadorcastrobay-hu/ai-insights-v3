@@ -15,6 +15,7 @@ import {
   saveCalendar,
   saveOwnBrandComparison,
   saveRegionInsight,
+  pruneStaleSuggestions,
   seedSuggestionFeedback,
   type StoredContentPost,
 } from "./store";
@@ -95,15 +96,24 @@ export async function runSynthesis(
       // Cada pieza nace como 'pending'. Es lo que después permite calcular el
       // "% aprobado sin cambios" que pide la sección 10 del brief — y no se
       // puede reconstruir a posteriori.
-      await seedSuggestionFeedback(
-        calendar.entries.map((entry) => ({
-          entry_key: suggestionKey(calendar.region, calendar.month, entry.date, entry.title),
-          region: calendar.region,
-          month: calendar.month,
-          publish_date: entry.date,
-          entry,
-        })),
-      ).catch((err) => console.warn("[pipeline] no pude sembrar el feedback:", err));
+      const seeded = calendar.entries.map((entry) => ({
+        entry_key: suggestionKey(calendar.region, calendar.month, entry.date, entry.title),
+        region: calendar.region,
+        month: calendar.month,
+        publish_date: entry.date,
+        entry,
+      }));
+
+      await seedSuggestionFeedback(seeded).catch((err) =>
+        console.warn("[pipeline] no pude sembrar el feedback:", err),
+      );
+
+      // Y se limpia lo que quedó colgado de la versión anterior del calendario.
+      await pruneStaleSuggestions(
+        calendar.region,
+        calendar.month,
+        seeded.map((s) => s.entry_key),
+      ).catch((err) => console.warn("[pipeline] no pude limpiar el feedback viejo:", err));
     }
 
     // "Comparás el desempeño propio de Humand contra los patrones detectados"

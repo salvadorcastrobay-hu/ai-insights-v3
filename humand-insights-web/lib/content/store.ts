@@ -622,6 +622,42 @@ export async function saveOwnBrandComparison(region: string, payload: unknown): 
  * ignoreDuplicates a propósito: si el calendario se regenera y una pieza se
  * repite igual, no puede pisar una decisión que ya se tomó.
  */
+/**
+ * Borra el feedback PENDIENTE de piezas que ya no existen.
+ *
+ * El calendario se regenera cada semana y los títulos cambian, así que las
+ * claves cambian con ellos. Sin esta limpieza cada corrida dejaba atrás una
+ * tanda entera de filas apuntando a piezas muertas: después de una sola
+ * regeneración la app decía "78 sin revisar" cuando las vivas eran 39, y el
+ * número seguía creciendo cada lunes.
+ *
+ * Solo se borra lo que está en `pending`. Una pieza que alguien aprobó,
+ * descartó o publicó es historia de una decisión real y se conserva aunque el
+ * calendario ya no la incluya — es la base de la métrica del brief.
+ */
+export async function pruneStaleSuggestions(
+  region: string,
+  month: string,
+  liveKeys: string[],
+): Promise<number> {
+  let query = getSupabase()
+    .from("content_suggestion_feedback")
+    .delete({ count: "exact" })
+    .eq("region", region)
+    .eq("month", month)
+    .eq("state", "pending");
+
+  // `not in ()` con lista vacía es SQL inválido; sin piezas vivas se borra todo
+  // lo pendiente de ese mes, que es justamente lo correcto.
+  if (liveKeys.length) {
+    query = query.not("entry_key", "in", `(${liveKeys.join(",")})`);
+  }
+
+  const { error, count } = await query;
+  if (error) throw error;
+  return count ?? 0;
+}
+
 export async function seedSuggestionFeedback(
   rows: Array<{
     entry_key: string;
