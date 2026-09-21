@@ -35,13 +35,30 @@ jobs:
           set -euo pipefail
           for platform in linkedin instagram; do
             echo "── clasificando ${platform}"
-            curl -sS --fail-with-body -X POST \
-              -H "Authorization: Bearer ${ENGINE_TOKEN}" \
-              -H "content-type: application/json" \
-              -H "x-acting-user: github-actions" \
-              -d "{\"kind\":\"analyze\",\"platform\":\"${platform}\",\"limit\":150}" \
-              "${ENGINE_URL}/api/internal/content/runs"
-            echo
+
+            # En tandas chicas y en loop, no 150 de una.
+            #
+            # `analyze` corre SINCRÓNICO (a diferencia de discovery, que solo
+            # dispara) con maxDuration=300. Clasificar 150 posts son ~25 lotes
+            # de LLM: pasa los cinco minutos y Railway corta con 502, que fue
+            # exactamente como murió la corrida del 21/09. Con 40 por tanda
+            # cada request entra cómoda, y el loop sigue hasta vaciar la cola.
+            for round in 1 2 3 4 5 6 7 8; do
+              RESPONSE=$(curl -sS --fail-with-body -X POST \
+                -H "Authorization: Bearer ${ENGINE_TOKEN}" \
+                -H "content-type: application/json" \
+                -H "x-acting-user: github-actions" \
+                -d "{\"kind\":\"analyze\",\"platform\":\"${platform}\",\"limit\":40}" \
+                "${ENGINE_URL}/api/internal/content/runs") || {
+                  echo "::error::falló la tanda ${round} de ${platform}"
+                  exit 1
+                }
+              echo "   tanda ${round}: ${RESPONSE}"
+
+              # Cuando no queda nada por clasificar, el motor devuelve
+              # analyzed:0 y no tiene sentido seguir pidiendo.
+              echo "${RESPONSE}" | grep -q '"analyzed":0' && break
+            done
           done
 
       - name: Sintetizar patrones y regenerar calendario
