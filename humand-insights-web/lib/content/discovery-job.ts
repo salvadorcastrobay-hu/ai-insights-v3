@@ -50,6 +50,7 @@ import {
   updateAuthorBaseline,
   updateJob,
   upsertAuthors,
+  linkPostsToAuthors,
   upsertPosts,
   type ContentPostUpsert,
   type ContentSource,
@@ -667,6 +668,17 @@ async function runDiscovery(job: RefreshJob, options: DiscoveryOptions): Promise
           return 0;
         })
       : 0;
+
+    // Se vincula post -> autor antes de puntuar, y después de hidratar: el
+    // autor puede haberse insertado recién en el paso anterior. Sin esto la FK
+    // author_id queda en null y la UI no tiene de dónde sacar avatar ni
+    // seguidores, aunque el dato esté en content_authors.
+    for (const platform of touchedByPlatform.keys()) {
+      await linkPostsToAuthors(platform).catch((err) => {
+        console.warn(`[discovery-job] no se pudo vincular autores de ${platform}:`, err);
+        return 0;
+      });
+    }
 
     // El ranking se recalcula solo sobre los autores con posts medibles: los
     // descubiertos por hashtag todavía no tienen engagement que puntuar.

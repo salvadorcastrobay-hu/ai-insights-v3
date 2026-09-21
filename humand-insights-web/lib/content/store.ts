@@ -313,6 +313,42 @@ export async function upsertPosts(posts: ContentPostUpsert[]): Promise<number> {
   return posts.length;
 }
 
+/**
+ * Vincula los posts con su autor por (platform, handle).
+ *
+ * La FK `content_posts.author_id` existía desde la migración inicial y nunca se
+ * llenaba: el mapper no la produce y el upsert no la calcula, así que estuvo en
+ * cero sobre mil posts. El scoring nunca lo notó porque agrupa por handle, pero
+ * cualquier lectura que quiera datos del autor —avatar, seguidores, si está
+ * verificado— se queda sin nada.
+ *
+ * Se resuelve acá y no en el upsert porque el autor puede insertarse DESPUÉS
+ * que sus posts (en LinkedIn se persiste desde el propio post).
+ */
+export async function linkPostsToAuthors(platform: string): Promise<number> {
+  const { data: authors, error: authorsError } = await getSupabase()
+    .from("content_authors")
+    .select("id, handle")
+    .eq("platform", platform);
+  if (authorsError) throw authorsError;
+
+  const rows = (authors ?? []) as Array<{ id: string; handle: string }>;
+  if (!rows.length) return 0;
+
+  let linked = 0;
+  for (const author of rows) {
+    const { error, count } = await getSupabase()
+      .from("content_posts")
+      .update({ author_id: author.id }, { count: "exact" })
+      .eq("platform", platform)
+      .eq("author_handle", author.handle)
+      .is("author_id", null);
+    if (error) throw error;
+    linked += count ?? 0;
+  }
+  return linked;
+}
+
 /** Vincula posts a la fuente que los trajo. Un post puede venir de varias. */
 export async function linkPostsToSource(
   source: ContentSource,
