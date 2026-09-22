@@ -50,6 +50,8 @@ import {
   updateAuthorBaseline,
   updateJob,
   upsertAuthors,
+  linkPostsToAuthors,
+  loadHandlesWithUnscoredPosts,
   upsertPosts,
   type ContentPostUpsert,
   type ContentSource,
@@ -442,6 +444,24 @@ async function hydrateAuthors(platform: string, handles: string[]): Promise<numb
  * sobre los recién traídos: la mediana del autor y los percentiles de cohorte
  * son relativos al conjunto.
  */
+/**
+ * Re-puntúa los posts que quedaron sin `viral_score` y ya maduraron.
+ *
+ * `rescoreAuthors` solo toca los autores de las fuentes que corrieron en esa
+ * pasada. Un post que entró inmaduro —menos de 48h en Instagram, 72 en
+ * LinkedIn— y cuya fuente después se desactivó, falló, o era un hashtag de una
+ * sola vez, NO se vuelve a puntuar nunca: se queda con `viral_score` null, y
+ * como el clasificador exige score, tampoco se clasifica. Queda invisible.
+ *
+ * Eran 275 posts, todos con más de 72 horas. No se curaban solos, aunque a
+ * simple vista pareciera que sí.
+ */
+export async function rescoreStragglers(platform: Platform): Promise<number> {
+  const handles = await loadHandlesWithUnscoredPosts(platform);
+  if (!handles.length) return 0;
+  return rescoreAuthors(platform, handles);
+}
+
 export async function rescoreAuthors(platform: Platform, handles: string[]): Promise<number> {
   const posts = await loadPostsForAuthors(platform, handles);
   if (!posts.length) return 0;
@@ -488,6 +508,16 @@ export async function runAnalysis(
   platform: Platform,
   limit = 100,
 ): Promise<{ analyzed: number; skipped: number }> {
+  // Primero se rescatan los que quedaron sin puntuar: el clasificador exige
+  // viral_score, así que un post sin score es un post que nunca se analiza.
+  // Sin esto el backlog crece en silencio cada vez que una fuente deja de
+  // correr.
+  const rescued = await rescoreStragglers(platform).catch((err) => {
+    console.warn(`[analyze] no pude re-puntuar los rezagados de ${platform}:`, err);
+    return 0;
+  });
+  if (rescued) console.log(`[analyze] ${rescued} posts rezagados volvieron a puntuarse`);
+
   const posts = await loadUnanalyzedPosts(platform, limit);
   if (!posts.length) return { analyzed: 0, skipped: 0 };
 
@@ -667,6 +697,17 @@ async function runDiscovery(job: RefreshJob, options: DiscoveryOptions): Promise
           return 0;
         })
       : 0;
+
+    // Se vincula post -> autor antes de puntuar, y después de hidratar: el
+    // autor puede haberse insertado recién en el paso anterior. Sin esto la FK
+    // author_id queda en null y la UI no tiene de dónde sacar avatar ni
+    // seguidores, aunque el dato esté en content_authors.
+    for (const platform of touchedByPlatform.keys()) {
+      await linkPostsToAuthors(platform).catch((err) => {
+        console.warn(`[discovery-job] no se pudo vincular autores de ${platform}:`, err);
+        return 0;
+      });
+    }
 
     // El ranking se recalcula solo sobre los autores con posts medibles: los
     // descubiertos por hashtag todavía no tienen engagement que puntuar.

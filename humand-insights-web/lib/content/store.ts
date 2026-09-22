@@ -7,6 +7,7 @@
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
+import type { CalendarEntry } from "./calendar";
 import type { FollowerTier } from "./scoring";
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
@@ -313,6 +314,42 @@ export async function upsertPosts(posts: ContentPostUpsert[]): Promise<number> {
   return posts.length;
 }
 
+/**
+ * Vincula los posts con su autor por (platform, handle).
+ *
+ * La FK `content_posts.author_id` existía desde la migración inicial y nunca se
+ * llenaba: el mapper no la produce y el upsert no la calcula, así que estuvo en
+ * cero sobre mil posts. El scoring nunca lo notó porque agrupa por handle, pero
+ * cualquier lectura que quiera datos del autor —avatar, seguidores, si está
+ * verificado— se queda sin nada.
+ *
+ * Se resuelve acá y no en el upsert porque el autor puede insertarse DESPUÉS
+ * que sus posts (en LinkedIn se persiste desde el propio post).
+ */
+export async function linkPostsToAuthors(platform: string): Promise<number> {
+  const { data: authors, error: authorsError } = await getSupabase()
+    .from("content_authors")
+    .select("id, handle")
+    .eq("platform", platform);
+  if (authorsError) throw authorsError;
+
+  const rows = (authors ?? []) as Array<{ id: string; handle: string }>;
+  if (!rows.length) return 0;
+
+  let linked = 0;
+  for (const author of rows) {
+    const { error, count } = await getSupabase()
+      .from("content_posts")
+      .update({ author_id: author.id }, { count: "exact" })
+      .eq("platform", platform)
+      .eq("author_handle", author.handle)
+      .is("author_id", null);
+    if (error) throw error;
+    linked += count ?? 0;
+  }
+  return linked;
+}
+
 /** Vincula posts a la fuente que los trajo. Un post puede venir de varias. */
 export async function linkPostsToSource(
   source: ContentSource,
@@ -439,6 +476,27 @@ export async function saveScores(
  * Posts sin clasificar, priorizados por score: se analiza primero lo que ya
  * sabemos que funcionó. Clasificar todo sería gastar tokens en el ruido.
  */
+/**
+ * Handles con posts sin puntuar que ya pasaron la ventana de madurez.
+ *
+ * Es la entrada de `rescoreStragglers`. El corte de 72h cubre el umbral más
+ * alto de las dos plataformas, así que no re-puntúa nada prematuramente.
+ */
+export async function loadHandlesWithUnscoredPosts(platform: string): Promise<string[]> {
+  return safeRead("loadHandlesWithUnscoredPosts", [], async () => {
+    const cutoff = new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString();
+    const { data, error } = await getSupabase()
+      .from("content_posts")
+      .select("author_handle")
+      .eq("platform", platform)
+      .is("viral_score", null)
+      .lt("posted_at", cutoff)
+      .limit(2000);
+    if (error) throw error;
+    return [...new Set((data ?? []).map((r) => r.author_handle as string))];
+  });
+}
+
 export async function loadUnanalyzedPosts(
   platform: string,
   limit = 100,
@@ -586,6 +644,67 @@ export async function saveOwnBrandComparison(region: string, payload: unknown): 
  * ignoreDuplicates a propósito: si el calendario se regenera y una pieza se
  * repite igual, no puede pisar una decisión que ya se tomó.
  */
+/**
+ * Borra el feedback PENDIENTE de piezas que ya no existen.
+ *
+ * El calendario se regenera cada semana y los títulos cambian, así que las
+ * claves cambian con ellos. Sin esta limpieza cada corrida dejaba atrás una
+ * tanda entera de filas apuntando a piezas muertas: después de una sola
+ * regeneración la app decía "78 sin revisar" cuando las vivas eran 39, y el
+ * número seguía creciendo cada lunes.
+ *
+ * Solo se borra lo que está en `pending`. Una pieza que alguien aprobó,
+ * descartó o publicó es historia de una decisión real y se conserva aunque el
+ * calendario ya no la incluya — es la base de la métrica del brief.
+ */
+/**
+ * Las piezas de un mes sobre las que ya hay una decisión tomada.
+ *
+ * Se lee del snapshot guardado en `content_suggestion_feedback.entry`, no del
+ * calendario: el calendario se reescribe y el snapshot es justamente lo que la
+ * persona vio cuando decidió.
+ */
+export async function loadDecidedEntries(
+  region: string,
+  month: string,
+): Promise<CalendarEntry[]> {
+  return safeRead("loadDecidedEntries", [], async () => {
+    const { data, error } = await getSupabase()
+      .from("content_suggestion_feedback")
+      .select("entry")
+      .eq("region", region)
+      .eq("month", month)
+      .neq("state", "pending");
+    if (error) throw error;
+    return (data ?? [])
+      .map((r) => r.entry as CalendarEntry)
+      .filter((e) => e && e.date && e.title);
+  });
+}
+
+export async function pruneStaleSuggestions(
+  region: string,
+  month: string,
+  liveKeys: string[],
+): Promise<number> {
+  let query = getSupabase()
+    .from("content_suggestion_feedback")
+    .delete({ count: "exact" })
+    .eq("region", region)
+    .eq("month", month)
+    .eq("state", "pending");
+
+  // `not in ()` con lista vacía es SQL inválido; sin piezas vivas se borra todo
+  // lo pendiente de ese mes, que es justamente lo correcto.
+  if (liveKeys.length) {
+    query = query.not("entry_key", "in", `(${liveKeys.join(",")})`);
+  }
+
+  const { error, count } = await query;
+  if (error) throw error;
+  return count ?? 0;
+}
+
 export async function seedSuggestionFeedback(
   rows: Array<{
     entry_key: string;

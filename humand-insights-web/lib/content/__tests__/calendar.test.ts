@@ -182,3 +182,38 @@ test("con un solo patron ganador no se aplica el tope", () => {
   assert.equal(out.length, 10);
   assert.ok(out.every((x) => x === "pov"), "sin alternativa, el único ganador cubre todo");
 });
+
+test("las fechas ya decididas salen del reparto de slots nuevos", () => {
+  // El escenario real: Sofía aprueba dos piezas, el lunes siguiente corre la
+  // semanal y se regenera el mes. Esas dos fechas no se vuelven a ofrecer, así
+  // que el modelo no escribe un título nuevo encima — que es lo que rompía la
+  // clave (sha1 del título) y dejaba la decisión huérfana.
+  const synthesis = {
+    region: "br",
+    posts_considered: 120,
+    top_posts_count: 24,
+    winning_hooks: [
+      { key: "pov", top_count: 8, lift: 1.6 },
+      { key: "pregunta", top_count: 6, lift: 1.3 },
+    ],
+    winning_themes: [{ key: "clima_cultura", top_count: 9, lift: 1.5 }],
+    top_topics: [{ key: "cultura", count: 9 }],
+    tone_mix: [{ key: "cercano", count: 7 }],
+    replicable_ideas: [],
+  } as never;
+
+  const todos = planSlots(synthesis, new Date(Date.UTC(2026, 9, 1)), 3);
+  assert.ok(todos.length >= 4, "el mes tiene que planificar varias piezas");
+
+  const decididas = [todos[0].date, todos[2].date];
+  const taken = new Set(decididas);
+  const nuevos = todos.filter((s) => !taken.has(s.date));
+
+  assert.equal(nuevos.length, todos.length - 2);
+  for (const fecha of decididas) {
+    assert.ok(
+      !nuevos.some((s) => s.date === fecha),
+      `la fecha decidida ${fecha} no puede volver al reparto`,
+    );
+  }
+});

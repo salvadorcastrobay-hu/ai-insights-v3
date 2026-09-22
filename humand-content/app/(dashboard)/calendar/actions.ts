@@ -43,3 +43,30 @@ export async function decideSuggestion(
     return { ok: false, message: (err as Error).message };
   }
 }
+
+/**
+ * Marca una pieza como publicada, con el link.
+ *
+ * El estado `published` existía en la tabla y en los tipos desde el principio,
+ * pero no había forma de llegar a él desde la app: la cadena del brief se
+ * cortaba en "aprobada" y nunca llegaba a "publicada", que es donde se puede
+ * medir si la pieza efectivamente rindió.
+ */
+export async function publishSuggestion(
+  entryKey: string,
+  publishedUrl: string,
+): Promise<FeedbackResult> {
+  try {
+    const url = publishedUrl.trim();
+    if (!/^https?:\/\//i.test(url)) {
+      return { ok: false, message: "Pegá el link completo, con https://" };
+    }
+    const email = await requireContentUser();
+    await setFeedback(entryKey, "published", email, null, url);
+    revalidatePath("/calendar");
+    revalidatePath("/sistema");
+    return { ok: true, message: "Registrada como publicada." };
+  } catch (err) {
+    return { ok: false, message: (err as Error).message };
+  }
+}

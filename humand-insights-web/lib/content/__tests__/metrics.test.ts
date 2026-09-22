@@ -32,3 +32,11 @@ test("isoWeek da la misma semana para dos dias de la misma semana", () => {
   const viernes = isoWeek(new Date("2026-09-18T20:00:00Z"));
   assert.equal(lunes, viernes, "dos corridas de la misma semana no deben duplicar la foto");
 });
+
+test("la clave cambia si el calendario se regenera con otro título", () => {
+  // Es la razón por la que hace falta podar: la pieza del 6/10 sigue existiendo
+  // pero con otro texto, así que su fila vieja queda apuntando a nada.
+  const antes = suggestionKey("br", "2026-10", "2026-10-06", "A cultura é o alicerce");
+  const despues = suggestionKey("br", "2026-10", "2026-10-06", "Cultura não se decreta");
+  assert.notEqual(antes, despues);
+});

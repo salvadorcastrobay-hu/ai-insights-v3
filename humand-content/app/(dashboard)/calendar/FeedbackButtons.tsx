@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 
 import { FEEDBACK_LABELS, type FeedbackState } from "@/lib/content/types";
 
-import { decideSuggestion } from "./actions";
+import { decideSuggestion, publishSuggestion } from "./actions";
 
 export function FeedbackButtons({
   entryKey,
@@ -18,6 +18,8 @@ export function FeedbackButtons({
   const [error, setError] = useState<string | null>(null);
   const [askingNote, setAskingNote] = useState(false);
   const [note, setNote] = useState("");
+  const [askingUrl, setAskingUrl] = useState(false);
+  const [url, setUrl] = useState("");
 
   const decide = (next: FeedbackState, editNote?: string) =>
     start(async () => {
@@ -31,10 +33,64 @@ export function FeedbackButtons({
       }
     });
 
+  // Una pieza aprobada todavía no está publicada. Sin este paso la cadena del
+  // brief se corta acá y nunca se puede comparar lo publicado contra el
+  // baseline propio, que es la cuarta métrica.
+  const aprobada = state === "approved_as_is" || state === "approved_edited";
+
+  if (askingUrl) {
+    return (
+      <span className="flex flex-wrap items-center gap-2">
+        <input
+          autoFocus
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          placeholder="Link de la pieza publicada"
+          className="min-w-[220px] rounded-[var(--r-s)] border border-[var(--border)] px-2 py-1 text-[12px]"
+        />
+        <button
+          disabled={pending}
+          onClick={() =>
+            start(async () => {
+              const result = await publishSuggestion(entryKey, url);
+              if (result.ok) {
+                setState("published");
+                setAskingUrl(false);
+                setError(null);
+              } else {
+                setError(result.message);
+              }
+            })
+          }
+          className="rounded-[var(--r-s)] bg-[var(--brand-solid)] px-2 py-1 text-[12px] font-semibold text-white disabled:opacity-50"
+        >
+          Guardar
+        </button>
+        <button
+          disabled={pending}
+          onClick={() => setAskingUrl(false)}
+          className="text-[12px] underline disabled:opacity-50"
+        >
+          cancelar
+        </button>
+        {error ? <span className="text-[12px] text-[var(--error)]">{error}</span> : null}
+      </span>
+    );
+  }
+
   if (state !== "pending") {
     return (
-      <span className="flex items-center gap-2 text-xs text-[var(--muted)]">
+      <span className="flex items-center gap-2 text-[12px] text-[var(--muted)]">
         {FEEDBACK_LABELS[state]}
+        {aprobada ? (
+          <button
+            disabled={pending}
+            onClick={() => setAskingUrl(true)}
+            className="font-semibold text-[var(--brand-ink)] underline disabled:opacity-50"
+          >
+            marcar publicada
+          </button>
+        ) : null}
         <button
           disabled={pending}
           onClick={() => decide("pending")}
