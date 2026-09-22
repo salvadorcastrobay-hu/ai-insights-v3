@@ -51,25 +51,30 @@ export const TARGET_PROFILE_LABELS: Record<TargetProfile, string> = {
 export type PostAnalysis = {
   is_relevant_to_hr: boolean;
   theme: string;
-  topic: string;
-  relevance_reason: string;
-  angle: string;
   audience_signal: Audience;
   target_profiles: TargetProfile[];
   // Copy in: el texto dentro de la pieza.
   hook: string | null;
   hook_pattern: string;
-  development: string;
   structure: string;
   cta: string | null;
-  keywords: string[];
-  expressions: string[];
   tone: string;
   // Copy out: el texto que la acompaña.
   hashtag_strategy: string;
   replicability: "alta" | "media" | "baja";
-  humand_angle: string | null;
-  why_it_worked: string;
+  /**
+   * Lo que el post AFIRMA, como oración que se puede sostener o refutar.
+   * Reemplaza a humand_angle y why_it_worked, que eran relleno: el 46% de los
+   * ángulos empezaba con uno de cuatro verbos genéricos y 32 "por qué
+   * funcionó" arrancaban con "el post generó engagement" — circular, porque el
+   * engagement es el criterio con el que se los eligió.
+   */
+  claim: string | null;
+  counterclaim: string | null;
+  claim_object: string | null;
+  claim_stance: "a_favor" | "en_contra" | "condicional" | "descriptivo" | null;
+  /** Qué lo hace funcionar más allá del tema. Es lo único transferible. */
+  transferable_mechanism: string | null;
   copy_length: number;
   hashtag_count: number;
 };
@@ -134,7 +139,39 @@ export type PostAuthor = {
 export type PatternLift = {
   key: string;
   top_count: number;
+  /** Cuántos autores distintos lo sostienen. Es la señal, no el conteo. */
+  top_authors?: number;
   lift: number;
+};
+
+/** Un lado de un debate del mercado. */
+export type PositionSide = {
+  stance: string;
+  posts: number;
+  authors: number;
+  median_outlier: number | null;
+  claims: Array<{
+    claim: string;
+    author_handle: string;
+    post_url: string | null;
+    outlier_factor: number | null;
+  }>;
+};
+
+/**
+ * Un tema sobre el que el mercado dice cosas, agrupado por objeto y partido
+ * por postura. Cuando los dos lados están poblados es una tensión — y la
+ * asimetría dice cuál de los dos rinde, que es lo único del sistema que indica
+ * de qué lado conviene pararse.
+ */
+export type MarketPosition = {
+  object_label: string;
+  variants: string[];
+  posts: number;
+  authors: number;
+  sides: PositionSide[];
+  asymmetry: number | null;
+  is_tension: boolean;
 };
 
 export type RegionSynthesis = {
@@ -143,6 +180,7 @@ export type RegionSynthesis = {
   top_posts_count: number;
   winning_hooks: PatternLift[] | null;
   winning_themes: PatternLift[] | null;
+  winning_structures?: PatternLift[] | null;
   top_topics: Array<{ key: string; count: number }>;
   tone_mix: Array<{ key: string; count: number }>;
   replicable_ideas: Array<{
@@ -151,9 +189,15 @@ export type RegionSynthesis = {
     hook: string | null;
     hook_pattern: string;
     theme: string;
-    humand_angle: string;
+    claim: string;
+    counterclaim: string | null;
+    claim_object: string | null;
+    claim_stance: string | null;
+    mechanism: string;
+    debate_factor: number | null;
     outlier_factor: number | null;
   }>;
+  positions?: MarketPosition[];
   insufficient_sample?: string;
 };
 

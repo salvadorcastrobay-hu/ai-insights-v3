@@ -48,6 +48,10 @@ function FilterGroup({
         <a
           key={option.value}
           href={build(option.value)}
+          // El rótulo del grupo se ve pero no está asociado: sin esto hay dos
+          // links "Todas" que en el árbol son indistinguibles.
+          aria-label={`${label}: ${option.label}`}
+          aria-current={current === option.value ? "true" : undefined}
           className={`rounded-full border px-3 py-1 text-[12px] leading-[1.4] transition-colors ${
             current === option.value
               ? "border-transparent bg-[var(--brand-soft-2)] font-semibold text-[var(--brand-deep)]"

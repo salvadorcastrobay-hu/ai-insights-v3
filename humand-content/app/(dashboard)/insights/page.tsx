@@ -1,6 +1,11 @@
 import { Badge, Bar, Callout, Card, EmptyState, PageHeader, SectionLabel } from "@/components/ui";
 import { loadOwnBrandComparisons, loadSyntheses } from "@/lib/content/queries";
-import { regionLabel, type OwnBrandComparison, type PatternLift } from "@/lib/content/types";
+import {
+  regionLabel,
+  type MarketPosition,
+  type OwnBrandComparison,
+  type PatternLift,
+} from "@/lib/content/types";
 
 export const dynamic = "force-dynamic";
 
@@ -9,6 +14,88 @@ export const dynamic = "force-dynamic";
  * barra y no solo con el número: escrito como texto, un 3,2× y un 1,1× ocupan
  * el mismo espacio y se ven igual.
  */
+
+const STANCE_LABELS: Record<string, string> = {
+  a_favor: "A favor",
+  en_contra: "En contra",
+  condicional: "Con condiciones",
+  descriptivo: "Sin tomar partido",
+};
+
+/**
+ * Una tensión del mercado: sobre qué se discute, quién sostiene cada lado, y
+ * cuál de los dos rinde.
+ *
+ * Es lo único de toda la app que dice QUÉ decir. El lift de hooks dice un
+ * formato —"empezá en primera persona"— y las piezas que salen de ahí pueden
+ * decir cualquier cosa. Esto dice de qué lado pararse, con la evidencia al
+ * lado para poder discutirlo.
+ */
+function Tension({ position }: { position: MarketPosition }) {
+  const [mejor, ...resto] = position.sides;
+  return (
+    <div className="rounded-[var(--r-m)] border border-[var(--border)] p-3">
+      <div className="mb-2 flex flex-wrap items-baseline gap-2">
+        <h3 className="text-[14px] font-semibold leading-[1.4]">{position.object_label}</h3>
+        <span className="text-[12px] text-[var(--faint)]">
+          {position.posts} posts · {position.authors} autores
+        </span>
+        {position.is_tension ? (
+          <Badge tone="brand">está en disputa</Badge>
+        ) : (
+          <Badge tone="muted">hay consenso</Badge>
+        )}
+        {position.is_tension && position.asymmetry && position.asymmetry >= 1.5 ? (
+          <span className="ml-auto text-[12px] font-semibold text-[var(--brand-ink)]">
+            un lado rinde {position.asymmetry}×
+          </span>
+        ) : null}
+      </div>
+
+      <div className="space-y-2">
+        {[mejor, ...resto].filter(Boolean).map((side, index) => (
+          <div
+            key={side.stance}
+            className={index === 0 && position.is_tension ? "rounded-[var(--r-s)] bg-[var(--brand-soft)] p-2" : "p-2"}
+          >
+            <p className="mb-1 text-[12px] leading-[1.4]">
+              <span className="font-semibold">{STANCE_LABELS[side.stance] ?? side.stance}</span>
+              <span className="text-[var(--faint)]">
+                {" "}
+                · {side.posts} posts, {side.authors} autores
+                {side.median_outlier ? ` · mediana ${side.median_outlier.toFixed(1)}×` : ""}
+              </span>
+              {index === 0 && position.is_tension ? (
+                <span className="ml-2 font-semibold text-[var(--brand-ink)]">← este lado rinde</span>
+              ) : null}
+            </p>
+            <ul className="space-y-0.5">
+              {side.claims.slice(0, 3).map((c) => (
+                <li key={c.post_url ?? c.claim} className="text-[14px] leading-[1.4]">
+                  <span className="text-[var(--muted)]">“{c.claim}”</span>{" "}
+                  {c.post_url ? (
+                    <a
+                      href={c.post_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="whitespace-nowrap text-[12px] text-[var(--brand-ink)] hover:underline"
+                    >
+                      @{c.author_handle}
+                      {c.outlier_factor ? ` ${c.outlier_factor.toFixed(1)}×` : ""} ↗
+                    </a>
+                  ) : (
+                    <span className="text-[12px] text-[var(--faint)]">@{c.author_handle}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function LiftList({ title, rows }: { title: string; rows: PatternLift[] }) {
   const winners = rows.filter((r) => r.lift > 1).slice(0, 6);
   if (!winners.length) return null;
@@ -152,9 +239,23 @@ export default async function InsightsPage() {
               </div>
             ) : null}
 
+            {/* Primero de qué se discute, después con qué formato: el formato
+                sin el mensaje no le dice a nadie qué escribir. */}
+            {s.positions?.length ? (
+              <div className="mb-5">
+                <SectionLabel>Sobre qué discute el mercado</SectionLabel>
+                <div className="space-y-2">
+                  {s.positions.slice(0, 5).map((p) => (
+                    <Tension key={p.object_label} position={p} />
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
             <div className="grid gap-6 sm:grid-cols-2">
               <LiftList title="Hooks que ganan" rows={s.winning_hooks ?? []} />
               <LiftList title="Temas que ganan" rows={s.winning_themes ?? []} />
+              <LiftList title="Estructuras que ganan" rows={s.winning_structures ?? []} />
             </div>
 
             {s.top_topics.length ? (

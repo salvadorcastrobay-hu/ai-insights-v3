@@ -35,6 +35,7 @@ export type AnalyzedPost = {
   region: string | null;
   viral_score: number | null;
   outlier_factor: number | null;
+  debate_factor?: number | null;
   likes_count: number | null;
   comments_count: number | null;
   shares_count?: number | null;
@@ -74,8 +75,19 @@ export type RegionSynthesis = {
     hook: string | null;
     hook_pattern: string;
     theme: string;
-    humand_angle: string;
+    /**
+     * Lo que el post AFIRMA. Reemplaza a humand_angle, que era una paráfrasis
+     * y encima era el insumo creativo del calendario: gpt-4o no puede escribir
+     * mejor que su brief, y su brief eran ocho frases que servían para
+     * cualquier post.
+     */
+    claim: string;
+    counterclaim: string | null;
+    claim_object: string | null;
+    claim_stance: string | null;
+    mechanism: string;
     outlier_factor: number | null;
+    debate_factor: number | null;
   }>;
   insufficient_sample?: string;
 };
@@ -182,10 +194,16 @@ export function synthesizeRegion(region: string, posts: AnalyzedPost[]): RegionS
     winning_hooks: null,
     winning_themes: null,
     winning_structures: null,
-    top_topics: toSortedList(tally(top.map((p) => p.analysis.topic)), 10),
+    // Antes era `topic`, texto libre que produjo 907 valores distintos sobre
+    // 983 posts: prácticamente uno por post, así que el ranking en pantalla era
+    // arbitrario. `claim_object` es vocabulario acotado del rubro y sí agrega.
+    top_topics: toSortedList(tally(top.map((p) => p.analysis.claim_object)), 10),
     tone_mix: toSortedList(tally(top.map((p) => p.analysis.tone)), 6),
+    // Se filtra por tener CLAIM, no por replicability: un post sin afirmación
+    // no le da al calendario nada sobre qué escribir, por replicable que sea
+    // su formato.
     replicable_ideas: top
-      .filter((p) => p.analysis.replicability === "alta" && p.analysis.humand_angle)
+      .filter((p) => p.analysis.claim)
       .slice(0, 8)
       .map((p) => ({
         post_url: p.post_url,
@@ -193,8 +211,13 @@ export function synthesizeRegion(region: string, posts: AnalyzedPost[]): RegionS
         hook: p.analysis.hook,
         hook_pattern: p.analysis.hook_pattern,
         theme: p.analysis.theme,
-        humand_angle: p.analysis.humand_angle as string,
+        claim: p.analysis.claim as string,
+        counterclaim: p.analysis.counterclaim ?? null,
+        claim_object: p.analysis.claim_object ?? null,
+        claim_stance: p.analysis.claim_stance ?? null,
+        mechanism: p.analysis.transferable_mechanism ?? "ninguno",
         outlier_factor: p.outlier_factor,
+        debate_factor: p.debate_factor ?? null,
       })),
   };
 

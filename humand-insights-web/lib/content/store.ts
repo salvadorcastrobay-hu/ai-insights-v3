@@ -84,6 +84,7 @@ export type StoredContentPost = ContentPostUpsert & {
   engagement_total: number | null;
   engagement_rate: number | null;
   outlier_factor: number | null;
+  debate_factor: number | null;
   viral_score: number | null;
   analysis: unknown | null;
   fetched_at: string;

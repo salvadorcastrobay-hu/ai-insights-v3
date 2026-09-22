@@ -229,6 +229,7 @@ export default async function CalendarPage({
           <a
             key={c.region}
             href={`/calendar?region=${c.region}`}
+            aria-current={c.region === cal.region ? "page" : undefined}
             className={`-mb-px border-b-2 px-3 pb-2 text-[14px] transition-colors ${
               c.region === cal.region
                 ? "border-[var(--brand)] font-semibold text-[var(--text)]"

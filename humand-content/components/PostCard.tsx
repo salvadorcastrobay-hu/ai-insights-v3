@@ -113,18 +113,25 @@ export function PostCard({
 
         <h3 className="text-[18px] font-semibold leading-[1.4] text-[var(--text)]">{headline}</h3>
 
-        {a?.why_it_worked ? (
-          <p className="border-l-2 border-[var(--border-strong)] pl-3 text-[14px] leading-[1.4] text-[var(--muted)]">
-            {a.why_it_worked}
-          </p>
-        ) : null}
-
-        {/* La única caja de color de la tarjeta, porque es el puente a la acción. */}
-        {a?.humand_angle ? (
-          <p className="rounded-[var(--r-m)] bg-[var(--brand-soft)] px-3 py-2 text-[14px] leading-[1.4] text-[var(--brand-deep)]">
-            <span className="font-semibold">Para Humand · </span>
-            {a.humand_angle}
-          </p>
+        {/*
+          Lo que el post AFIRMA, con su contraria debajo. La contraria es lo que
+          convierte la afirmación en algo discutible: si nadie sostendría lo
+          opuesto, el post decía una obviedad — y el clasificador ya lo descarta
+          por esa misma regla.
+        */}
+        {a?.claim ? (
+          <div className="rounded-[var(--r-m)] bg-[var(--brand-soft)] px-3 py-2">
+            <p className="text-[14px] leading-[1.4] text-[var(--brand-deep)]">
+              <span className="font-semibold">Afirma · </span>
+              {a.claim}
+            </p>
+            {a.counterclaim ? (
+              <p className="mt-1 text-[12px] leading-[1.4] text-[var(--muted)]">
+                <span className="font-semibold">Hay quien dice · </span>
+                {a.counterclaim}
+              </p>
+            ) : null}
+          </div>
         ) : null}
 
         <div className="mt-auto flex flex-wrap items-center gap-2 pt-1">
@@ -139,11 +146,17 @@ export function PostCard({
           ) : null}
           {a?.hook_pattern ? <Badge tone="brand">{a.hook_pattern}</Badge> : null}
           {a?.theme ? <Badge tone="muted">{a.theme.replace(/_/g, " ")}</Badge> : null}
+          {a?.transferable_mechanism && a.transferable_mechanism !== "ninguno" ? (
+            <Badge tone="muted">{a.transferable_mechanism.replace(/_/g, " ")}</Badge>
+          ) : null}
           {post.post_url ? (
             <a
               href={post.post_url}
               target="_blank"
               rel="noreferrer"
+              // Cuarenta links diciendo "Ver el post" son cuarenta links
+              // indistinguibles para un lector de pantalla.
+              aria-label={`Ver el post de @${post.author_handle} en ${platformLabel(post.platform)}`}
               className="ml-auto text-[12px] font-semibold text-[var(--brand-ink)] hover:underline"
             >
               Ver el post ↗
@@ -152,21 +165,13 @@ export function PostCard({
         </div>
 
         {/* <details> nativo: cero JS y funciona dentro de un server component. */}
-        {a?.development || a?.cta ? (
+        {a?.cta ? (
           <details className="group">
             <summary className="cursor-pointer list-none text-[12px] leading-[1.4] text-[var(--faint)] hover:text-[var(--text)]">
-              <span className="group-open:hidden">Ver desarrollo y CTA</span>
+              <span className="group-open:hidden">Ver el CTA</span>
               <span className="hidden group-open:inline">Ocultar</span>
             </summary>
-            <div className="mt-2 space-y-1 text-[14px] leading-[1.4] text-[var(--muted)]">
-              {a.development ? <p>{a.development}</p> : null}
-              {a.cta ? (
-                <p>
-                  <span className="font-semibold">CTA · </span>
-                  {a.cta}
-                </p>
-              ) : null}
-            </div>
+            <p className="mt-2 text-[14px] leading-[1.4] text-[var(--muted)]">{a.cta}</p>
           </details>
         ) : null}
       </div>

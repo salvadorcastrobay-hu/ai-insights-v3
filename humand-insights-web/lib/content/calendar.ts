@@ -298,7 +298,11 @@ function buildBrief(
           idea.outlier_factor ? `${idea.outlier_factor.toFixed(1)}x` : "?"
         } sobre el promedio del autor, @${idea.author_handle})`,
       );
-      lines.push(`  ángulo para Humand: ${idea.humand_angle}`);
+      lines.push(`  AFIRMA: "${idea.claim}"`);
+      if (idea.counterclaim) lines.push(`  la posición contraria: "${idea.counterclaim}"`);
+      if (idea.mechanism && idea.mechanism !== "ninguno") {
+        lines.push(`  lo que lo hace funcionar: ${idea.mechanism.replace(/_/g, " ")}`);
+      }
     });
   }
 

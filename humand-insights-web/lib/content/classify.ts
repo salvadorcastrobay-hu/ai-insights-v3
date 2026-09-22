@@ -78,6 +78,43 @@ export const TARGET_PROFILES = [
 ] as const;
 
 /** Estructura del desarrollo, después del hook. */
+/**
+ * Enum cerrado a propósito. `tone` era `z.string()` "en una o dos palabras" y
+ * produjo 79 valores distintos sobre 983 posts; `topic` produjo 907, o sea
+ * prácticamente uno por post. `tally()` agrupa por match exacto, así que los
+ * conteos quedaban fragmentados y el ranking que salía en pantalla era
+ * arbitrario. Un eje agregable necesita vocabulario cerrado.
+ */
+/**
+ * Lo que hace funcionar al post más allá del tema. Es lo único transferible:
+ * el tema es de quien lo escribió, el mecanismo se puede usar en otro tema.
+ */
+export const MECHANISMS = [
+  "tension_con_el_consenso",
+  "dato_propietario",
+  "admision_de_error",
+  "ritual_interno_concreto",
+  "desmontar_practica_comun",
+  "checklist_operable",
+  "caso_con_numeros",
+  "pregunta_diagnostica",
+  "reencuadre_de_un_termino",
+  "ninguno",
+] as const;
+
+export const TONES = [
+  "educativo",
+  "informativo",
+  "reflexivo",
+  "provocador",
+  "emotivo",
+  "inspirador",
+  "critico",
+  "humoristico",
+  "tecnico",
+  "celebratorio",
+] as const;
+
 export const COPY_STRUCTURES = [
   "lista",
   "caso",
@@ -114,20 +151,12 @@ const PostAnalysisSchema = z.object({
         "aunque el autor sea de RRHH.",
     ),
   theme: z.enum(CONTENT_THEMES).describe("Tema principal. 'otro' si no encaja."),
-  topic: z.string().describe("El tema puntual del post, 2 a 5 palabras, en el idioma del post."),
   audience_signal: z
     .enum(AUDIENCE_SIGNALS)
     .describe(
       "hr_leader: le habla a quien gestiona personas. candidate: le habla a quien " +
         "busca trabajo. general: a cualquiera.",
     ),
-  relevance_reason: z
-    .string()
-    .describe(
-      "Por qué este tema le importa a nuestra audiencia, en una oración. " +
-        "Si is_relevant_to_hr es false, explicá por qué no.",
-    ),
-  angle: z.string().describe("Desde qué ángulo aborda el tema, 3 a 8 palabras."),
   target_profiles: z
     .array(z.enum(TARGET_PROFILES))
     .describe(
@@ -138,24 +167,14 @@ const PostAnalysisSchema = z.object({
   // ── Copy in: el texto DENTRO de la pieza ──────────────────────────────────
   hook: z.string().nullable().describe("La frase de apertura que engancha, textual, máximo 15 palabras."),
   hook_pattern: z.enum(HOOK_PATTERNS).describe("Qué estructura usa la apertura."),
-  development: z
-    .string()
-    .describe("Cómo sigue después del hook: qué argumenta y cómo lo sostiene, en una o dos oraciones."),
   structure: z.enum(COPY_STRUCTURES).describe("Qué forma tiene el desarrollo."),
   cta: z
     .string()
     .nullable()
     .describe("La llamada a la acción dentro de la pieza, textual. Null si no tiene."),
-  keywords: z
-    .array(z.string())
-    .describe(
-      "3 a 6 términos del mundo laboral que aparecen en el CUERPO del texto, en " +
-        "su idioma original. No repitas los hashtags: esos van aparte.",
-    ),
-  expressions: z
-    .array(z.string())
-    .describe("Hasta 3 frases o giros textuales que le dan carácter al texto."),
-  tone: z.string().describe("Tono en una o dos palabras: educativo, provocador, emotivo, humorístico, etc."),
+  tone: z
+    .enum(TONES)
+    .describe("El registro dominante del texto."),
 
   // ── Copy out: el texto que acompaña ───────────────────────────────────────
   hashtag_strategy: z
@@ -167,17 +186,61 @@ const PostAnalysisSchema = z.object({
       "¿Humand podría hacer algo parecido? alta: formato y tema reutilizables. " +
         "baja: depende de la persona, su historia o su autoridad personal.",
     ),
-  humand_angle: z
+
+  // ── Qué AFIRMA el post ────────────────────────────────────────────────────
+  //
+  // Reemplaza a humand_angle y why_it_worked, que eran relleno medible:
+  // el 46% de los ángulos empezaba con uno de cuatro verbos genéricos, y 32
+  // "por qué funcionó" arrancaban con "el post generó engagement" — que es
+  // circular, porque el engagement es el criterio con el que lo elegimos.
+  //
+  // La categoría borra lo único replicable. Dos posts etiquetados igual
+  // (contrarian + clima_cultura) pueden sostener cosas opuestas: "el clima no
+  // se arregla con encuestas" contra "la encuesta es el primer paso". Lo que
+  // se puede replicar, o refutar, es la afirmación.
+  claim: z
     .string()
     .nullable()
     .describe(
-      "Una línea concreta de cómo Humand adaptaría esta idea. Si replicability " +
-        "es alta o media, tiene que haber un ángulo. Null solo si " +
-        "is_relevant_to_hr es false o si la pieza depende de la persona.",
+      "La afirmación que el post sostiene, como oración declarativa completa, " +
+        "en el idioma del post, máximo 20 palabras. Tiene que ser algo con lo " +
+        "que un profesional de RRHH informado PODRÍA estar en desacuerdo. " +
+        "Null si el post no sostiene nada discutible: anuncio, lista de " +
+        "recursos, anécdota personal, saludo, celebración.",
     ),
-  why_it_worked: z
+  counterclaim: z
     .string()
-    .describe("Una oración sobre por qué este post generó engagement."),
+    .nullable()
+    .describe(
+      "La posición contraria, tal como la sostendría alguien real del rubro. " +
+        "Si al escribirla te queda algo que nadie defendería en serio ('la " +
+        "cultura no importa', 'hay que tratar mal a la gente'), entonces el " +
+        "claim era una obviedad: devolvé null en los dos.",
+    ),
+  claim_object: z
+    .string()
+    .nullable()
+    .describe(
+      "SOBRE QUÉ afirma, como sustantivo corto de 2 a 4 palabras, sin verbo y " +
+        "sin postura. Ejemplos: 'encuestas de clima', 'home office', " +
+        "'evaluación de desempeño', 'salario emocional', 'onboarding remoto'. " +
+        "Usá el término más común del rubro, no una perífrasis.",
+    ),
+  claim_stance: z
+    .enum(["a_favor", "en_contra", "condicional", "descriptivo"])
+    .nullable()
+    .describe(
+      "Postura respecto del objeto. a_favor: lo defiende o recomienda. " +
+        "en_contra: lo critica, lo desmiente o dice que no alcanza. " +
+        "condicional: funciona solo bajo ciertas condiciones. descriptivo: " +
+        "reporta sin tomar partido.",
+    ),
+  transferable_mechanism: z
+    .enum(MECHANISMS)
+    .describe(
+      "QUÉ hace que el post funcione, más allá del tema. Es lo único que se " +
+        "transfiere entre marcas. 'ninguno' si funciona por quién lo firma.",
+    ),
 });
 
 const BatchSchema = z.object({ posts: z.array(PostAnalysisSchema) });
@@ -223,8 +286,31 @@ const SYSTEM = [
   "Para copy in y copy out citá lo que el texto dice de verdad. No inventes un",
   "CTA que no está ni hashtags que no aparecen: la ausencia es un dato válido.",
   "",
-  "Respondé en español, salvo hook, keywords y expressions, que van textuales en",
-  "el idioma original de la pieza. Devolvé un objeto por post, con su post_index.",
+  "",
+  "EL CAMPO MÁS IMPORTANTE ES `claim`. Un claim no es un tema ni un resumen: es",
+  "una afirmación que se puede sostener o refutar.",
+  "",
+  '- "Habla de la importancia del feedback" NO es un claim: es un tema.',
+  '- "El feedback anual llega tarde para corregir nada" SÍ es un claim:',
+  "  alguien puede estar en desacuerdo.",
+  "",
+  "Antes de dar un claim por bueno, escribí su contraria y miralá. Si tu",
+  "counterclaim es algo que ningún profesional defendería en público —'la",
+  "cultura no importa', 'hay que tratar mal a la gente'—, entonces tu claim era",
+  "una obviedad disfrazada. Devolvé null en los dos.",
+  "",
+  "Preferí null antes que forzar un claim. Muchos posts que funcionan no",
+  "afirman nada: anuncios, listas de recursos, anécdotas, celebraciones. Eso es",
+  "un dato válido, no una falla tuya.",
+  "",
+  "`claim_object` es un sustantivo del vocabulario del rubro, sin postura",
+  'adentro: "encuestas de clima", no "el problema de las encuestas de clima".',
+  "Usá el término que usaría alguien del rubro, no una perífrasis: sobre ese",
+  "texto se agrupan los posts entre sí, así que dos posts sobre lo mismo tienen",
+  "que escribirlo igual.",
+  "",
+  "Respondé en español, salvo hook, claim y counterclaim, que van en el idioma",
+  "original de la pieza. Devolvé un objeto por post, con su post_index.",
 ].join("\n");
 
 /**
@@ -233,7 +319,11 @@ const SYSTEM = [
  * a 10, y con el schema extendido del brief —de 10 a 19 campos por post— baja a
  * 6: lo que satura no es el contexto de entrada sino el largo de la respuesta.
  */
-const BATCH_SIZE = 6;
+// Se sacaron cinco campos de texto libre largo (relevance_reason, angle,
+// development, keywords, expressions) y se cerraron topic y tone. Lo que
+// saturaba era el LARGO DE LA RESPUESTA, no el contexto de entrada, así que el
+// lote vuelve a 10 — que es donde estaba antes de que el schema se inflara.
+const BATCH_SIZE = 10;
 
 function renderPost(post: ClassifiablePost, index: number): string {
   const parts = [`POST ${index}`];

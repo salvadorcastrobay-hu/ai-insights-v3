@@ -7,6 +7,8 @@
  * llamar. Antes esto existía como scripts locales, o sea que no era reproducible.
  */
 import { generateCalendar } from "./calendar";
+import { embedTexts } from "./embeddings";
+import { buildPositions, normalizeObject } from "./propositions";
 import type { PostAnalysis } from "./classify";
 import { suggestionKey, takeCoverageSnapshot } from "./metrics";
 import {
@@ -29,6 +31,7 @@ function toAnalyzable(post: StoredContentPost): AnalyzedPost {
   const raw = post as unknown as {
     viral_score: number | null;
     outlier_factor: number | null;
+    debate_factor: number | null;
   };
   return {
     post_id: post.post_id,
@@ -37,6 +40,7 @@ function toAnalyzable(post: StoredContentPost): AnalyzedPost {
     region: post.region ?? null,
     viral_score: raw.viral_score,
     outlier_factor: raw.outlier_factor,
+    debate_factor: raw.debate_factor ?? null,
     likes_count: post.likes_count,
     comments_count: post.comments_count,
     shares_count: post.shares_count ?? null,
@@ -79,9 +83,58 @@ export async function runSynthesis(
   for (const synthesis of synthesizeAll(posts)) {
     if (NON_MARKET_REGIONS.has(synthesis.region)) continue;
 
+    /*
+     * Posiciones y tensiones del mercado.
+     *
+     * Es el paso que faltaba: hasta acá se contaban categorías, que es un hecho
+     * sobre nuestras propias etiquetas. Agrupar las AFIRMACIONES por el objeto
+     * del que hablan, y separarlas por postura, convierte "nueve posts sobre
+     * clima" en "nueve posts que discuten si la encuesta de clima sirve, y el
+     * lado que dice que no rinde el triple".
+     *
+     * Se corre sobre los posts relevantes del mercado, no solo el corte
+     * superior: el denominador es parte del dato.
+     */
+    const claims = posts
+      .filter(
+        (p) =>
+          p.region === synthesis.region &&
+          p.analysis?.is_relevant_to_hr &&
+          p.analysis.claim &&
+          p.analysis.claim_object &&
+          p.analysis.claim_stance,
+      )
+      .map((p) => ({
+        post_id: p.post_id,
+        post_url: p.post_url,
+        author_handle: p.author_handle,
+        claim: p.analysis.claim as string,
+        counterclaim: p.analysis.counterclaim ?? null,
+        claim_object: p.analysis.claim_object as string,
+        claim_stance: p.analysis.claim_stance as string,
+        outlier_factor: p.outlier_factor,
+        debate_factor: p.debate_factor ?? null,
+      }));
+
+    const embeddings = await embedTexts(
+      claims.map((c) => normalizeObject(c.claim_object)),
+    ).catch((err: unknown) => {
+      console.warn("[pipeline] sin embeddings, agrupo por texto exacto:", err);
+      return new Map<string, number[]>();
+    });
+
+    const positions = buildPositions(claims, embeddings);
+    const withPositions = { ...synthesis, positions };
+    if (positions.length) {
+      const tensiones = positions.filter((p) => p.is_tension).length;
+      console.log(
+        `[pipeline] ${synthesis.region}: ${positions.length} posiciones, ${tensiones} tensiones`,
+      );
+    }
+
     await saveRegionInsight(
       synthesis.region,
-      synthesis,
+      withPositions,
       synthesis.posts_considered,
       "deterministic-v1",
     );

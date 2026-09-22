@@ -19,23 +19,20 @@ function analysis(over: Partial<PostAnalysis> = {}): PostAnalysis {
   return {
     is_relevant_to_hr: true,
     theme: "clima_cultura",
-    topic: "cultura organizacional",
-    relevance_reason: "toca un problema que el área vive todos los días",
-    angle: "la cultura como práctica diaria",
     audience_signal: "hr_leader",
     target_profiles: ["hr_manager", "chro"],
     hook: "Un hook",
     hook_pattern: "pov",
-    development: "Sostiene el punto con un ejemplo concreto.",
     structure: "opinion",
     cta: null,
-    keywords: ["cultura", "liderazgo"],
-    expressions: ["la cultura no se declara"],
     tone: "educativo",
     hashtag_strategy: "ninguno",
     replicability: "alta",
-    humand_angle: "Adaptarlo a comunicación interna",
-    why_it_worked: "porque sí",
+    claim: "Adaptarlo a comunicación interna",
+    counterclaim: null,
+    claim_object: "onboarding remoto",
+    claim_stance: "a_favor",
+    transferable_mechanism: "ninguno",
     copy_length: 420,
     hashtag_count: 0,
     ...over,
@@ -113,8 +110,8 @@ test("un patrón que sostiene un solo autor no cuenta como patrón", () => {
 test("synthesizeRegion solo mira posts relevantes y de audiencia RRHH", () => {
   const posts = [
     ...Array.from({ length: 10 }, (_, i) => post(`ok-${i}`, 0.9 - i * 0.01)),
-    post("personal", 0.99, { is_relevant_to_hr: false, topic: "Rock in Rio" }),
-    post("candidato", 0.98, { audience_signal: "candidate", topic: "como hacer un CV" }),
+    post("personal", 0.99, { is_relevant_to_hr: false, claim_object: "Rock in Rio" }),
+    post("candidato", 0.98, { audience_signal: "candidate", claim_object: "como hacer un CV" }),
   ];
 
   const s = synthesizeRegion("br", posts);
@@ -132,15 +129,21 @@ test("synthesizeRegion avisa cuando la muestra no alcanza en vez de inventar pat
   assert.ok(s.top_topics.length > 0);
 });
 
-test("synthesizeRegion junta ideas replicables con su angulo", () => {
+test("las ideas replicables exigen una afirmación, no una etiqueta", () => {
+  // El filtro pasó de `replicability === "alta"` a "tiene claim": un post sin
+  // afirmación no le da al calendario nada sobre qué escribir, por replicable
+  // que sea su formato.
   const posts = [
-    ...Array.from({ length: MIN_TOP_POSTS }, (_, i) => post(`alta-${i}`, 0.9 - i * 0.01)),
-    post("baja", 0.5, { replicability: "baja", humand_angle: null }),
+    ...Array.from({ length: MIN_TOP_POSTS }, (_, i) => post(`conclaim-${i}`, 0.9 - i * 0.01)),
+    post("sinclaim", 0.5, { replicability: "alta", claim: null }),
   ];
   const s = synthesizeRegion("br", posts);
   assert.ok(s.replicable_ideas.length > 0);
-  assert.ok(s.replicable_ideas.every((i) => i.humand_angle));
-  assert.ok(!s.replicable_ideas.some((i) => i.post_url?.includes("baja")));
+  assert.ok(s.replicable_ideas.every((i) => i.claim), "toda idea tiene que afirmar algo");
+  assert.ok(
+    !s.replicable_ideas.some((i) => i.post_url?.includes("sinclaim")),
+    "un post sin claim no entra aunque su replicabilidad sea alta",
+  );
 });
 
 test("compareOwnBrand marca los patrones que funcionan y no usamos", () => {
