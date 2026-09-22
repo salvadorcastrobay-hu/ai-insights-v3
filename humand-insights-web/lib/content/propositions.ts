@@ -17,8 +17,16 @@
  * campo categórico aparte. La polaridad nunca pasa por el embedding.
  */
 
-/** Dos objetos por encima de esto son el mismo tema. Calibrado, no teórico. */
-const SIMILARITY_THRESHOLD = 0.82;
+/**
+ * Dos objetos por encima de esto son el mismo tema.
+ *
+ * Calibrado sobre los objetos reales, no elegido a ojo: por encima de 0,78 casi
+ * no agrupa (grupos de 3 como máximo) y por debajo de 0,70 empieza a juntar
+ * cosas distintas. En 0,74 con enlace completo el grupo más grande queda en 6
+ * variantes, y son variantes de verdad: "pesquisa de clima / investigación de
+ * clima / encuestas de clima", incluso cruzando idiomas.
+ */
+const SIMILARITY_THRESHOLD = 0.74;
 
 /** Una posición necesita varias voces. Dos posts del mismo autor no son dos. */
 export const MIN_POSITION_AUTHORS = 3;
@@ -103,7 +111,19 @@ function median(values: number[]): number | null {
 }
 
 /**
- * Agrupa etiquetas por similitud, con enlace simple.
+ * Agrupa etiquetas por similitud, con ENLACE COMPLETO.
+ *
+ * El enlace simple encadena: si A se parece a B y B se parece a C, los tres
+ * caen en el mismo grupo aunque A y C no tengan nada que ver. Medido sobre los
+ * objetos reales, eso producía un grupo de 28 variantes que metía "límites en
+ * liderazgo" junto a "liderazgo efectivo" — o sea el mismo artefacto de
+ * categoría amplia que el prompt acababa de eliminar, reintroducido por el
+ * agrupamiento.
+ *
+ * Con enlace completo un objeto entra al grupo solo si se parece a TODOS los
+ * que ya están. Es más caro —hay que comparar contra cada miembro— pero con
+ * unos cientos de etiquetas cortas eso es irrelevante, y es lo que evita que un
+ * término genérico actúe de imán.
  *
  * `embeddings` puede venir vacío: en ese caso agrupa solo por coincidencia
  * exacta del texto normalizado, que ya resuelve la mayoría y no cuesta nada.
@@ -114,29 +134,26 @@ export function clusterObjects(
   threshold = SIMILARITY_THRESHOLD,
 ): Map<string, string[]> {
   const unique = [...new Set(labels.map(normalizeObject))].filter(Boolean);
-  // parent[i] apunta al representante del grupo de i (union-find chico).
-  const parent = unique.map((_, i) => i);
-  const find = (i: number): number => (parent[i] === i ? i : (parent[i] = find(parent[i])));
-  const union = (i: number, j: number) => {
-    const a = find(i);
-    const b = find(j);
-    if (a !== b) parent[b] = a;
+
+  const similar = (a: string, b: string): boolean => {
+    const ea = embeddings.get(a);
+    const eb = embeddings.get(b);
+    if (!ea || !eb) return false;
+    return cosine(ea, eb) >= threshold;
   };
 
-  for (let i = 0; i < unique.length; i += 1) {
-    for (let j = i + 1; j < unique.length; j += 1) {
-      const ea = embeddings.get(unique[i]);
-      const eb = embeddings.get(unique[j]);
-      // Sin embeddings queda el match exacto, que ya ocurrió al deduplicar.
-      if (!ea || !eb) continue;
-      if (cosine(ea, eb) >= threshold) union(i, j);
-    }
-  }
-
   const groups = new Map<string, string[]>();
-  for (let i = 0; i < unique.length; i += 1) {
-    const root = unique[find(i)];
-    groups.set(root, [...(groups.get(root) ?? []), unique[i]]);
+  for (const label of unique) {
+    // Entra al primer grupo con el que se parezca a TODOS sus miembros.
+    let destino: string | null = null;
+    for (const [root, members] of groups) {
+      if (members.every((m) => similar(label, m))) {
+        destino = root;
+        break;
+      }
+    }
+    if (destino) groups.set(destino, [...(groups.get(destino) ?? []), label]);
+    else groups.set(label, [label]);
   }
   return groups;
 }

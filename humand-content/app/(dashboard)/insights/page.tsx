@@ -243,7 +243,26 @@ export default async function InsightsPage() {
                 sin el mensaje no le dice a nadie qué escribir. */}
             {s.positions?.length ? (
               <div className="mb-5">
-                <SectionLabel>Sobre qué discute el mercado</SectionLabel>
+                <SectionLabel>
+                  {s.positions.some((p) => p.is_tension)
+                    ? "Sobre qué discute el mercado"
+                    : "De qué se habla, y desde qué postura"}
+                </SectionLabel>
+                {/*
+                  Cuando no hay ninguna tensión hay que decirlo. Una lista de
+                  consensos bajo el título "sobre qué se discute" haría pensar
+                  que el mercado está dividido cuando no lo está — y lo
+                  interesante para Content es justamente lo contrario: un tema
+                  donde todos dicen lo mismo es un tema donde tomar la posición
+                  contraria no tiene competencia.
+                */}
+                {!s.positions.some((p) => p.is_tension) ? (
+                  <p className="mb-2 text-[12px] leading-[1.4] text-[var(--faint)]">
+                    Ningún tema tiene los dos lados sostenidos por varias voces: en este
+                    mercado hay consenso, no debate. Hace falta más volumen de posts para
+                    detectar una tensión real.
+                  </p>
+                ) : null}
                 <div className="space-y-2">
                   {s.positions.slice(0, 5).map((p) => (
                     <Tension key={p.object_label} position={p} />

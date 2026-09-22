@@ -124,3 +124,20 @@ test("con los dos lados poblados sí se calcula", () => {
   assert.ok(pos.is_tension);
   assert.equal(pos.asymmetry, 3);
 });
+
+test("el enlace completo evita que un término genérico haga de imán", () => {
+  // Con enlace simple, A~B y B~C mete a A y C en el mismo grupo aunque no se
+  // parezcan. Medido sobre los objetos reales eso daba un grupo de 28 variantes
+  // que juntaba "límites en liderazgo" con "liderazgo efectivo".
+  const emb = new Map([
+    ["extremo a", [1, 0, 0]],
+    ["puente", [0.72, 0.69, 0]],
+    ["extremo b", [0, 1, 0]],
+  ]);
+  const groups = clusterObjects([...emb.keys()], emb, 0.7);
+  // "puente" se parece a los dos extremos, pero los extremos no entre sí (0).
+  const juntos = [...groups.values()].some(
+    (g) => g.includes("extremo a") && g.includes("extremo b"),
+  );
+  assert.equal(juntos, false, "los dos extremos no pueden terminar en el mismo grupo");
+});
