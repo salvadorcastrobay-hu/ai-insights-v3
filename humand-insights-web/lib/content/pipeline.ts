@@ -8,7 +8,12 @@
  */
 import { generateCalendar } from "./calendar";
 import { embedTexts } from "./embeddings";
-import { buildPositions, normalizeObject } from "./propositions";
+import {
+  buildCanonicalVocabulary,
+  buildPositions,
+  normalizeObject,
+  snapToCanonical,
+} from "./propositions";
 import type { PostAnalysis } from "./classify";
 import { suggestionKey, takeCoverageSnapshot } from "./metrics";
 import {
@@ -123,7 +128,27 @@ export async function runSynthesis(
       return new Map<string, number[]>();
     });
 
-    const positions = buildPositions(claims, embeddings);
+    /*
+     * Antes de agrupar, se ancla cada objeto a un vocabulario derivado del
+     * propio corpus.
+     *
+     * Sin esto el agregado no existe: `claim_object` es texto libre y el 86% de
+     * los objetos seguía siendo nuevo a los 700 claims. La curva es lineal, no
+     * saturante, así que más posts no densifican nada — diez mil darían ocho
+     * mil objetos con la misma densidad de 1,2.
+     *
+     * Medido sobre el mismo corpus, sin un solo post nuevo: de 0 tensiones a 6.
+     */
+    const canon = buildCanonicalVocabulary(
+      claims.map((c) => c.claim_object),
+      embeddings,
+    );
+    const anchored = claims.map((c) => ({
+      ...c,
+      claim_object: snapToCanonical(c.claim_object, canon, embeddings) ?? c.claim_object,
+    }));
+
+    const positions = buildPositions(anchored, embeddings);
     const withPositions = { ...synthesis, positions };
     if (positions.length) {
       const tensiones = positions.filter((p) => p.is_tension).length;

@@ -159,6 +159,93 @@ export function clusterObjects(
 }
 
 /**
+ * Construye un vocabulario canónico de prácticas a partir del propio corpus.
+ *
+ * POR QUÉ HACE FALTA: `claim_object` es texto libre, y medido sobre el corpus
+ * real el 86% de los objetos sigue siendo nuevo a los 700 claims. La curva es
+ * lineal, no saturante: el modelo inventa una frase por post. Eso significa que
+ * MÁS POSTS NO DENSIFICAN NADA — diez mil posts darían ocho mil objetos y la
+ * densidad quedaría igual en 1,2 posts por objeto.
+ *
+ * Es la misma patología que tenían `tone` (79 valores) y `topic` (907), que se
+ * resolvieron cerrando el vocabulario. Acá no se puede enumerar la taxonomía de
+ * antemano sin inventarla, así que se deriva del corpus: se toman los términos
+ * más repetidos como canónicos y todo lo demás se ancla al más cercano.
+ *
+ * Anclar no es lo mismo que agrupar. Agrupar compara todo contra todo y un
+ * término suelto arrastra a los demás; anclar compara contra una lista fija, así
+ * que el resultado no depende del orden ni de qué más haya en el corpus.
+ */
+export function buildCanonicalVocabulary(
+  objects: string[],
+  embeddings: Map<string, number[]>,
+  opts: { minOccurrences?: number; maxTerms?: number } = {},
+): string[] {
+  const minOccurrences = opts.minOccurrences ?? 2;
+  const maxTerms = opts.maxTerms ?? 80;
+
+  const counts = new Map<string, number>();
+  for (const o of objects) {
+    const n = normalizeObject(o);
+    if (n) counts.set(n, (counts.get(n) ?? 0) + 1);
+  }
+
+  // Candidatos: los que se repiten. Un término que aparece una sola vez no es
+  // vocabulario del rubro, es una frase que el modelo escribió esa vez.
+  const candidatos = [...counts.entries()]
+    .filter(([, n]) => n >= minOccurrences)
+    .sort((a, b) => b[1] - a[1])
+    .map(([term]) => term);
+
+  // Y se deduplican entre sí: "encuestas de clima" y "pesquisa de clima" no
+  // pueden ser dos entradas del vocabulario.
+  const canon: string[] = [];
+  for (const term of candidatos) {
+    if (canon.length >= maxTerms) break;
+    const emb = embeddings.get(term);
+    const yaEsta = canon.some((c) => {
+      const ec = embeddings.get(c);
+      return emb && ec && cosine(emb, ec) >= SIMILARITY_THRESHOLD;
+    });
+    if (!yaEsta) canon.push(term);
+  }
+  return canon;
+}
+
+/**
+ * Ancla un objeto al término canónico más cercano.
+ *
+ * Devuelve null si no hay ninguno lo bastante cerca: es preferible dejar el
+ * objeto afuera del agregado a meterlo en la práctica equivocada.
+ */
+export function snapToCanonical(
+  object: string,
+  canon: string[],
+  embeddings: Map<string, number[]>,
+  threshold = SIMILARITY_THRESHOLD,
+): string | null {
+  const n = normalizeObject(object);
+  if (!n) return null;
+  if (canon.includes(n)) return n;
+
+  const emb = embeddings.get(n);
+  if (!emb) return null;
+
+  let mejor: string | null = null;
+  let mejorSim = threshold;
+  for (const term of canon) {
+    const ec = embeddings.get(term);
+    if (!ec) continue;
+    const sim = cosine(emb, ec);
+    if (sim >= mejorSim) {
+      mejorSim = sim;
+      mejor = term;
+    }
+  }
+  return mejor;
+}
+
+/**
  * Arma las posiciones del mercado a partir de los claims.
  *
  * Los umbrales son la diferencia entre un hallazgo y un artefacto: sin ellos

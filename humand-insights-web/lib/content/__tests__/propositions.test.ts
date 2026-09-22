@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  buildCanonicalVocabulary,
   buildPositions,
   clusterObjects,
+  snapToCanonical,
   cosine,
   normalizeObject,
   type ClaimInput,
@@ -140,4 +142,42 @@ test("el enlace completo evita que un término genérico haga de imán", () => {
     (g) => g.includes("extremo a") && g.includes("extremo b"),
   );
   assert.equal(juntos, false, "los dos extremos no pueden terminar en el mismo grupo");
+});
+
+test("el vocabulario canónico se deriva de lo que se repite, no de una lista inventada", () => {
+  const emb = new Map([
+    ["encuestas de clima", [1, 0, 0]],
+    ["pesquisa de clima", [0.98, 0.2, 0]],
+    ["home office", [0, 1, 0]],
+    ["una frase que el modelo escribio una vez", [0, 0, 1]],
+  ]);
+  const objetos = [
+    "encuestas de clima", "encuestas de clima", "pesquisa de clima",
+    "home office", "home office",
+    "una frase que el modelo escribio una vez",
+  ];
+  const canon = buildCanonicalVocabulary(objetos, emb);
+  assert.ok(canon.includes("encuestas de clima"));
+  assert.ok(canon.includes("home office"));
+  assert.ok(
+    !canon.includes("una frase que el modelo escribio una vez"),
+    "lo que aparece una sola vez no es vocabulario del rubro",
+  );
+  assert.ok(
+    !canon.includes("pesquisa de clima"),
+    "no puede haber dos entradas para el mismo tema",
+  );
+});
+
+test("anclar no inventa: si nada está cerca, devuelve null", () => {
+  const emb = new Map([
+    ["encuestas de clima", [1, 0, 0]],
+    ["algo totalmente distinto", [0, 0, 1]],
+  ]);
+  assert.equal(snapToCanonical("encuestas de clima", ["encuestas de clima"], emb), "encuestas de clima");
+  assert.equal(
+    snapToCanonical("algo totalmente distinto", ["encuestas de clima"], emb),
+    null,
+    "es preferible dejarlo afuera a meterlo en la práctica equivocada",
+  );
 });
