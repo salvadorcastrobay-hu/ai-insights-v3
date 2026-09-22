@@ -347,15 +347,24 @@ export async function setFeedback(
   state: FeedbackState,
   decidedBy: string | null,
   editNote?: string | null,
+  /**
+   * Link de la pieza ya publicada. Es lo que habilita la cuarta métrica del
+   * brief: comparar lo que publicamos contra nuestro propio baseline. Solo se
+   * pisa cuando viene un valor, para que un "deshacer" no borre el link.
+   */
+  publishedUrl?: string | null,
 ): Promise<void> {
+  const patch: Record<string, unknown> = {
+    state,
+    edit_note: editNote ?? null,
+    decided_by: decidedBy,
+    decided_at: new Date().toISOString(),
+  };
+  if (publishedUrl !== undefined) patch.published_url = publishedUrl;
+
   const { error } = await sb()
     .from("content_suggestion_feedback")
-    .update({
-      state,
-      edit_note: editNote ?? null,
-      decided_by: decidedBy,
-      decided_at: new Date().toISOString(),
-    })
+    .update(patch)
     .eq("entry_key", entryKey);
   if (error) throw error;
 }

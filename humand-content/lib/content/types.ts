@@ -150,6 +150,13 @@ export type RegionSynthesis = {
   insufficient_sample?: string;
 };
 
+/** Un post real que respalda una pieza del calendario. */
+export type EvidenceLink = {
+  author_handle: string;
+  post_url: string;
+  outlier_factor: number | null;
+};
+
 export type CalendarEntry = {
   date: string;
   hook_pattern: string;
@@ -160,6 +167,12 @@ export type CalendarEntry = {
   format: string;
   cta: string | null;
   based_on: string;
+  /**
+   * Los posts concretos que respaldan la pieza, ya resueltos por el motor. Es
+   * lo que hace auditable al calendario: `based_on` es una frase que el modelo
+   * escribe, esto son links que existen.
+   */
+  evidence_links?: EvidenceLink[];
 };
 
 export type ContentCalendar = {

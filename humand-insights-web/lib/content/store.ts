@@ -7,6 +7,7 @@
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
+import type { CalendarEntry } from "./calendar";
 import type { FollowerTier } from "./scoring";
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
@@ -475,6 +476,27 @@ export async function saveScores(
  * Posts sin clasificar, priorizados por score: se analiza primero lo que ya
  * sabemos que funcionó. Clasificar todo sería gastar tokens en el ruido.
  */
+/**
+ * Handles con posts sin puntuar que ya pasaron la ventana de madurez.
+ *
+ * Es la entrada de `rescoreStragglers`. El corte de 72h cubre el umbral más
+ * alto de las dos plataformas, así que no re-puntúa nada prematuramente.
+ */
+export async function loadHandlesWithUnscoredPosts(platform: string): Promise<string[]> {
+  return safeRead("loadHandlesWithUnscoredPosts", [], async () => {
+    const cutoff = new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString();
+    const { data, error } = await getSupabase()
+      .from("content_posts")
+      .select("author_handle")
+      .eq("platform", platform)
+      .is("viral_score", null)
+      .lt("posted_at", cutoff)
+      .limit(2000);
+    if (error) throw error;
+    return [...new Set((data ?? []).map((r) => r.author_handle as string))];
+  });
+}
+
 export async function loadUnanalyzedPosts(
   platform: string,
   limit = 100,
@@ -635,6 +657,31 @@ export async function saveOwnBrandComparison(region: string, payload: unknown): 
  * descartó o publicó es historia de una decisión real y se conserva aunque el
  * calendario ya no la incluya — es la base de la métrica del brief.
  */
+/**
+ * Las piezas de un mes sobre las que ya hay una decisión tomada.
+ *
+ * Se lee del snapshot guardado en `content_suggestion_feedback.entry`, no del
+ * calendario: el calendario se reescribe y el snapshot es justamente lo que la
+ * persona vio cuando decidió.
+ */
+export async function loadDecidedEntries(
+  region: string,
+  month: string,
+): Promise<CalendarEntry[]> {
+  return safeRead("loadDecidedEntries", [], async () => {
+    const { data, error } = await getSupabase()
+      .from("content_suggestion_feedback")
+      .select("entry")
+      .eq("region", region)
+      .eq("month", month)
+      .neq("state", "pending");
+    if (error) throw error;
+    return (data ?? [])
+      .map((r) => r.entry as CalendarEntry)
+      .filter((e) => e && e.date && e.title);
+  });
+}
+
 export async function pruneStaleSuggestions(
   region: string,
   month: string,

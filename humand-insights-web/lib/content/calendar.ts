@@ -218,6 +218,15 @@ const CalendarEntrySchema = z.object({
     .enum(["texto", "carrusel", "video", "imagen"])
     .describe("Formato sugerido para la pieza."),
   cta: z.string().nullable().describe("Cierre o llamada a la acción. Null si no corresponde."),
+  /**
+   * Índices (1-based) de los posts del brief que respaldan la pieza. Se piden
+   * como números y no como URLs para que la cita sea verificable: un número
+   * fuera de rango se descarta, una URL inventada no se puede distinguir.
+   */
+  // Sin .default(): el structured output de OpenAI exige que todo campo del
+  // schema sea required, y un .default() lo vuelve opcional. Si no hay
+  // evidencia, el modelo manda [].
+  evidence_ids: z.array(z.number().int()),
   based_on: z
     .string()
     .describe("Qué evidencia del brief respalda esta pieza: el post o patrón concreto."),
@@ -225,7 +234,15 @@ const CalendarEntrySchema = z.object({
 
 const CalendarSchema = z.object({ entries: z.array(CalendarEntrySchema) });
 
-export type CalendarEntry = z.infer<typeof CalendarEntrySchema> & CalendarSlot;
+/** Un link de evidencia ya resuelto contra el post que lo respalda. */
+export type EvidenceLink = {
+  author_handle: string;
+  post_url: string;
+  outlier_factor: number | null;
+};
+
+export type CalendarEntry = z.infer<typeof CalendarEntrySchema> &
+  CalendarSlot & { evidence_links?: EvidenceLink[] };
 
 export type ContentCalendar = {
   region: string;
@@ -243,7 +260,11 @@ export type ContentCalendar = {
   warnings: string[];
 };
 
-function buildBrief(synthesis: RegionSynthesis, slots: CalendarSlot[]): string {
+function buildBrief(
+  synthesis: RegionSynthesis,
+  slots: CalendarSlot[],
+  keep: CalendarEntry[] = [],
+): string {
   const lines: string[] = [];
   lines.push(`MERCADO: ${synthesis.region}`);
   lines.push(`Base: ${synthesis.posts_considered} posts de referentes de RRHH que rindieron.`);
@@ -267,14 +288,24 @@ function buildBrief(synthesis: RegionSynthesis, slots: CalendarSlot[]): string {
     lines.push("TONOS: " + synthesis.tone_mix.map((t) => t.key).join(", "));
   }
   if (synthesis.replicable_ideas.length) {
-    lines.push("\nPOSTS CONCRETOS QUE FUNCIONARON:");
-    for (const idea of synthesis.replicable_ideas) {
+    // Numerados: el modelo devuelve el número y el código lo mapea al post real.
+    // Pedirle la URL sería invitarlo a inventar una; un índice fuera de rango
+    // se descarta y ya.
+    lines.push("\nPOSTS CONCRETOS QUE FUNCIONARON (citá el número en evidence_ids):");
+    synthesis.replicable_ideas.forEach((idea, i) => {
       lines.push(
-        `- [${idea.hook_pattern}] "${idea.hook ?? ""}" (${
+        `[E${i + 1}] [${idea.hook_pattern}] "${idea.hook ?? ""}" (${
           idea.outlier_factor ? `${idea.outlier_factor.toFixed(1)}x` : "?"
-        } sobre el promedio del autor)`,
+        } sobre el promedio del autor, @${idea.author_handle})`,
       );
       lines.push(`  ángulo para Humand: ${idea.humand_angle}`);
+    });
+  }
+
+  if (keep.length) {
+    lines.push("\nYA PLANIFICADO ESTE MES (no repitas estos temas ni estos ángulos):");
+    for (const entry of keep) {
+      lines.push(`- ${entry.date} · ${entry.title} — ${entry.angle}`);
     }
   }
 
@@ -301,7 +332,8 @@ const SYSTEM = [
   "- Le hablás a quien GESTIONA personas, no a quien busca trabajo.",
   "- Nada de vender Humand de frente: el contenido aporta valor, el producto",
   "  aparece a lo sumo como cierre natural.",
-  "- En `based_on` citá la evidencia concreta del brief que respalda la pieza.",
+  "- En `based_on` citá la evidencia concreta del brief que respalda la pieza,",
+  "  y en `evidence_ids` los números [E1], [E2]… de los posts que usaste.",
   "- Devolvé una entrada por pieza, con su slot_index.",
 ].join("\n");
 
@@ -316,6 +348,14 @@ export async function generateCalendar(
   synthesis: RegionSynthesis,
   monthStart: Date,
   postsPerWeek = 3,
+  /**
+   * Piezas que NO se regeneran: las que alguien ya aprobó, editó, descartó o
+   * publicó. Sin esto cada corrida semanal reescribía el mes entero con
+   * títulos nuevos, y como el entry_key es sha1 del título, las decisiones
+   * quedaban huérfanas: la pieza aprobada desaparecía de la pantalla y el
+   * "% aprobado sin cambios" se calculaba sobre fantasmas.
+   */
+  keep: CalendarEntry[] = [],
 ): Promise<ContentCalendar> {
   const warnings: string[] = [];
   if (synthesis.insufficient_sample) warnings.push(synthesis.insufficient_sample);
@@ -326,7 +366,9 @@ export async function generateCalendar(
     );
   }
 
-  const slots = planSlots(synthesis, monthStart, postsPerWeek);
+  // Las fechas ya ocupadas por una pieza decidida salen del reparto.
+  const taken = new Set(keep.map((e) => e.date));
+  const slots = planSlots(synthesis, monthStart, postsPerWeek).filter((s) => !taken.has(s.date));
   const month = monthStart.toISOString().slice(0, 7);
   const model = calendarModel();
 
@@ -338,14 +380,18 @@ export async function generateCalendar(
   };
 
   if (!slots.length) {
+    // Con todas las fechas ya decididas no hay nada que generar, y eso es un
+    // mes completo, no un fallo.
     return {
       region: synthesis.region,
       month,
       generated_at: new Date().toISOString(),
       model,
       evidence,
-      entries: [],
-      warnings: [...warnings, "No se pudieron planificar fechas para el mes."],
+      entries: [...keep].sort((a, b) => a.date.localeCompare(b.date)),
+      warnings: keep.length
+        ? warnings
+        : [...warnings, "No se pudieron planificar fechas para el mes."],
     };
   }
 
@@ -353,20 +399,48 @@ export async function generateCalendar(
     model: openai(model),
     schema: CalendarSchema,
     system: SYSTEM,
-    prompt: buildBrief(synthesis, slots),
+    prompt: buildBrief(synthesis, slots, keep),
   });
 
-  const entries: CalendarEntry[] = [];
+  const entries: CalendarEntry[] = [...keep];
   for (const entry of object.entries) {
     const slot = slots[entry.slot_index - 1];
     if (!slot) continue;
-    // La fecha, el patrón y el tema los pone el código, no el modelo.
-    entries.push({ ...entry, date: slot.date, hook_pattern: slot.hook_pattern, theme: slot.theme });
+    // La fecha, el patrón y el tema los pone el código, no el modelo. Los
+    // evidence_ids fuera de rango se descartan acá: es lo que hace que la cita
+    // sea verificable y no una frase plausible.
+    const evidence_ids = (entry.evidence_ids ?? []).filter(
+      (id) => id >= 1 && id <= synthesis.replicable_ideas.length,
+    );
+    // Los links se resuelven acá, contra el post real. La app solo los pinta:
+    // así la cita del calendario es navegable y auditable, y no una frase.
+    const evidence_links = evidence_ids
+      .map((id) => synthesis.replicable_ideas[id - 1])
+      .filter((idea) => idea?.post_url)
+      .map((idea) => ({
+        author_handle: idea.author_handle,
+        post_url: idea.post_url as string,
+        outlier_factor: idea.outlier_factor ?? null,
+      }));
+    entries.push({
+      ...entry,
+      // El modelo repite los marcadores [E1], [E5] del brief adentro de la
+      // frase. Sirven para mapear, no para leerse: los chips de abajo ya
+      // muestran el link.
+      based_on: entry.based_on?.replace(/\s*\[E\d+\]/g, "").trim(),
+      evidence_ids,
+      evidence_links,
+      date: slot.date,
+      hook_pattern: slot.hook_pattern,
+      theme: slot.theme,
+    });
   }
   entries.sort((a, b) => a.date.localeCompare(b.date));
 
-  if (entries.length < slots.length) {
-    warnings.push(`Se planificaron ${slots.length} piezas y el modelo devolvió ${entries.length}.`);
+  if (entries.length - keep.length < slots.length) {
+    warnings.push(
+      `Se planificaron ${slots.length} piezas nuevas y el modelo devolvió ${entries.length - keep.length}.`,
+    );
   }
   if (synthesis.insufficient_sample) {
     warnings.push(

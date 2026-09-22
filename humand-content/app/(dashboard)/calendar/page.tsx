@@ -2,6 +2,7 @@ import { Badge, Callout, Card, EmptyState, PageHeader, SectionLabel } from "@/co
 import { loadCalendars, loadFeedback, suggestionKey } from "@/lib/content/queries";
 import { regionLabel, type CalendarEntry, type ContentCalendar } from "@/lib/content/types";
 
+import { CopyButton } from "./CopyButton";
 import { FeedbackButtons } from "./FeedbackButtons";
 
 export const dynamic = "force-dynamic";
@@ -111,10 +112,34 @@ function EntryCard({
       ) : null}
 
       {/* La cita de la evidencia es lo que separa esto de una lluvia de ideas. */}
-      <p className="mt-3 border-l-2 border-[var(--brand-soft-2)] pl-3 text-[12px] leading-[1.4] text-[var(--muted)]">
-        <span className="font-semibold">Se apoya en · </span>
-        {entry.based_on}
-      </p>
+      <div className="mt-3 border-l-2 border-[var(--brand-soft-2)] pl-3">
+        <p className="text-[12px] leading-[1.4] text-[var(--muted)]">
+          <span className="font-semibold">Se apoya en · </span>
+          {entry.based_on}
+        </p>
+        {/* Los links son lo que separa esto de una frase plausible: se puede
+            abrir el post y comprobarlo. */}
+        {entry.evidence_links?.length ? (
+          <div className="mt-1.5 flex flex-wrap gap-1">
+            {entry.evidence_links.map((ev) => (
+              <a
+                key={ev.post_url}
+                href={ev.post_url}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-[var(--r-s)] border border-[var(--border)] px-2 py-0.5 text-[11px] leading-[1.4] text-[var(--brand-ink)] hover:border-[var(--brand)]"
+              >
+                @{ev.author_handle}
+                {ev.outlier_factor ? ` ${ev.outlier_factor.toFixed(1)}×` : ""} ↗
+              </a>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-1 text-[11px] leading-[1.4] text-[var(--faint)]">
+            Sin evidencia directa citada.
+          </p>
+        )}
+      </div>
 
       <div className="mt-3 border-t border-[var(--border)] pt-2">
         <FeedbackButtons
@@ -157,11 +182,46 @@ export default async function CalendarPage({
       "pending",
   ).length;
 
+  // TSV para el botón de copiar: es lo que se pega como tabla en Notion o en
+  // una planilla, sin pasar por un importador.
+  const tsv = [
+    ["Fecha", "Título", "Hook", "Ángulo", "Patrón", "Tema", "Formato", "CTA", "Estado"].join("\t"),
+    ...cal.entries.map((entry) => {
+      const state =
+        feedback.get(suggestionKey(cal.region, cal.month, entry.date, entry.title))?.state ??
+        "pending";
+      return [
+        entry.date,
+        entry.title,
+        entry.hook,
+        entry.angle,
+        entry.hook_pattern.replace(/_/g, " "),
+        entry.theme.replace(/_/g, " "),
+        entry.format,
+        entry.cta ?? "",
+        state === "pending" ? "sin revisar" : state,
+      ]
+        .map((v) => String(v).replace(/[\t\n]/g, " "))
+        .join("\t");
+    }),
+  ].join("\n");
+
   return (
     <>
       <PageHeader
         title="Calendario"
         subtitle="Borrador armado con lo que funcionó. El patrón de cada pieza sale del lift medido en ese mercado, no de una corazonada."
+        actions={
+          <div className="flex shrink-0 gap-2">
+            <CopyButton tsv={tsv} />
+            <a
+              href={`/calendar/export?region=${cal.region}`}
+              className="rounded-[var(--r-m)] border border-[var(--border)] px-3 py-1.5 text-[12px] font-semibold text-[var(--text)] transition-colors hover:border-[var(--border-strong)]"
+            >
+              Descargar CSV
+            </a>
+          </div>
+        }
       />
 
       <div className="mb-6 flex flex-wrap items-center gap-1 border-b border-[var(--border)]">
