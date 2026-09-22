@@ -221,10 +221,16 @@ const PostAnalysisSchema = z.object({
     .string()
     .nullable()
     .describe(
-      "SOBRE QUÉ afirma, como sustantivo corto de 2 a 4 palabras, sin verbo y " +
-        "sin postura. Ejemplos: 'encuestas de clima', 'home office', " +
-        "'evaluación de desempeño', 'salario emocional', 'onboarding remoto'. " +
-        "Usá el término más común del rubro, no una perífrasis.",
+      "LA PRÁCTICA CONCRETA sobre la que afirma, como sustantivo de 2 a 5 " +
+        "palabras, sin verbo y sin postura. Tiene que ser algo de lo que se " +
+        "pueda estar a favor o en contra. " +
+        "SÍ: 'encuestas de clima', 'evaluación anual de desempeño', " +
+        "'home office', 'liderazgo vulnerable', 'entrevistas por competencias'. " +
+        "NO: 'liderazgo', 'cultura organizacional', 'recursos humanos', " +
+        "'comunicación' — son categorías, nadie está a favor o en contra de " +
+        "ellas, y agrupan posts que no discuten lo mismo. " +
+        "Si solo te sale una categoría amplia, buscá la práctica puntual que " +
+        "el post cuestiona o defiende dentro de ella.",
     ),
   claim_stance: z
     .enum(["a_favor", "en_contra", "condicional", "descriptivo"])
@@ -303,11 +309,18 @@ const SYSTEM = [
   "afirman nada: anuncios, listas de recursos, anécdotas, celebraciones. Eso es",
   "un dato válido, no una falla tuya.",
   "",
-  "`claim_object` es un sustantivo del vocabulario del rubro, sin postura",
-  'adentro: "encuestas de clima", no "el problema de las encuestas de clima".',
-  "Usá el término que usaría alguien del rubro, no una perífrasis: sobre ese",
-  "texto se agrupan los posts entre sí, así que dos posts sobre lo mismo tienen",
-  "que escribirlo igual.",
+  "`claim_object` es la PRÁCTICA sobre la que se discute, no la categoría que la",
+  "contiene. La prueba: si no se puede estar a favor o en contra de eso, está mal.",
+  "",
+  '- "liderazgo" está MAL: nadie está en contra del liderazgo. Lo que se',
+  '  discute es "liderazgo vulnerable", "liderazgo por miedo", "líder como',
+  '  referente técnico".',
+  '- "cultura organizacional" está MAL por lo mismo. Lo discutible es "cultura',
+  '  como consecuencia del liderazgo", "rituales de cultura", "cultura remota".',
+  "",
+  "Sin postura adentro del objeto: 'encuestas de clima', no 'el problema de las",
+  "encuestas de clima'. Sobre ese texto se agrupan los posts entre sí, así que",
+  "dos posts que discuten lo mismo tienen que escribirlo igual.",
   "",
   "Respondé en español, salvo hook, claim y counterclaim, que van en el idioma",
   "original de la pieza. Devolvé un objeto por post, con su post_index.",
