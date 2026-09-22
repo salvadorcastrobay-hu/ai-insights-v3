@@ -217,12 +217,27 @@ export function buildPositions(
       aFavor.authors >= MIN_SIDE_AUTHORS &&
       enContra.authors >= MIN_SIDE_AUTHORS;
 
-    const medians = sides
-      .map((s) => s.median_outlier)
-      .filter((v): v is number => v !== null && v > 0);
+    /*
+     * La asimetría compara SOLO a_favor contra en_contra, y solo cuando los dos
+     * lados tienen voces suficientes.
+     *
+     * Calculada sobre todos los lados daba cosas como "cultura organizacional,
+     * asimetría 187×", que salía de dividir la mediana de cinco posts por la de
+     * UN post etiquetado 'condicional'. Ni era una comparación entre posturas
+     * opuestas ni tenía muestra: era ruido con dos decimales.
+     */
     const asymmetry =
-      medians.length >= 2
-        ? Number((Math.max(...medians) / Math.min(...medians)).toFixed(2))
+      is_tension &&
+      aFavor?.median_outlier &&
+      enContra?.median_outlier &&
+      aFavor.median_outlier > 0 &&
+      enContra.median_outlier > 0
+        ? Number(
+            (
+              Math.max(aFavor.median_outlier, enContra.median_outlier) /
+              Math.min(aFavor.median_outlier, enContra.median_outlier)
+            ).toFixed(2),
+          )
         : null;
 
     positions.push({

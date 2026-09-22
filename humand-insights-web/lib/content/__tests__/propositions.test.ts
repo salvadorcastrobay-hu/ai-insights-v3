@@ -94,3 +94,33 @@ test("cosine es coseno", () => {
   assert.equal(cosine([1, 0], [1, 0]), 1);
   assert.equal(cosine([1, 0], [0, 1]), 0);
 });
+
+test("la asimetría no se calcula contra un lado de un solo post", () => {
+  // El caso real: "cultura organizacional, asimetría 187x" salía de dividir la
+  // mediana de cinco posts por la de UN post etiquetado 'condicional'. Ni era
+  // una comparación entre posturas opuestas ni tenía muestra.
+  const claims = [
+    ...Array.from({ length: 5 }, (_, i) =>
+      claim({ author_handle: `@a${i}`, claim_object: "cultura", claim_stance: "a_favor", outlier_factor: 35 }),
+    ),
+    claim({ author_handle: "@z", claim_object: "cultura", claim_stance: "condicional", outlier_factor: 0.2 }),
+  ];
+  const [pos] = buildPositions(claims);
+  assert.ok(pos);
+  assert.equal(pos.is_tension, false, "a_favor contra condicional no es una tensión");
+  assert.equal(pos.asymmetry, null, "sin dos lados opuestos poblados no hay asimetría");
+});
+
+test("con los dos lados poblados sí se calcula", () => {
+  const claims = [
+    ...Array.from({ length: 3 }, (_, i) =>
+      claim({ author_handle: `@a${i}`, claim_object: "encuestas", claim_stance: "a_favor", outlier_factor: 1 }),
+    ),
+    ...Array.from({ length: 3 }, (_, i) =>
+      claim({ author_handle: `@b${i}`, claim_object: "encuestas", claim_stance: "en_contra", outlier_factor: 3 }),
+    ),
+  ];
+  const [pos] = buildPositions(claims);
+  assert.ok(pos.is_tension);
+  assert.equal(pos.asymmetry, 3);
+});
