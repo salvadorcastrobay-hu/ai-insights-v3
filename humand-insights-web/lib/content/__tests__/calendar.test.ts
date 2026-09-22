@@ -11,7 +11,7 @@ import {
 import type { RegionSynthesis } from "../synthesize";
 
 function lift(key: string, value: number) {
-  return { key, lift: value, top_count: 5, top_share: 0.2, base_share: 0.1 };
+  return { key, lift: value, top_count: 5, top_authors: 3, top_share: 0.2, base_share: 0.1 };
 }
 
 test("allocateByLift reparte proporcional al lift medido", () => {
@@ -70,6 +70,7 @@ test("planSlots respeta el lift y no inventa fechas fuera del mes", () => {
     top_posts_count: 20,
     winning_hooks: [lift("pov", 1.65), lift("pregunta", 1.58), lift("storytelling", 0.9)],
     winning_themes: [lift("clima_cultura", 1.41)],
+    winning_structures: null,
     top_topics: [],
     tone_mix: [],
     replicable_ideas: [],
@@ -92,6 +93,7 @@ test("themeCandidates garantiza variedad cuando hay un solo tema ganador", () =>
     top_posts_count: 20,
     winning_hooks: [lift("pov", 1.65)],
     winning_themes: [lift("clima_cultura", 1.41), lift("liderazgo", 0.87), lift("desempeno", 0.6)],
+    winning_structures: null,
     top_topics: [],
     tone_mix: [],
     replicable_ideas: [],
@@ -116,6 +118,7 @@ test("planSlots acorta el calendario cuando la evidencia no alcanza", () => {
     top_posts_count: 4,
     winning_hooks: null,
     winning_themes: null,
+    winning_structures: null,
     top_topics: [],
     tone_mix: [],
     replicable_ideas: [
@@ -193,10 +196,11 @@ test("las fechas ya decididas salen del reparto de slots nuevos", () => {
     posts_considered: 120,
     top_posts_count: 24,
     winning_hooks: [
-      { key: "pov", top_count: 8, lift: 1.6 },
-      { key: "pregunta", top_count: 6, lift: 1.3 },
+      { key: "pov", top_count: 8, top_authors: 3, lift: 1.6 },
+      { key: "pregunta", top_count: 6, top_authors: 3, lift: 1.3 },
     ],
-    winning_themes: [{ key: "clima_cultura", top_count: 9, lift: 1.5 }],
+    winning_themes: [{ key: "clima_cultura", top_count: 9, top_authors: 3, lift: 1.5 }],
+    winning_structures: null,
     top_topics: [{ key: "cultura", count: 9 }],
     tone_mix: [{ key: "cercano", count: 7 }],
     replicable_ideas: [],

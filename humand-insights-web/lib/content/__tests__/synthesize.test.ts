@@ -12,7 +12,7 @@ import {
 import type { PostAnalysis } from "../classify";
 
 function lift(key: string, value: number) {
-  return { key, lift: value, top_count: 5, top_share: 0.2, base_share: 0.1 };
+  return { key, lift: value, top_count: 5, top_authors: 3, top_share: 0.2, base_share: 0.1 };
 }
 
 function analysis(over: Partial<PostAnalysis> = {}): PostAnalysis {
@@ -60,12 +60,17 @@ test("computeLift separa lo que se usa mucho de lo que gana", () => {
   // 'pregunta' es el hook más común en general (6 de 10) pero aparece igual de
   // seguido arriba: no es ganador, es frecuente. 'contrarian' es raro abajo y
   // domina arriba: ese sí.
+  // Cada observación trae su autor: el lift exige voces distintas, no posts.
+  const obs = (key: string, i: number) => ({ key, author: `a${i}` });
   const all = [
-    ...Array(12).fill("pregunta"),
-    ...Array(4).fill("contrarian"),
-    ...Array(4).fill("pov"),
+    ...Array.from({ length: 12 }, (_, i) => obs("pregunta", i)),
+    ...Array.from({ length: 4 }, (_, i) => obs("contrarian", i)),
+    ...Array.from({ length: 4 }, (_, i) => obs("pov", i)),
   ];
-  const top = ["contrarian", "contrarian", "contrarian", "pregunta", "pregunta", "pregunta"];
+  const top = [
+    obs("contrarian", 0), obs("contrarian", 1), obs("contrarian", 2),
+    obs("pregunta", 3), obs("pregunta", 4), obs("pregunta", 5),
+  ];
 
   const lifts = computeLift(top, all);
   const byKey = new Map(lifts.map((l) => [l.key, l]));
@@ -79,11 +84,30 @@ test("computeLift separa lo que se usa mucho de lo que gana", () => {
 test("computeLift ignora patrones con muy pocas apariciones arriba", () => {
   // Un lift altísimo sobre 2 posts se lee como hallazgo y no lo es: es el caso
   // real de "onboarding 4.95x" en España, calculado sobre dos apariciones.
-  const top = ["raro", "raro", ...Array(8).fill("comun")];
-  const all = [...top, ...Array(40).fill("comun")];
+  const obs = (key: string, i: number) => ({ key, author: `a${i}` });
+  const top = [
+    obs("raro", 0), obs("raro", 1),
+    ...Array.from({ length: 8 }, (_, i) => obs("comun", i + 2)),
+  ];
+  const all = [...top, ...Array.from({ length: 40 }, (_, i) => obs("comun", i + 10))];
   const lifts = computeLift(top, all);
   assert.ok(!lifts.some((l) => l.key === "raro"), "2 apariciones no son un patrón");
   assert.ok(lifts.some((l) => l.key === "comun"));
+});
+
+test("un patrón que sostiene un solo autor no cuenta como patrón", () => {
+  // El agujero real: MIN_PATTERN_COUNT miraba posts, así que un autor prolífico
+  // con cinco posts del mismo tipo fabricaba un "patrón del mercado" solo.
+  const unoSolo = Array.from({ length: 5 }, () => ({ key: "cruzada", author: "@el_mismo" }));
+  const varios = Array.from({ length: 5 }, (_, i) => ({ key: "real", author: `@a${i}` }));
+  const top = [...unoSolo, ...varios];
+  const all = [...top, ...Array.from({ length: 30 }, (_, i) => ({ key: "comun", author: `@b${i}` }))];
+
+  const lifts = computeLift(top, all);
+  assert.ok(!lifts.some((l) => l.key === "cruzada"), "cinco posts de una persona no son un patrón");
+  const real = lifts.find((l) => l.key === "real");
+  assert.ok(real, "cinco posts de cinco personas sí lo son");
+  assert.equal(real!.top_authors, 5);
 });
 
 test("synthesizeRegion solo mira posts relevantes y de audiencia RRHH", () => {
@@ -126,6 +150,7 @@ test("compareOwnBrand marca los patrones que funcionan y no usamos", () => {
     top_posts_count: 20,
     winning_hooks: [lift("contrarian", 2.1), lift("pregunta", 1.6), lift("pov", 1.2)],
     winning_themes: [lift("clima_cultura", 1.5), lift("liderazgo", 1.3)],
+    winning_structures: null,
     top_topics: [],
     tone_mix: [],
     replicable_ideas: [],
@@ -171,6 +196,7 @@ test("compareOwnBrand no acusa de sobreuso a un patron sin lift medido", () => {
     top_posts_count: 4,
     winning_hooks: null,
     winning_themes: null,
+    winning_structures: null,
     top_topics: [],
     tone_mix: [],
     replicable_ideas: [],

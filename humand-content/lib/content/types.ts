@@ -97,6 +97,13 @@ export type ContentPost = {
   comments_count: number | null;
   shares_count: number | null;
   outlier_factor: number | null;
+  /**
+   * Cuánto más se discutió el post que lo normal de su autor. Mide fricción,
+   * no alcance: un post con muchos likes y pocos comentarios es asentimiento;
+   * uno con el ratio disparado tocó algo. Son ejes independientes —medido,
+   * correlación -0,08— así que un post puede rendir poco y discutirse mucho.
+   */
+  debate_factor: number | null;
   viral_score: number | null;
   analysis: PostAnalysis | null;
   /**

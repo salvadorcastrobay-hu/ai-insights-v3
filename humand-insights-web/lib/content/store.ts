@@ -449,6 +449,7 @@ export async function saveScores(
     engagement_total: number;
     engagement_rate: number | null;
     outlier_factor: number | null;
+    debate_factor: number | null;
     viral_score: number | null;
   }>,
 ): Promise<void> {
@@ -463,6 +464,7 @@ export async function saveScores(
         engagement_total: score.engagement_total,
         engagement_rate: score.engagement_rate,
         outlier_factor: score.outlier_factor,
+        debate_factor: score.debate_factor,
         viral_score: score.viral_score,
         scored_at: scoredAt,
       })

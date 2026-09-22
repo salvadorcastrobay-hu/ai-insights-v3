@@ -50,12 +50,19 @@ export type PostFilters = {
    * cuentas cualquiera por encima de los referentes.
    */
   onlyMeasured?: boolean;
+  /**
+   * Por qué eje ordenar. `viral` es alcance; `debate` es fricción — cuánto más
+   * se discutió el post que lo normal de su autor. Son independientes: medido
+   * sobre los datos reales, la correlación entre los dos es -0,08.
+   */
+  sortBy?: "viral" | "debate";
   limit?: number;
 };
 
 const POST_COLUMNS =
   "id, platform, post_id, author_handle, post_url, format, caption, posted_at," +
-  " likes_count, comments_count, shares_count, outlier_factor, viral_score, analysis," +
+  " likes_count, comments_count, shares_count, outlier_factor, debate_factor," +
+  " viral_score, analysis," +
   // display_url y media estaban guardados desde la primera corrida y nunca se
   // pedían acá: por eso la app no mostraba una sola foto.
   " display_url, media, stored_media";
@@ -186,6 +193,11 @@ export async function loadRankedPosts(filters: PostFilters = {}): Promise<Conten
     let q = sb().from("content_posts").select(POST_COLUMNS) as unknown as PostgrestQuery;
     for (const column of notNull) q = q.not(column, "is", null);
     for (const [column, value] of eqFilters) q = q.eq(column, value);
+    // Ordenar por debate exige tenerlo medido: sin eso el orden lo definen los
+    // nulls y el feed se llena de posts sin señal.
+    if (filters.sortBy === "debate") {
+      return q.not("debate_factor", "is", null).order("debate_factor", { ascending: false });
+    }
     return q.order("viral_score", { ascending: false });
   };
 

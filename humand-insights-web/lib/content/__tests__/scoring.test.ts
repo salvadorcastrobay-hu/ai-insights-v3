@@ -366,3 +366,59 @@ test("el piso de alcance se calcula por mercado, no global", () => {
     "el que sobresale en su mercado debe ganarle al que rinde normal en uno más grande",
   );
 });
+
+test("debate_factor detecta el post que se discutió más de lo normal de su autor", () => {
+  // Un autor cuyo ratio habitual de comentarios es ~2%. Un post que salta a 20%
+  // no tuvo más alcance: tuvo más fricción. viral_score no los distingue.
+  const base = (id: string, likes: number, comments: number, dias: number) => ({
+    post_id: id,
+    author_handle: "@referente",
+    likes_count: likes,
+    comments_count: comments,
+    video_views: null,
+    shares_count: null,
+    author_followers_at_fetch: 10_000,
+    posted_at: new Date(Date.now() - dias * 864e5).toISOString(),
+    is_pinned: false,
+    region: "br",
+  });
+
+  const posts = [
+    ...Array.from({ length: 6 }, (_, i) => base(`normal-${i}`, 490, 10, 20 + i)),
+    base("polemico", 400, 100, 10),
+  ];
+
+  const scores = scorePosts(posts, new Date(), "instagram");
+  const byId = new Map(scores.map((s) => [s.post_id, s]));
+
+  const polemico = byId.get("polemico")!;
+  const normal = byId.get("normal-0")!;
+
+  assert.ok(polemico.debate_factor !== null, "el post polémico tiene debate medido");
+  assert.ok(
+    polemico.debate_factor! > 5,
+    `esperaba un debate alto, dio ${polemico.debate_factor}`,
+  );
+  assert.ok(
+    (normal.debate_factor ?? 0) < 2,
+    "un post con el ratio habitual del autor no es debate",
+  );
+});
+
+test("sin volumen suficiente el ratio de comentarios no se mide", () => {
+  // 1 like y 1 comentario da 50% de ratio y no significa nada.
+  const posts = Array.from({ length: 6 }, (_, i) => ({
+    post_id: `chico-${i}`,
+    author_handle: "@cuenta_chica",
+    likes_count: 1,
+    comments_count: 1,
+    video_views: null,
+    shares_count: null,
+    author_followers_at_fetch: 100,
+    posted_at: new Date(Date.now() - (20 + i) * 864e5).toISOString(),
+    is_pinned: false,
+    region: "br",
+  }));
+  const scores = scorePosts(posts, new Date(), "instagram");
+  assert.ok(scores.every((s) => s.debate_factor === null), "sin volumen no hay debate medible");
+});

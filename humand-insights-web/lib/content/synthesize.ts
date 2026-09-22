@@ -23,7 +23,10 @@ export const MIN_TOP_POSTS = 8;
  * Con 2 el lift es ruido: España marcaba "onboarding 4.95x" sobre dos posts.
  * Un número grande sobre una muestra diminuta se lee como hallazgo y no lo es.
  */
-export const MIN_PATTERN_COUNT = 3;
+export /** Un patrón necesita varias voces distintas, no varios posts de una. */
+const MIN_PATTERN_AUTHORS = 3;
+
+const MIN_PATTERN_COUNT = 3;
 
 export type AnalyzedPost = {
   post_id: string;
@@ -42,6 +45,8 @@ export type PatternLift = {
   key: string;
   /** Cuántos del corte superior lo usan. */
   top_count: number;
+  /** Cuántos AUTORES distintos lo sostienen. Es la señal, no el conteo de posts. */
+  top_authors: number;
   /** Qué proporción del corte superior representa. */
   top_share: number;
   /** Qué proporción del total representa. */
@@ -60,6 +65,7 @@ export type RegionSynthesis = {
   /** null cuando no hay muestra suficiente para afirmar nada. */
   winning_hooks: PatternLift[] | null;
   winning_themes: PatternLift[] | null;
+  winning_structures: PatternLift[] | null;
   top_topics: Array<{ key: string; count: number }>;
   tone_mix: Array<{ key: string; count: number }>;
   replicable_ideas: Array<{
@@ -97,25 +103,51 @@ function toSortedList(counts: Map<string, number>, limit: number) {
  * liderar el corte superior por volumen y no porque funcione. El lift separa
  * "lo que se usa mucho" de "lo que gana".
  */
+/** Una observación: qué valor tomó el patrón y quién lo publicó. */
+export type LiftObservation = { key: string | null | undefined; author: string };
+
+/**
+ * Cuántos AUTORES distintos sostienen cada valor.
+ *
+ * Es la protección que faltaba: contando posts, un autor prolífico fabrica un
+ * patrón solo. Con 983 posts sobre ~75 fuentes eso no es hipotético — hay
+ * autores con veinte posts y autores con dos, y `MIN_PATTERN_COUNT` no
+ * distingue "tres posts de tres personas" de "tres posts de la misma".
+ */
+function tallyAuthors(items: LiftObservation[]): Map<string, Set<string>> {
+  const out = new Map<string, Set<string>>();
+  for (const item of items) {
+    if (!item.key) continue;
+    const set = out.get(item.key) ?? new Set<string>();
+    set.add(item.author);
+    out.set(item.key, set);
+  }
+  return out;
+}
+
 export function computeLift(
-  top: Array<string | null | undefined>,
-  all: Array<string | null | undefined>,
+  top: LiftObservation[],
+  all: LiftObservation[],
   minTopCount = MIN_PATTERN_COUNT,
 ): PatternLift[] {
-  const topCounts = tally(top);
-  const allCounts = tally(all);
+  const topCounts = tally(top.map((t) => t.key));
+  const allCounts = tally(all.map((a) => a.key));
+  const topAuthors = tallyAuthors(top);
   const topTotal = [...topCounts.values()].reduce((a, b) => a + b, 0);
   const allTotal = [...allCounts.values()].reduce((a, b) => a + b, 0);
   if (!topTotal || !allTotal) return [];
 
   return [...topCounts.entries()]
-    .filter(([, count]) => count >= minTopCount)
+    // Se exige el mínimo en AUTORES, no en posts: un patrón que sostiene una
+    // sola persona no es un patrón del mercado.
+    .filter(([key, count]) => count >= minTopCount && (topAuthors.get(key)?.size ?? 0) >= MIN_PATTERN_AUTHORS)
     .map(([key, count]) => {
       const topShare = count / topTotal;
       const baseShare = (allCounts.get(key) ?? 0) / allTotal;
       return {
         key,
         top_count: count,
+        top_authors: topAuthors.get(key)?.size ?? 0,
         top_share: Number(topShare.toFixed(3)),
         base_share: Number(baseShare.toFixed(3)),
         lift: baseShare > 0 ? Number((topShare / baseShare).toFixed(2)) : 0,
@@ -149,6 +181,7 @@ export function synthesizeRegion(region: string, posts: AnalyzedPost[]): RegionS
     top_posts_count: top.length,
     winning_hooks: null,
     winning_themes: null,
+    winning_structures: null,
     top_topics: toSortedList(tally(top.map((p) => p.analysis.topic)), 10),
     tone_mix: toSortedList(tally(top.map((p) => p.analysis.tone)), 6),
     replicable_ideas: top
@@ -177,12 +210,19 @@ export function synthesizeRegion(region: string, posts: AnalyzedPost[]): RegionS
   return {
     ...base,
     winning_hooks: computeLift(
-      top.map((p) => p.analysis.hook_pattern),
-      relevant.map((p) => p.analysis.hook_pattern),
+      top.map((p) => ({ key: p.analysis.hook_pattern, author: p.author_handle })),
+      relevant.map((p) => ({ key: p.analysis.hook_pattern, author: p.author_handle })),
     ),
     winning_themes: computeLift(
-      top.map((p) => p.analysis.theme),
-      relevant.map((p) => p.analysis.theme),
+      top.map((p) => ({ key: p.analysis.theme, author: p.author_handle })),
+      relevant.map((p) => ({ key: p.analysis.theme, author: p.author_handle })),
+    ),
+    // structure ya se extraía y no la leía nadie. Es un eje bastante menos
+    // superficial que el hook: el hook son las primeras quince palabras, la
+    // estructura es la forma del argumento entero.
+    winning_structures: computeLift(
+      top.map((p) => ({ key: p.analysis.structure, author: p.author_handle })),
+      relevant.map((p) => ({ key: p.analysis.structure, author: p.author_handle })),
     ),
   };
 }

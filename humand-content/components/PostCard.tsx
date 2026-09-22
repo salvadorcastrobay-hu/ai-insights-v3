@@ -128,6 +128,15 @@ export function PostCard({
         ) : null}
 
         <div className="mt-auto flex flex-wrap items-center gap-2 pt-1">
+          {/* Solo cuando es notable: un debate de 1,2x no dice nada y suma ruido. */}
+          {post.debate_factor && post.debate_factor >= 2 ? (
+            <span
+              className="rounded-[var(--r-s)] border border-[var(--warn-border)] bg-[var(--warn-bg)] px-2 py-0.5 text-[12px] leading-[1.4] text-[var(--warn-text)]"
+              title={`${post.comments_count ?? 0} comentarios · ${post.debate_factor.toFixed(1)} veces el ratio habitual de esta cuenta`}
+            >
+              {post.debate_factor.toFixed(1)}× discutido
+            </span>
+          ) : null}
           {a?.hook_pattern ? <Badge tone="brand">{a.hook_pattern}</Badge> : null}
           {a?.theme ? <Badge tone="muted">{a.theme.replace(/_/g, " ")}</Badge> : null}
           {post.post_url ? (
