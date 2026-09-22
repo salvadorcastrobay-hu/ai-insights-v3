@@ -209,6 +209,7 @@ export async function loadRankedPosts(filters: PostFilters = {}): Promise<Conten
     return posts;
   }
 
+  const sortKey = filters.sortBy === "debate" ? "debate_factor" : "viral_score";
   const ids = await postIdsForRegion(filters.region);
   if (!ids.length) return [];
 
@@ -224,7 +225,11 @@ export async function loadRankedPosts(filters: PostFilters = {}): Promise<Conten
 
   const posts = batches
     .flat()
-    .sort((a, b) => (b.viral_score ?? 0) - (a.viral_score ?? 0))
+    // Se reordena en memoria porque cada lote viene ordenado por su cuenta:
+    // entre lotes no hay orden garantizado. Tiene que ser por el MISMO eje que
+    // pidió el filtro — ordenar por viral cuando se pidió debate devuelve el
+    // feed equivocado sin que nada falle.
+    .sort((a, b) => ((b[sortKey] as number) ?? 0) - ((a[sortKey] as number) ?? 0))
     .slice(0, limit);
   await Promise.all([loadAuthorsFor(posts), signMediaFor(posts)]);
   return posts;
