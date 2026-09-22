@@ -263,48 +263,82 @@ export async function classifyPosts(
 
   for (let start = 0; start < posts.length; start += BATCH_SIZE) {
     const batch = posts.slice(start, start + BATCH_SIZE);
-    const prompt = batch.map((p, i) => renderPost(p, i + 1)).join("\n\n---\n\n");
+    const done = await classifyBatch(batch, out);
 
-    let object: z.infer<typeof BatchSchema> | null = null;
-    // Un reintento: los fallos acá son transitorios (rate limit, corte) o de
-    // parseo, y los dos se resuelven volviendo a pedir.
-    for (let attempt = 0; attempt < 2 && !object; attempt++) {
-      try {
-        ({ object } = await generateObject({
-          model: openai(classifyModel()),
-          schema: BatchSchema,
-          system: SYSTEM,
-          prompt,
-        }));
-      } catch (err) {
-        const msg = (err as Error)?.message ?? String(err);
-        if (attempt === 1) {
-          console.warn(`[classify] lote de ${batch.length} posts falló tras reintento: ${msg}`);
-        }
-      }
+    /*
+     * El modelo devuelve lotes incompletos con cierta frecuencia: pide seis y
+     * vuelven tres, sin error. Antes eso solo dejaba un warning y los que
+     * faltaban se descartaban hasta la corrida siguiente.
+     *
+     * Ahora se reintentan los que faltan, de a dos: lo que satura no es el
+     * contexto de entrada sino el largo de la respuesta —veintiún campos por
+     * post— así que un lote más chico entra entero.
+     */
+    const missing = batch.filter((p) => !done.has(p.post_id));
+    if (!missing.length) continue;
+
+    console.warn(
+      `[classify] faltaron ${missing.length} de ${batch.length}; reintentando de a dos`,
+    );
+    for (let i = 0; i < missing.length; i += 2) {
+      await classifyBatch(missing.slice(i, i + 2), out);
     }
 
-    if (object) {
-      if (object.posts.length < batch.length) {
-        // No es fatal, pero hay que verlo: si pasa seguido, bajar BATCH_SIZE.
-        console.warn(
-          `[classify] el modelo devolvió ${object.posts.length} de ${batch.length} posts`,
-        );
-      }
-      for (const item of object.posts) {
-        const post = batch[item.post_index - 1];
-        if (!post) continue;
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { post_index, ...llm } = item;
-        out.set(post.post_id, {
-          ...llm,
-          // Contables: se calculan acá en vez de pedírselos al modelo.
-          copy_length: (post.caption ?? "").length,
-          hashtag_count: post.hashtags?.length ?? 0,
-        });
-      }
+    const stillMissing = missing.filter((p) => !out.has(p.post_id));
+    if (stillMissing.length) {
+      // Quedan sin analysis, así que la próxima corrida los vuelve a tomar.
+      console.warn(`[classify] ${stillMissing.length} posts quedaron sin clasificar`);
     }
   }
 
   return out;
+}
+
+/**
+ * Clasifica un lote y escribe en `out`. Devuelve los post_id que resolvió, que
+ * es lo que permite saber cuáles faltaron.
+ */
+async function classifyBatch(
+  batch: ClassifiablePost[],
+  out: Map<string, PostAnalysis>,
+): Promise<Set<string>> {
+  const resolved = new Set<string>();
+  if (!batch.length) return resolved;
+
+  const prompt = batch.map((p, i) => renderPost(p, i + 1)).join("\n\n---\n\n");
+
+  let object: z.infer<typeof BatchSchema> | null = null;
+  // Un reintento: los fallos acá son transitorios (rate limit, corte) o de
+  // parseo, y los dos se resuelven volviendo a pedir.
+  for (let attempt = 0; attempt < 2 && !object; attempt++) {
+    try {
+      ({ object } = await generateObject({
+        model: openai(classifyModel()),
+        schema: BatchSchema,
+        system: SYSTEM,
+        prompt,
+      }));
+    } catch (err) {
+      const msg = (err as Error)?.message ?? String(err);
+      if (attempt === 1) {
+        console.warn(`[classify] lote de ${batch.length} posts falló tras reintento: ${msg}`);
+      }
+    }
+  }
+  if (!object) return resolved;
+
+  for (const item of object.posts) {
+    const post = batch[item.post_index - 1];
+    if (!post) continue;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { post_index, ...llm } = item;
+    out.set(post.post_id, {
+      ...llm,
+      // Contables: se calculan acá en vez de pedírselos al modelo.
+      copy_length: (post.caption ?? "").length,
+      hashtag_count: post.hashtags?.length ?? 0,
+    });
+    resolved.add(post.post_id);
+  }
+  return resolved;
 }
