@@ -24,7 +24,9 @@
  * globalThis: acá el que pollea es otra app, y un redeploy de Railway no puede
  * llevarse el job puesto.
  */
+import { classifyVisuals, type AnalyzableImage } from "./classify-visual";
 import { archiveMediaFor } from "./media-archive-batch";
+import { signedMediaUrl } from "./media-archive";
 import { createHash, randomUUID } from "crypto";
 
 import {
@@ -52,6 +54,8 @@ import {
   upsertAuthors,
   linkPostsToAuthors,
   loadHandlesWithUnscoredPosts,
+  loadTopPostsForVisual,
+  saveVisualAnalyses,
   upsertPosts,
   type ContentPostUpsert,
   type ContentSource,
@@ -540,6 +544,33 @@ export async function runAnalysis(
     process.env.CONTENT_ANALYSIS_MODEL ?? process.env.COMPETITOR_ADS_MODEL ?? "gpt-4o-mini",
   );
   return { analyzed: saved, skipped: posts.length - saved };
+}
+
+/**
+ * Analiza el creativo del corte superior de cada mercado.
+ *
+ * Las imágenes viven en nuestro bucket privado, así que hay que firmarlas antes
+ * de pasárselas al modelo — la URL dura una hora, de sobra para el lote.
+ */
+export async function runVisualAnalysis(
+  limitPerRegion = 40,
+): Promise<{ analyzed: number; skipped: number }> {
+  const pending = await loadTopPostsForVisual(limitPerRegion);
+  if (!pending.length) return { analyzed: 0, skipped: 0 };
+
+  const images: AnalyzableImage[] = [];
+  for (const item of pending) {
+    const url = await signedMediaUrl(item.storedPath).catch(() => null);
+    // Una firma que falla es un post menos, no una corrida caída.
+    if (url) images.push({ post_id: item.post_id, image_url: url });
+  }
+  if (!images.length) return { analyzed: 0, skipped: pending.length };
+
+  const results = await classifyVisuals(images);
+  const saved = await saveVisualAnalyses(
+    [...results.entries()].map(([post_id, visual]) => ({ post_id, visual })),
+  );
+  return { analyzed: saved, skipped: pending.length - saved };
 }
 
 // ─── Orquestación ────────────────────────────────────────────────────────────

@@ -40,6 +40,8 @@ export type AnalyzedPost = {
   comments_count: number | null;
   shares_count?: number | null;
   analysis: PostAnalysis;
+  /** Qué se ve en el creativo. Solo lo tiene el corte superior. */
+  visual?: { visual_format: string; text_on_image: string; visual_text: string | null } | null;
 };
 
 export type PatternLift = {
@@ -67,6 +69,20 @@ export type RegionSynthesis = {
   winning_hooks: PatternLift[] | null;
   winning_themes: PatternLift[] | null;
   winning_structures: PatternLift[] | null;
+  /**
+   * Cómo se ve el creativo del corte superior.
+   *
+   * NO es un lift y no se puede presentar como tal: el análisis visual corre
+   * solo sobre el corte superior, así que no hay denominador. Lo que sí es
+   * válido es comparar DENTRO del corte — entre los posts que funcionaron,
+   * cuáles formatos promedian más.
+   */
+  visual_mix: Array<{
+    key: string;
+    posts: number;
+    authors: number;
+    median_outlier: number | null;
+  }> | null;
   top_topics: Array<{ key: string; count: number }>;
   tone_mix: Array<{ key: string; count: number }>;
   replicable_ideas: Array<{
@@ -194,6 +210,7 @@ export function synthesizeRegion(region: string, posts: AnalyzedPost[]): RegionS
     winning_hooks: null,
     winning_themes: null,
     winning_structures: null,
+    visual_mix: null,
     // Antes era `topic`, texto libre que produjo 907 valores distintos sobre
     // 983 posts: prácticamente uno por post, así que el ranking en pantalla era
     // arbitrario. `claim_object` es vocabulario acotado del rubro y sí agrega.
@@ -240,6 +257,7 @@ export function synthesizeRegion(region: string, posts: AnalyzedPost[]): RegionS
       top.map((p) => ({ key: p.analysis.theme, author: p.author_handle })),
       relevant.map((p) => ({ key: p.analysis.theme, author: p.author_handle })),
     ),
+    visual_mix: visualMix(top),
     // structure ya se extraía y no la leía nadie. Es un eje bastante menos
     // superficial que el hook: el hook son las primeras quince palabras, la
     // estructura es la forma del argumento entero.
@@ -248,6 +266,49 @@ export function synthesizeRegion(region: string, posts: AnalyzedPost[]): RegionS
       relevant.map((p) => ({ key: p.analysis.structure, author: p.author_handle })),
     ),
   };
+}
+
+/**
+ * Mezcla de formatos visuales dentro del corte superior.
+ *
+ * Se cuentan autores además de posts por la misma razón que en computeLift: un
+ * autor que siempre usa el mismo formato no hace que ese formato funcione.
+ */
+function visualMix(
+  top: AnalyzedPost[],
+): Array<{ key: string; posts: number; authors: number; median_outlier: number | null }> | null {
+  const conVisual = top.filter((p) => p.visual?.visual_format);
+  // Con pocas piezas analizadas la mezcla es anecdótica, no un patrón.
+  if (conVisual.length < 10) return null;
+
+  const byFormat = new Map<string, AnalyzedPost[]>();
+  for (const p of conVisual) {
+    const key = p.visual!.visual_format;
+    byFormat.set(key, [...(byFormat.get(key) ?? []), p]);
+  }
+
+  return [...byFormat.entries()]
+    .map(([key, list]) => {
+      const outliers = list
+        .map((l) => l.outlier_factor)
+        .filter((v): v is number => v !== null)
+        .sort((a, b) => a - b);
+      const mid = Math.floor(outliers.length / 2);
+      return {
+        key,
+        posts: list.length,
+        authors: new Set(list.map((l) => l.author_handle)).size,
+        median_outlier: outliers.length
+          ? Number(
+              (outliers.length % 2
+                ? outliers[mid]
+                : (outliers[mid - 1] + outliers[mid]) / 2
+              ).toFixed(2),
+            )
+          : null,
+      };
+    })
+    .sort((a, b) => b.posts - a.posts);
 }
 
 /** Sintetiza todos los mercados presentes en el set. */

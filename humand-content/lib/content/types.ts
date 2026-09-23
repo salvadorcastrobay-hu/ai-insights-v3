@@ -181,6 +181,17 @@ export type RegionSynthesis = {
   winning_hooks: PatternLift[] | null;
   winning_themes: PatternLift[] | null;
   winning_structures?: PatternLift[] | null;
+  /**
+   * Cómo se ve el creativo del corte superior. NO es un lift: el análisis
+   * visual corre solo sobre el corte, así que no hay denominador. Compara
+   * dentro de los que funcionaron, no contra el resto.
+   */
+  visual_mix?: Array<{
+    key: string;
+    posts: number;
+    authors: number;
+    median_outlier: number | null;
+  }> | null;
   top_topics: Array<{ key: string; count: number }>;
   tone_mix: Array<{ key: string; count: number }>;
   replicable_ideas: Array<{

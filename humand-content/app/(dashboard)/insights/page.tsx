@@ -271,6 +271,41 @@ export default async function InsightsPage() {
               </div>
             ) : null}
 
+            {s.visual_mix?.length ? (
+              <div className="mb-5">
+                <SectionLabel>Cómo se ve lo que funciona</SectionLabel>
+                {/*
+                  A propósito NO se llama lift ni se compara contra una base:
+                  el análisis del creativo corre solo sobre el corte superior,
+                  así que no hay denominador. Esto compara entre los que
+                  funcionaron, y decirlo importa — presentarlo como lift sería
+                  afirmar algo que el dato no sostiene.
+                */}
+                <p className="mb-2 text-[12px] leading-[1.4] text-[var(--faint)]">
+                  Sobre las piezas del corte superior que pudimos analizar visualmente. Es
+                  una comparación entre las que funcionaron, no contra el resto del mercado.
+                </p>
+                <ul className="space-y-2">
+                  {s.visual_mix.slice(0, 6).map((v) => (
+                    <li
+                      key={v.key}
+                      className="flex items-baseline gap-2 text-[14px] leading-[1.4]"
+                    >
+                      <span className="min-w-0 flex-1 truncate">{v.key.replace(/_/g, " ")}</span>
+                      <span className="shrink-0 tabular-nums text-[var(--muted)]">
+                        {v.posts} posts · {v.authors} autores
+                      </span>
+                      {v.median_outlier ? (
+                        <span className="shrink-0 font-semibold tabular-nums">
+                          {v.median_outlier.toFixed(1)}×
+                        </span>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
             <div className="grid gap-6 sm:grid-cols-2">
               <LiftList title="Hooks que ganan" rows={s.winning_hooks ?? []} />
               <LiftList title="Temas que ganan" rows={s.winning_themes ?? []} />

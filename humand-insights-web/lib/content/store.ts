@@ -518,6 +518,78 @@ export async function loadUnanalyzedPosts(
   });
 }
 
+/**
+ * El corte superior de cada mercado que todavía no tiene análisis visual.
+ *
+ * Solo posts con imagen ARCHIVADA: las URLs del CDN vencen en días, así que
+ * mandarlas al modelo devolvería 403 la mitad de las veces. Y solo el corte
+ * superior: analizar mil imágenes para después mirar cuarenta es pagar por lo
+ * que nadie lee.
+ */
+export async function loadTopPostsForVisual(
+  limitPerRegion = 40,
+): Promise<Array<{ post_id: string; region: string; storedPath: string }>> {
+  return safeRead("loadTopPostsForVisual", [], async () => {
+    const { data: links, error: linkError } = await getSupabase()
+      .from("content_post_sources")
+      .select("post_id, region")
+      .limit(5000);
+    if (linkError) throw linkError;
+
+    const regionByPost = new Map<string, string>();
+    for (const row of (links ?? []) as Array<{ post_id: string; region: string }>) {
+      if (!regionByPost.has(row.post_id)) regionByPost.set(row.post_id, row.region);
+    }
+
+    const { data, error } = await getSupabase()
+      .from("content_posts")
+      .select("id, post_id, stored_media, viral_score")
+      .not("viral_score", "is", null)
+      .is("visual_analysis", null)
+      .eq("analysis->>is_relevant_to_hr", "true")
+      .not("stored_media", "is", null)
+      .order("viral_score", { ascending: false })
+      .limit(1500);
+    if (error) throw error;
+
+    const porRegion = new Map<string, number>();
+    const out: Array<{ post_id: string; region: string; storedPath: string }> = [];
+    for (const row of (data ?? []) as Array<{
+      id: string;
+      post_id: string;
+      stored_media: { images?: string[] } | null;
+    }>) {
+      const path = row.stored_media?.images?.[0];
+      if (!path) continue;
+      const region = regionByPost.get(row.id) ?? "unknown";
+      const usados = porRegion.get(region) ?? 0;
+      if (usados >= limitPerRegion) continue;
+      porRegion.set(region, usados + 1);
+      out.push({ post_id: row.post_id, region, storedPath: path });
+    }
+    return out;
+  });
+}
+
+/** Guarda el análisis del creativo. Update y no upsert, igual que los scores. */
+export async function saveVisualAnalyses(
+  analyses: Array<{ post_id: string; visual: unknown }>,
+): Promise<number> {
+  if (!analyses.length) return 0;
+  const now = new Date().toISOString();
+  const sb = getSupabase();
+  let saved = 0;
+  for (const item of analyses) {
+    const { error } = await sb
+      .from("content_posts")
+      .update({ visual_analysis: item.visual, visual_analyzed_at: now })
+      .eq("post_id", item.post_id);
+    if (error) throw error;
+    saved += 1;
+  }
+  return saved;
+}
+
 export async function savePostAnalyses(
   platform: string,
   analyses: Array<{ post_id: string; analysis: unknown }>,

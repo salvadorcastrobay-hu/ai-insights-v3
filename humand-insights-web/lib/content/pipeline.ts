@@ -46,6 +46,7 @@ function toAnalyzable(post: StoredContentPost): AnalyzedPost {
     viral_score: raw.viral_score,
     outlier_factor: raw.outlier_factor,
     debate_factor: raw.debate_factor ?? null,
+    visual: (post as unknown as { visual_analysis?: never }).visual_analysis ?? null,
     likes_count: post.likes_count,
     comments_count: post.comments_count,
     shares_count: post.shares_count ?? null,

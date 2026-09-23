@@ -61,6 +61,33 @@ jobs:
             done
           done
 
+      - name: Analizar el creativo del corte superior
+        env:
+          ENGINE_URL: ${{ secrets.CONTENT_ENGINE_URL }}
+          ENGINE_TOKEN: ${{ secrets.CONTENT_ENGINE_TOKEN }}
+        run: |
+          set -uo pipefail
+
+          # Solo el corte superior de cada mercado. El analisis del creativo usa
+          # un modelo multimodal y cuesta por imagen; sobre las mil y pico de
+          # posts seria pagar por lo que nadie mira.
+          #
+          # En tandas y con || true: que falle el creativo no puede impedir que
+          # corra la sintesis, que es lo que produce el calendario.
+          for round in 1 2 3; do
+            RESPONSE=$(curl -sS --fail-with-body -X POST \
+              -H "Authorization: Bearer ${ENGINE_TOKEN}" \
+              -H "content-type: application/json" \
+              -H "x-acting-user: github-actions" \
+              -d '{"kind":"analyze_visual","limit":20}' \
+              "${ENGINE_URL}/api/internal/content/runs") || {
+                echo "::warning::el analisis del creativo fallo en la tanda ${round}"
+                break
+              }
+            echo "   tanda ${round}: ${RESPONSE}"
+            echo "${RESPONSE}" | grep -q '"analyzed":0' && break
+          done
+
       - name: Sintetizar patrones y regenerar calendario
         run: |
           set -euo pipefail
