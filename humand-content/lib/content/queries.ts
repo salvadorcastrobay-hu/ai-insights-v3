@@ -15,6 +15,7 @@ import type {
   ContentSource,
   CoverageSnapshot,
   FeedbackState,
+  MarketPosition,
   OwnBrandComparison,
   RefreshJob,
   RegionSynthesis,
@@ -250,11 +251,31 @@ export async function loadSources(): Promise<ContentSource[]> {
   return (data ?? []) as unknown as ContentSource[];
 }
 
+/**
+ * Las posiciones del rubro: el debate que cruza los tres mercados.
+ *
+ * Se guardan aparte de las síntesis por mercado porque se calculan sobre el
+ * corpus entero. Por mercado hay ~100 claims relevantes y ninguna práctica
+ * junta los autores que hacen falta; agrupando los tres, sí.
+ */
+export async function loadMarketPositions(): Promise<MarketPosition[]> {
+  const { data, error } = await sb()
+    .from("content_insights")
+    .select("payload")
+    .eq("scope", "region")
+    .eq("scope_key", "rubro")
+    .limit(1);
+  if (error) throw error;
+  const payload = (data ?? [])[0]?.payload as { positions?: MarketPosition[] } | undefined;
+  return payload?.positions ?? [];
+}
+
 export async function loadSyntheses(): Promise<RegionSynthesis[]> {
   const { data, error } = await sb()
     .from("content_insights")
     .select("payload, posts_analyzed")
     .eq("scope", "region")
+    .neq("scope_key", "rubro")
     .order("posts_analyzed", { ascending: false });
   if (error) throw error;
   return (data ?? []).map((r) => r.payload as RegionSynthesis);

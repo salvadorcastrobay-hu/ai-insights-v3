@@ -1,5 +1,9 @@
 import { Badge, Bar, Callout, Card, EmptyState, PageHeader, SectionLabel } from "@/components/ui";
-import { loadOwnBrandComparisons, loadSyntheses } from "@/lib/content/queries";
+import {
+  loadMarketPositions,
+  loadOwnBrandComparisons,
+  loadSyntheses,
+} from "@/lib/content/queries";
 import {
   regionLabel,
   type CopyShapeRow,
@@ -397,10 +401,12 @@ function OwnBrand({ cmp }: { cmp: OwnBrandComparison }) {
 }
 
 export default async function InsightsPage() {
-  const [syntheses, ownComparisons] = await Promise.all([
+  const [syntheses, ownComparisons, marketPositions] = await Promise.all([
     loadSyntheses(),
     loadOwnBrandComparisons().catch(() => []),
+    loadMarketPositions().catch(() => []),
   ]);
+  const tensiones = marketPositions.filter((p) => p.is_tension);
   const ownByRegion = new Map(ownComparisons.map((c) => [c.region, c.comparison]));
 
   if (!syntheses.length) {
@@ -418,6 +424,34 @@ export default async function InsightsPage() {
         title="Patrones"
         subtitle="El lift compara cuánto aparece un patrón arriba contra cuánto aparece en el total. Mayor a 1 significa que funciona mejor de lo que su frecuencia explicaría."
       />
+
+      {/*
+        Las tensiones van arriba y son del RUBRO, no de un mercado.
+        Por mercado hay ~100 claims relevantes y ninguna práctica junta los
+        autores que hacen falta; agrupando los tres, sí. Y tiene sentido de
+        fondo: que se discuta si la encuesta de clima sirve no es un debate
+        brasileño ni español. Lo que sí es por mercado es qué formato y qué
+        hook rinden, y eso está más abajo.
+      */}
+      {tensiones.length ? (
+        <Card className="mb-6">
+          <div className="mb-3">
+            <h2 className="text-[18px] font-semibold leading-[1.4]">
+              Sobre qué está dividido el rubro
+            </h2>
+            <p className="mt-1 text-[14px] leading-[1.4] text-[var(--muted)]">
+              Temas donde los referentes sostienen posiciones opuestas, con cuánto rinde
+              cada lado. Se calcula sobre los tres mercados juntos: el debate es del
+              rubro, no de un país.
+            </p>
+          </div>
+          <div className="space-y-2">
+            {tensiones.slice(0, 5).map((p) => (
+              <Tension key={p.object_label} position={p} />
+            ))}
+          </div>
+        </Card>
+      ) : null}
 
       <div className="space-y-6">
         {syntheses.map((s) => (
