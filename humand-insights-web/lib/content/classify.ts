@@ -230,7 +230,8 @@ const PostAnalysisSchema = z.object({
     .nullable()
     .describe(
       "La afirmación que el post sostiene, como oración declarativa completa, " +
-        "en el idioma del post, máximo 20 palabras. Tiene que ser algo con lo " +
+        "EN ESPAÑOL aunque el post esté en otro idioma, máximo 20 palabras. " +
+        "Tiene que ser algo con lo " +
         "que un profesional de RRHH informado PODRÍA estar en desacuerdo. " +
         "Null si el post no sostiene nada discutible: anuncio, lista de " +
         "recursos, anécdota personal, saludo, celebración.",
@@ -374,10 +375,14 @@ const SYSTEM = [
   "encuestas de clima'. Sobre ese texto se agrupan los posts entre sí, así que",
   "dos posts que discuten lo mismo tienen que escribirlo igual.",
   "",
-  "IDIOMA: hook, claim y counterclaim van en el idioma del post, que te indico",
-  "en 'idioma del post'. Un post en portugués tiene su claim en portugués: no lo",
-  "traduzcas. El resto de los campos, en español. Devolvé un objeto por post, con",
-  "su post_index.",
+  "IDIOMA: TODO tu análisis va en ESPAÑOL, incluidos `claim` y `counterclaim`,",
+  "aunque el post esté en portugués. El análisis es nuestro, no del post: lo lee",
+  "el equipo de Content, que trabaja en español.",
+  "",
+  "La única excepción es `hook`, que es una CITA y va textual en el idioma",
+  "original — traducirlo lo convertiría en otra cosa que la que se publicó.",
+  "",
+  "Devolvé un objeto por post, con su post_index.",
 ].join("\n");
 
 /**
@@ -474,7 +479,9 @@ function renderPost(post: ClassifiablePost, index: number): string {
   if (post.format) parts.push(`formato: ${post.format}`);
   if (post.language) {
     const names = { pt: "portugués", es: "español", en: "inglés" } as const;
-    parts.push(`idioma del post: ${names[post.language]} (hook, claim y counterclaim van en este idioma)`);
+    // El idioma se le pasa para que entienda el texto y cite bien el hook, no
+    // para que responda en él: el análisis va siempre en español.
+    parts.push(`idioma del post: ${names[post.language]} (el hook se cita en este idioma; el análisis va en español)`);
   }
   if (post.likes_count != null) {
     parts.push(`engagement: ${post.likes_count} likes, ${post.comments_count ?? 0} comentarios`);
