@@ -65,7 +65,7 @@ const POST_COLUMNS =
   " viral_score, analysis, features," +
   // display_url y media estaban guardados desde la primera corrida y nunca se
   // pedían acá: por eso la app no mostraba una sola foto.
-  " display_url, media, stored_media";
+  " display_url, media, stored_media, visual_analysis";
 
 /** El bucket de imágenes es privado; la URL firmada se emite por request. */
 const MEDIA_BUCKET = "content-media";

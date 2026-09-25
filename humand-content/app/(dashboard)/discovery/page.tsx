@@ -156,6 +156,17 @@ export default async function DiscoveryPage({
                 ? "Los que más se discutieron"
                 : "Los que más superaron su propio promedio"}
             </SectionLabel>
+            {/*
+              El multiplicador es el número que decide todo el orden y no se
+              explicaba en ningún lado. Sin saber contra qué se compara, "46×"
+              puede leerse como "46 veces mejor que el resto del mercado", que
+              no es lo que dice.
+            */}
+            <p className="-mt-1 mb-3 text-[12px] leading-[1.4] text-[var(--faint)]">
+              {sortBy === "debate"
+                ? "El multiplicador compara la proporción de comentarios de este post contra la habitual de esa misma cuenta. Un 4× no es que tuvo cuatro veces más comentarios: es que discutieron cuatro veces más de lo que esa cuenta suele generar."
+                : "El multiplicador compara este post contra la mediana de los últimos posts de esa misma cuenta, no contra el resto del mercado. Por eso una cuenta de 700 seguidores y una de 700.000 se pueden mirar juntas. Se cuentan likes y comentarios, y el comentario pesa más."}
+            </p>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {podium.map((post, index) => (
                 <PostCard key={post.id} post={post} rank={index + 1} hero />

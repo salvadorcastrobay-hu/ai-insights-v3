@@ -141,6 +141,20 @@ export type ContentPost = {
    */
   display_url: string | null;
   media: { images: string[]; videos: string[] } | null;
+  /**
+   * Qué se ve en el creativo. Solo lo tiene el corte superior: analizar todas
+   * las imágenes para después mirar cuarenta sería pagar por lo que nadie lee.
+   */
+  visual_analysis: {
+    visual_format: string;
+    text_on_image: string;
+    /** El texto ESCRITO sobre la imagen, transcripto. Es contenido que el
+     *  análisis de texto no puede ver y que en RRHH suele ser el mensaje. */
+    visual_text: string | null;
+    color_key: string;
+    face_present: boolean;
+    brand_visible: boolean;
+  } | null;
   /** Paths en nuestro bucket privado. Esto es lo durable. */
   stored_media: { images: string[]; videos: string[] } | null;
   /**

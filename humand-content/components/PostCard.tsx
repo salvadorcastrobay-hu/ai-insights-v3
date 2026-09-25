@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui";
+import { FullImage } from "@/components/FullImage";
 import { PostMedia } from "@/components/PostMedia";
 import type { ContentPost } from "@/lib/content/types";
 
@@ -65,7 +66,13 @@ function OutlierBadge({ value, engagement }: { value: number; engagement: number
   return (
     <div
       className={`absolute left-2 top-2 rounded-[var(--r-m)] px-2 py-1 text-center shadow-[var(--shadow-4)] ${tone}`}
-      title={`${engagement.toLocaleString("es")} interacciones en total`}
+      title={
+        `${value.toFixed(1)} veces la mediana de este autor. ` +
+        `Este post: ${engagement.toLocaleString("es")} interacciones ` +
+        `(likes y comentarios, los comentarios pesan más). ` +
+        `Se compara contra sus propios posts, no contra otras cuentas: por eso ` +
+        `una cuenta chica y una grande se pueden mirar juntas.`
+      }
     >
       <div className="text-[20px] font-semibold leading-none tabular-nums">
         {value >= 10 ? Math.round(value) : value.toFixed(1)}
@@ -145,12 +152,20 @@ export function PostCard({
         {a?.claim ? (
           <div className="rounded-[var(--r-m)] bg-[var(--brand-soft)] px-3 py-2">
             <p className="text-[14px] leading-[1.4] text-[var(--brand-deep)]">
-              <span className="font-semibold">Afirma · </span>
+              <span className="font-semibold">La postura del post · </span>
               {a.claim}
             </p>
             {a.counterclaim ? (
-              <p className="mt-1 text-[12px] leading-[1.4] text-[var(--muted)]">
-                <span className="font-semibold">Hay quien dice · </span>
+              /*
+               * "Hay quien dice" no se explicaba solo. Lo que va acá es la
+               * posición contraria que alguien del rubro sostendría, y no es
+               * decoración: es el filtro. Si nadie defendería lo opuesto, el
+               * post decía una obviedad y el clasificador lo descarta por esa
+               * misma regla. Decirlo en la etiqueta evita que se lea como una
+               * opinión que sacamos de la nada.
+               */
+              <p className="mt-1.5 text-[12px] leading-[1.4] text-[var(--muted)]">
+                <span className="font-semibold">Lo que discute · </span>
                 {a.counterclaim}
               </p>
             ) : null}
@@ -211,6 +226,41 @@ export function PostCard({
             </a>
           ) : null}
         </div>
+
+        {/*
+          El copy completo. La tarjeta muestra el hook, que son quince palabras,
+          y el resto quedaba cortado sin forma de leerlo — para decidir si una
+          pieza se replica hace falta ver cómo sigue, no solo cómo abre.
+        */}
+        {(post.caption && post.caption.length > 120) || post.image_url ? (
+          <details className="group/copy">
+            <summary className="cursor-pointer list-none text-[12px] font-semibold leading-[1.4] text-[var(--brand-ink)] hover:underline">
+              <span className="group-open/copy:hidden">Ver la pieza completa</span>
+              <span className="hidden group-open/copy:inline">Ocultar</span>
+            </summary>
+
+            {/*
+              La portada de la tarjeta va recortada a formato fijo para que la
+              grilla no baile. Acá se muestra entera: `object-contain` en vez de
+              `cover`, y sin aspect-ratio impuesto — una placa vertical de
+              LinkedIn y una foto apaisada se ven cada una como es.
+            */}
+            {post.image_url ? (
+              <FullImage src={post.image_url} />
+            ) : null}
+            {post.caption ? (
+              <p className="mt-2 whitespace-pre-wrap rounded-[var(--r-m)] bg-[var(--surface-sunk)] p-3 text-[14px] leading-[1.5] text-[var(--text)]">
+                {post.caption}
+              </p>
+            ) : null}
+            {post.visual_analysis?.visual_text ? (
+              <p className="mt-2 whitespace-pre-wrap rounded-[var(--r-m)] border border-[var(--border)] p-3 text-[13px] leading-[1.5] text-[var(--muted)]">
+                <span className="font-semibold">Texto sobre la imagen · </span>
+                {post.visual_analysis.visual_text}
+              </p>
+            ) : null}
+          </details>
+        ) : null}
 
         {/* <details> nativo: cero JS y funciona dentro de un server component. */}
         {a?.cta ? (
