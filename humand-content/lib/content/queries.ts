@@ -62,7 +62,7 @@ export type PostFilters = {
 const POST_COLUMNS =
   "id, platform, post_id, author_handle, post_url, format, caption, posted_at," +
   " likes_count, comments_count, shares_count, outlier_factor, debate_factor," +
-  " viral_score, analysis," +
+  " viral_score, analysis, features," +
   // display_url y media estaban guardados desde la primera corrida y nunca se
   // pedían acá: por eso la app no mostraba una sola foto.
   " display_url, media, stored_media";

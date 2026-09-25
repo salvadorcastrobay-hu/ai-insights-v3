@@ -216,3 +216,104 @@ test("compareOwnBrand no acusa de sobreuso a un patron sin lift medido", () => {
   assert.equal(cmp.missing_themes.length, 0);
   assert.equal(cmp.reference_median_engagement, null);
 });
+
+// ─── Lo nuevo: contraste, collabs, forma del copy ───────────────────────────
+
+import { computeContrast } from "../synthesize";
+import { computeFeatures } from "../post-features";
+
+function withFeatures(p: AnalyzedPost, over: Record<string, unknown> = {}): AnalyzedPost {
+  const base = computeFeatures(
+    { platform: "linkedin", caption: "Una línea", format: "text", media: null, posted_at: null, duration_secs: null, raw: {} },
+    "br",
+  );
+  return { ...p, features: { ...base, ...over } as AnalyzedPost["features"] };
+}
+
+test("computeContrast exige voces en los dos lados", () => {
+  const top = [
+    { key: "carrusel_texto", author: "a" },
+    { key: "carrusel_texto", author: "b" },
+    { key: "carrusel_texto", author: "c" },
+    { key: "meme", author: "a" },
+    { key: "meme", author: "b" },
+    { key: "meme", author: "c" },
+  ];
+  const rest = [
+    { key: "carrusel_texto", author: "x" },
+    { key: "carrusel_texto", author: "y" },
+    { key: "foto_stock", author: "z" },
+    { key: "foto_stock", author: "w" },
+    { key: "foto_stock", author: "v" },
+    { key: "foto_stock", author: "u" },
+  ];
+  const out = computeContrast(top, rest);
+  // meme no aparece en el control: el lift sería infinito, así que se omite.
+  assert.deepEqual(out.map((r) => r.key), ["carrusel_texto"]);
+  assert.equal(out[0].lift, 1.5);
+});
+
+test("synthesizeRegion deja los collabs fuera del corte y los cuenta", () => {
+  const posts: AnalyzedPost[] = [];
+  for (let i = 0; i < 40; i += 1) {
+    posts.push(withFeatures({ ...post(`p${i}`, 100 - i), author_handle: `autor${i % 8}` }));
+  }
+  // Los tres mejores son collabs: sin la exclusión, dominarían el corte.
+  for (let i = 0; i < 3; i += 1) {
+    posts.push(withFeatures({ ...post(`c${i}`, 1000 + i), author_handle: `collab${i}` }, { is_collab: true }));
+  }
+  const s = synthesizeRegion("br", posts);
+  assert.equal(s.excluded_collabs, 3);
+  assert.ok(!s.replicable_ideas.some((idea) => idea.author_handle.startsWith("collab")));
+});
+
+test("synthesizeRegion mide la forma del copy arriba contra el resto", () => {
+  const posts: AnalyzedPost[] = [];
+  for (let i = 0; i < 50; i += 1) {
+    const top = i < 10;
+    posts.push(
+      withFeatures(
+        { ...post(`p${i}`, 100 - i), author_handle: `autor${i % 10}` },
+        { first_line_chars: top ? 40 : 120, has_external_link: !top },
+      ),
+    );
+  }
+  const s = synthesizeRegion("br", posts);
+  const first = s.copy_shape?.find((r) => r.metric === "first_line_chars");
+  assert.equal(first?.top, 40);
+  assert.equal(first?.rest, 120);
+  const link = s.copy_shape?.find((r) => r.metric === "has_external_link");
+  assert.equal(link?.top, 0);
+  assert.equal(link?.rest, 1);
+});
+
+test("synthesizeRegion calcula lift visual solo con control suficiente", () => {
+  const visual = (fmt: string, prod: string) => ({
+    visual_format: fmt,
+    text_on_image: "titular_corto",
+    visual_text: null,
+    production_level: prod,
+    person_framing: "sin_persona",
+  });
+  const posts: AnalyzedPost[] = [];
+  for (let i = 0; i < 60; i += 1) {
+    const top = i < 12;
+    posts.push(
+      withFeatures({
+        ...post(`p${i}`, 100 - i),
+        author_handle: `autor${i % 12}`,
+        visual: top
+          ? visual(i % 3 ? "carrusel_texto" : "foto_stock", "plantilla")
+          : visual(i % 3 ? "foto_stock" : "carrusel_texto", i % 2 ? "producido" : "plantilla"),
+      }),
+    );
+  }
+  const s = synthesizeRegion("br", posts);
+  assert.ok(s.visual_lift, "con 12 arriba y 48 en el control hay lift");
+  const carrusel = s.visual_lift!.visual_format.find((r) => r.key === "carrusel_texto");
+  assert.ok(carrusel && carrusel.lift > 1);
+
+  // Sin control: cae a la mezcla, no inventa un lift.
+  const soloTop = posts.map((p, i) => (i < 12 ? p : { ...p, visual: null }));
+  assert.equal(synthesizeRegion("br", soloTop).visual_lift, null);
+});

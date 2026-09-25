@@ -118,6 +118,17 @@ export type ScorablePost = {
    * se pega al máximo y outlier_factor colapsa a ~1 para todos.
    */
   baseline_eligible?: boolean;
+  /**
+   * Collab de Instagram: se publica en dos perfiles y suma las dos audiencias.
+   * No entra a la mediana del autor —la subiría con alcance prestado— pero sí
+   * se puntúa: que explotó es un dato, solo que no del contenido.
+   */
+  is_collab?: boolean;
+  /**
+   * Pide comentar una palabra a cambio de algo. Sus comentarios son pedidos,
+   * no fricción: no tiene debate_factor ni alimenta el del autor.
+   */
+  comment_bait?: boolean;
 };
 
 export type PostScore = {
@@ -237,6 +248,7 @@ export function authorBaselines(
     // Los posts que no vienen de una muestra cronológica del autor quedan
     // afuera: ver el comentario de baseline_eligible en ScorablePost.
     if (post.baseline_eligible === false) continue;
+    if (post.is_collab) continue;
     const list = byAuthor.get(post.author_handle) ?? [];
     list.push(engagementTotal(post, platform));
     byAuthor.set(post.author_handle, list);
@@ -276,6 +288,7 @@ export function authorDebateBaselines(
   for (const post of posts) {
     if (!isMature(post, now, platform)) continue;
     if (post.baseline_eligible === false) continue;
+    if (post.is_collab || post.comment_bait) continue;
     const ratio = commentRatio(post);
     if (ratio === null) continue;
     const list = byAuthor.get(post.author_handle) ?? [];
@@ -355,7 +368,7 @@ export function scorePosts(
   const debateBase = authorDebateBaselines(posts, now, platform);
 
   return enriched.map(({ post, engagement, rate, age, outlier, tier }) => {
-    const ratio = commentRatio(post);
+    const ratio = post.comment_bait ? null : commentRatio(post);
     const authorRatio = debateBase.get(post.author_handle);
     const debate =
       ratio !== null && authorRatio && authorRatio.sample >= MIN_BASELINE_SAMPLE

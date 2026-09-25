@@ -5,6 +5,9 @@
  * role, upserts por constraint, lecturas defensivas), pero sobre las tablas
  * content_* — que no tienen el eje `competitor`.
  */
+import type { PostFeatures } from "./post-features";
+import { ANALYSIS_VERSION } from "./classify";
+import { MIN_TOP_POSTS, TOP_FRACTION } from "./synthesize";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 import type { CalendarEntry } from "./calendar";
@@ -73,6 +76,12 @@ export type ContentPostUpsert = {
   display_url: string | null;
   media: { images: string[]; videos: string[] };
   recent_comments: Array<{ text: string; timestamp: string }>;
+  /**
+   * Lo contable del post (formato real, placas, primera línea, collab, lead
+   * magnet, hora local). Se calcula en la ingesta con `computeFeatures`; ver
+   * post-features.ts.
+   */
+  features?: PostFeatures | null;
   raw: unknown;
 };
 
@@ -519,16 +528,32 @@ export async function loadUnanalyzedPosts(
 }
 
 /**
- * El corte superior de cada mercado que todavía no tiene análisis visual.
+ * Qué posts mandar al análisis visual: el corte superior de cada mercado y una
+ * muestra de CONTROL del resto.
  *
  * Solo posts con imagen ARCHIVADA: las URLs del CDN vencen en días, así que
- * mandarlas al modelo devolvería 403 la mitad de las veces. Y solo el corte
- * superior: analizar mil imágenes para después mirar cuarenta es pagar por lo
- * que nadie lee.
+ * mandarlas al modelo devolvería 403 la mitad de las veces.
+ *
+ * Antes era solo el corte superior, y eso dejaba el análisis sin denominador:
+ * "el 40% de lo que funciona es carrusel de texto" no dice nada si el 40% de
+ * todo también lo es. El control es una muestra SISTEMÁTICA del resto —uno
+ * cada k, recorriendo el ranking de arriba abajo— y no los peores: comparar el
+ * techo contra el piso exageraría cualquier diferencia.
+ *
+ * Cuesta lo mismo que el corte (≈USD 0,10 por mercado con gpt-4o) y es lo que
+ * permite llamar lift a lo visual.
  */
+export type VisualCandidate = {
+  post_id: string;
+  region: string;
+  storedPath: string;
+  sample: "top" | "control";
+};
+
 export async function loadTopPostsForVisual(
-  limitPerRegion = 40,
-): Promise<Array<{ post_id: string; region: string; storedPath: string }>> {
+  limitPerRegion = 60,
+  controlPerRegion = limitPerRegion,
+): Promise<VisualCandidate[]> {
   return safeRead("loadTopPostsForVisual", [], async () => {
     const { data: links, error: linkError } = await getSupabase()
       .from("content_post_sources")
@@ -541,34 +566,83 @@ export async function loadTopPostsForVisual(
       if (!regionByPost.has(row.post_id)) regionByPost.set(row.post_id, row.region);
     }
 
+    // Mismo universo que la síntesis —relevante y dirigido a quien gestiona
+    // personas— y con y sin análisis visual: el corte superior se define
+    // sobre el ranking completo, no sobre lo que falta analizar.
     const { data, error } = await getSupabase()
       .from("content_posts")
-      .select("id, post_id, stored_media, viral_score")
+      .select("id, post_id, stored_media, viral_score, visual_analysis")
       .not("viral_score", "is", null)
-      .is("visual_analysis", null)
       .eq("analysis->>is_relevant_to_hr", "true")
-      .not("stored_media", "is", null)
+      .eq("analysis->>audience_signal", "hr_leader")
       .order("viral_score", { ascending: false })
-      .limit(1500);
+      .limit(1000);
     if (error) throw error;
 
-    const porRegion = new Map<string, number>();
-    const out: Array<{ post_id: string; region: string; storedPath: string }> = [];
-    for (const row of (data ?? []) as Array<{
-      id: string;
-      post_id: string;
-      stored_media: { images?: string[] } | null;
-    }>) {
-      const path = row.stored_media?.images?.[0];
-      if (!path) continue;
+    const byRegion = new Map<string, VisualRow[]>();
+    for (const row of (data ?? []) as VisualRow[]) {
       const region = regionByPost.get(row.id) ?? "unknown";
-      const usados = porRegion.get(region) ?? 0;
-      if (usados >= limitPerRegion) continue;
-      porRegion.set(region, usados + 1);
-      out.push({ post_id: row.post_id, region, storedPath: path });
+      byRegion.set(region, [...(byRegion.get(region) ?? []), row]);
+    }
+
+    const out: VisualCandidate[] = [];
+    for (const [region, rows] of byRegion) {
+      out.push(...pickVisualSample(region, rows, limitPerRegion, controlPerRegion));
     }
     return out;
   });
+}
+
+type VisualRow = {
+  id: string;
+  post_id: string;
+  stored_media: { images?: string[] } | null;
+  visual_analysis: unknown | null;
+};
+
+/**
+ * Parte un mercado ya ordenado por score en corte superior y control.
+ *
+ * Exportada para testearla: el muestreo es la parte que decide si el lift
+ * visual significa algo, y no hace falta una base para verificarlo.
+ */
+export function pickVisualSample(
+  region: string,
+  rows: VisualRow[],
+  limitPerRegion: number,
+  controlPerRegion: number,
+): VisualCandidate[] {
+  const pending = (row: VisualRow) => !row.visual_analysis && Boolean(row.stored_media?.images?.[0]);
+  const toCandidate = (row: VisualRow, sample: "top" | "control"): VisualCandidate => ({
+    post_id: row.post_id,
+    region,
+    storedPath: row.stored_media!.images![0],
+    sample,
+  });
+
+  const topSize = Math.min(
+    limitPerRegion,
+    Math.max(MIN_TOP_POSTS, Math.ceil(rows.length * TOP_FRACTION)),
+  );
+  const top = rows.slice(0, topSize);
+  const rest = rows.slice(topSize);
+
+  const out = top.filter(pending).map((row) => toCandidate(row, "top"));
+
+  // El control se completa hasta el cupo y no se vuelve a pagar cada semana.
+  const target = Math.min(controlPerRegion, topSize);
+  // Solo cuenta lo analizado de verdad: una imagen inutilizable no llena cupo.
+  const analyzed = (r: VisualRow) =>
+    Boolean((r.visual_analysis as { visual_format?: string } | null)?.visual_format);
+  const need = Math.max(0, target - rest.filter(analyzed).length);
+  const candidates = rest.filter(pending);
+  if (!need || !candidates.length) return out;
+
+  const step = Math.max(1, Math.floor(candidates.length / need));
+  for (let i = 0, taken = 0; i < candidates.length && taken < need; i += step, taken += 1) {
+    out.push(toCandidate(candidates[i], "control"));
+  }
+  return out;
 }
 
 /** Guarda el análisis del creativo. Update y no upsert, igual que los scores. */
@@ -602,7 +676,12 @@ export async function savePostAnalyses(
   for (const item of analyses) {
     const { error } = await sb
       .from("content_posts")
-      .update({ analysis: item.analysis, analysis_model: model, analyzed_at: analyzedAt })
+      .update({
+        analysis: item.analysis,
+        analysis_model: model,
+        analysis_version: ANALYSIS_VERSION,
+        analyzed_at: analyzedAt,
+      })
       .eq("platform", platform)
       .eq("post_id", item.post_id);
     if (error) throw error;

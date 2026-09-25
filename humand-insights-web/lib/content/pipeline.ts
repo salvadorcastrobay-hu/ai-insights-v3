@@ -8,6 +8,7 @@
  */
 import { generateCalendar } from "./calendar";
 import { embedTexts } from "./embeddings";
+import { computeFeatures } from "./post-features";
 import {
   buildCanonicalVocabulary,
   buildPositions,
@@ -47,6 +48,10 @@ function toAnalyzable(post: StoredContentPost): AnalyzedPost {
     outlier_factor: raw.outlier_factor,
     debate_factor: raw.debate_factor ?? null,
     visual: (post as unknown as { visual_analysis?: never }).visual_analysis ?? null,
+    // Las filas anteriores al backfill no tienen `features`: se calculan con la
+    // misma función, así la síntesis no depende de que el backfill haya corrido.
+    features: post.features ?? computeFeatures(post, post.region ?? null),
+    baseline_eligible: post.baseline_eligible,
     likes_count: post.likes_count,
     comments_count: post.comments_count,
     shares_count: post.shares_count ?? null,
@@ -86,7 +91,11 @@ export async function runSynthesis(
   const own = posts.filter((p) => ownHandles.has(p.author_handle));
   const reference = posts.filter((p) => !ownHandles.has(p.author_handle));
 
-  for (const synthesis of synthesizeAll(posts)) {
+  // El mercado se sintetiza SIN lo propio. Antes iba `posts`, y @humand.es
+  // aparecía dentro de las posiciones del mercado —y en su corte superior—
+  // como si fuera un referente más: Humand terminaba comparándose contra un
+  // patrón que ella misma inflaba.
+  for (const synthesis of synthesizeAll(reference)) {
     if (NON_MARKET_REGIONS.has(synthesis.region)) continue;
 
     /*
@@ -101,7 +110,7 @@ export async function runSynthesis(
      * Se corre sobre los posts relevantes del mercado, no solo el corte
      * superior: el denominador es parte del dato.
      */
-    const claims = posts
+    const claims = reference
       .filter(
         (p) =>
           p.region === synthesis.region &&

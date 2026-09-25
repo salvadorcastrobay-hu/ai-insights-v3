@@ -18,6 +18,29 @@ function engagementTotal(post: ContentPost): number {
   return (post.likes_count ?? 0) + (post.comments_count ?? 0) + (post.shares_count ?? 0);
 }
 
+const FORMAT_LABELS: Record<string, string> = {
+  texto: "solo texto",
+  imagen: "imagen",
+  multi_imagen: "varias imágenes",
+  carrusel: "carrusel",
+  video: "video",
+  reel: "reel",
+  articulo_link: "link a artículo",
+  newsletter: "newsletter",
+  encuesta: "encuesta",
+};
+
+/** "carrusel · 7 placas", "reel · 30-60s": el formato con el dato que lo define. */
+function formatLabel(post: ContentPost): string | null {
+  const f = post.features;
+  // La imagen suelta es el caso por defecto: marcarla en cada tarjeta es ruido.
+  if (!f || f.format_detail === "imagen") return null;
+  const base = FORMAT_LABELS[f.format_detail] ?? f.format_detail;
+  if (f.slide_count && f.slide_count > 1) return `${base} · ${f.slide_count} placas`;
+  if (f.video_length) return `${base} · ${f.video_length}`;
+  return base;
+}
+
 function platformLabel(platform: string): string {
   return platform === "linkedin" ? "LinkedIn" : "Instagram";
 }
@@ -135,8 +158,33 @@ export function PostCard({
         ) : null}
 
         <div className="mt-auto flex flex-wrap items-center gap-2 pt-1">
+          {formatLabel(post) ? <Badge tone="muted">{formatLabel(post)}</Badge> : null}
+          {/*
+            Collab y lead magnet explican el número antes de que alguien lo
+            copie: el primero tomó alcance prestado de otra cuenta, el segundo
+            juntó comentarios por pedido. Ninguno de los dos es el contenido.
+          */}
+          {post.features?.is_collab ? (
+            <span
+              className="rounded-[var(--r-s)] border border-[var(--warn-border)] bg-[var(--warn-bg)] px-2 py-0.5 text-[12px] leading-[1.4] text-[var(--warn-text)]"
+              title="Publicado en colaboración con otra cuenta: suma las dos audiencias. No entra al cálculo de patrones."
+            >
+              collab
+            </span>
+          ) : null}
+          {post.features?.comment_bait ? (
+            <span
+              className="rounded-[var(--r-s)] border border-[var(--warn-border)] bg-[var(--warn-bg)] px-2 py-0.5 text-[12px] leading-[1.4] text-[var(--warn-text)]"
+              title="Pide comentar una palabra a cambio de algo: los comentarios son pedidos, no debate."
+            >
+              pide comentar palabra
+            </span>
+          ) : null}
+          {a?.timeliness && a.timeliness !== "evergreen" ? (
+            <Badge tone="muted">{a.timeliness === "efemeride" ? "efeméride" : "coyuntura"}</Badge>
+          ) : null}
           {/* Solo cuando es notable: un debate de 1,2x no dice nada y suma ruido. */}
-          {post.debate_factor && post.debate_factor >= 2 ? (
+          {post.debate_factor && post.debate_factor >= 2 && !post.features?.comment_bait ? (
             <span
               className="rounded-[var(--r-s)] border border-[var(--warn-border)] bg-[var(--warn-bg)] px-2 py-0.5 text-[12px] leading-[1.4] text-[var(--warn-text)]"
               title={`${post.comments_count ?? 0} comentarios · ${post.debate_factor.toFixed(1)} veces el ratio habitual de esta cuenta`}

@@ -42,9 +42,9 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   if (kind === "analyze_visual") {
-    // Corre sobre el corte superior de cada mercado, no sobre todo el corpus:
-    // analizar mil imágenes para después mirar cuarenta es pagar por lo que
-    // nadie lee. Sincrónico como analyze, y por eso va en tandas chicas.
+    // Corre sobre el corte superior de cada mercado y una muestra de control
+    // del resto, no sobre todo el corpus. `limit` es cuántas imágenes en ESTE
+    // request: sincrónico como analyze, y por eso va en tandas chicas.
     const result = await runVisualAnalysis(body.limit ?? 40);
     return Response.json({ kind, ...result });
   }

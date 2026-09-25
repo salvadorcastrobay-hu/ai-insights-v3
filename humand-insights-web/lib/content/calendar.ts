@@ -260,6 +260,21 @@ export type ContentCalendar = {
   warnings: string[];
 };
 
+/**
+ * Cómo se lee cada cta_type en el brief. El lead magnet se deja afuera a
+ * propósito: rinde porque fabrica comentarios, y no es algo que el calendario
+ * de Humand deba recomendar por default.
+ */
+const CTA_DESCRIPTIONS: Record<string, string> = {
+  pregunta_abierta: "cerrar con una pregunta que pida la experiencia del lector",
+  guardar_o_compartir: "pedir que lo guarden o se lo pasen a alguien del equipo",
+  etiquetar: "pedir que etiqueten a alguien",
+  ir_a_link: "llevar a leer, ver o descargar algo",
+  seguir: "pedir que sigan la cuenta",
+  inscribirse_evento: "invitar a un evento o webinar",
+  contacto_comercial: "invitar a una demo o a escribir",
+};
+
 function buildBrief(
   synthesis: RegionSynthesis,
   slots: CalendarSlot[],
@@ -281,6 +296,38 @@ function buildBrief(
       lines.push(`- ${t.key}: ${t.lift}x (${t.top_count})`);
     }
   }
+  const liftLine = (
+    title: string,
+    rows: Array<{ key: string; lift: number; top_count: number }> | null | undefined,
+    describe: (key: string) => string = (k) => k.replace(/_/g, " "),
+  ) => {
+    const winners = (rows ?? []).filter((r) => r.lift > 1).slice(0, 4);
+    if (!winners.length) return;
+    lines.push(`\n${title}:`);
+    for (const r of winners) lines.push(`- ${describe(r.key)}: ${r.lift}x (${r.top_count})`);
+  };
+  // Formato y pedido son lo que más cambia la pieza después del hook, y hasta
+  // acá el modelo elegía el formato sin evidencia.
+  liftLine("FORMATOS QUE MEJOR RINDEN", synthesis.winning_formats);
+  // Las claves van traducidas: con "ir_a_link" crudo en el brief, el modelo
+  // escribía literalmente `cta: "ir_a_link"` en la pieza.
+  liftLine(
+    "QUÉ LE PIDEN AL LECTOR LOS QUE RINDEN (guía para escribir el cierre; el `cta` de cada pieza es la frase, no esta etiqueta)",
+    synthesis.winning_ctas?.filter((r) => r.key !== "ninguno" && r.key !== "comentar_palabra_clave"),
+    (k) => CTA_DESCRIPTIONS[k] ?? k.replace(/_/g, " "),
+  );
+  if (synthesis.visual_lift) {
+    liftLine("CÓMO SE VE LO QUE RINDE (contra el resto)", synthesis.visual_lift.visual_format);
+    liftLine("NIVEL DE PRODUCCIÓN QUE RINDE", synthesis.visual_lift.production_level);
+  }
+  const firstLine = synthesis.copy_shape?.find((r) => r.metric === "first_line_chars");
+  if (firstLine) {
+    lines.push(
+      `\nPRIMERA LÍNEA: los que rinden la escriben de ~${Math.round(firstLine.top)} caracteres ` +
+        `(el resto, ~${Math.round(firstLine.rest)}).`,
+    );
+  }
+
   if (synthesis.top_topics.length) {
     lines.push("\nDE QUÉ SE HABLA: " + synthesis.top_topics.map((t) => t.key).join(", "));
   }

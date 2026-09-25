@@ -10,6 +10,7 @@
  * haya drift entre corridas.
  */
 import type { PostAnalysis } from "./classify";
+import type { PostFeatures } from "./post-features";
 
 /** Fracción superior que se considera "lo que funcionó". */
 export const TOP_FRACTION = 0.2;
@@ -40,8 +41,49 @@ export type AnalyzedPost = {
   comments_count: number | null;
   shares_count?: number | null;
   analysis: PostAnalysis;
-  /** Qué se ve en el creativo. Solo lo tiene el corte superior. */
-  visual?: { visual_format: string; text_on_image: string; visual_text: string | null } | null;
+  /** Qué se ve en el creativo. Lo tienen el corte superior y una muestra de control. */
+  visual?: {
+    visual_format: string;
+    text_on_image: string;
+    visual_text: string | null;
+    production_level?: string;
+    person_framing?: string;
+    face_present?: boolean;
+  } | null;
+  /** Lo contable del post. Ver post-features.ts. */
+  features?: PostFeatures | null;
+  /** Viene de una muestra cronológica del autor (scrape de perfil). */
+  baseline_eligible?: boolean;
+};
+
+/** Top contra el resto, para un eje donde "el total" no es representativo. */
+export type PatternContrast = {
+  key: string;
+  top_count: number;
+  top_authors: number;
+  top_share: number;
+  rest_count: number;
+  rest_share: number;
+  /** top_share / rest_share. */
+  lift: number;
+};
+
+/** Una métrica de forma del copy: cómo es arriba contra cómo es el resto. */
+export type CopyShapeRow = {
+  metric:
+    | "first_line_chars"
+    | "paragraphs"
+    | "emoji_count"
+    | "copy_length"
+    | "has_external_link"
+    | "ends_with_question"
+    | "slide_count";
+  /** Mediana para las métricas numéricas, proporción para las booleanas. */
+  top: number;
+  rest: number;
+  kind: "median" | "share";
+  top_n: number;
+  rest_n: number;
 };
 
 export type PatternLift = {
@@ -83,6 +125,49 @@ export type RegionSynthesis = {
     authors: number;
     median_outlier: number | null;
   }> | null;
+  /** Formato real (el de LinkedIn corregido), CTA y vigencia: lift como los demás. */
+  winning_formats?: PatternLift[] | null;
+  winning_ctas?: PatternLift[] | null;
+  winning_timeliness?: PatternLift[] | null;
+  /**
+   * Lift visual de verdad: corte superior contra la muestra de control del
+   * resto. null si el control no alcanza, y entonces se cae a `visual_mix`.
+   */
+  visual_lift?: {
+    visual_format: PatternContrast[];
+    production_level: PatternContrast[];
+    person_framing: PatternContrast[];
+    text_on_image: PatternContrast[];
+    top_n: number;
+    rest_n: number;
+  } | null;
+  /** Cómo está escrito lo que funciona contra el resto. Determinístico. */
+  copy_shape?: CopyShapeRow[] | null;
+  /**
+   * Cuándo publican los que funcionan. Solo sobre muestras cronológicas de
+   * perfil: un scrape de hashtag trae "lo último", o sea todo del mismo día, y
+   * eso no es un hábito de publicación. Descriptivo, no causal.
+   */
+  timing?: { weekday: PatternLift[]; daypart: PatternLift[]; sample: number } | null;
+  /**
+   * Páginas de EMPRESA: Humand publica como empresa y casi todo el corpus son
+   * personas. Con esta muestra no da para lift, así que son casos, no un %.
+   */
+  company_pages?: {
+    posts: number;
+    authors: number;
+    median_outlier: number | null;
+    person_median_outlier: number | null;
+    examples: Array<{
+      author_handle: string;
+      post_url: string | null;
+      hook: string | null;
+      format: string | null;
+      outlier_factor: number | null;
+    }>;
+  } | null;
+  /** Cuántos collabs se dejaron fuera del corte: su alcance es prestado. */
+  excluded_collabs?: number;
   top_topics: Array<{ key: string; count: number }>;
   tone_mix: Array<{ key: string; count: number }>;
   replicable_ideas: Array<{
@@ -192,12 +277,16 @@ export function computeLift(
  * para el calendario de Humand.
  */
 export function synthesizeRegion(region: string, posts: AnalyzedPost[]): RegionSynthesis {
-  const relevant = posts.filter(
+  const eligible = posts.filter(
     (p) =>
       p.analysis.is_relevant_to_hr &&
       p.analysis.audience_signal === "hr_leader" &&
       p.viral_score !== null,
   );
+  // Los collabs se publican en dos perfiles y suman las dos audiencias: su
+  // rendimiento mide la distribución, no el contenido. En el feed se muestran
+  // marcados; acá, donde se decide qué patrón gana, quedan afuera.
+  const relevant = eligible.filter((p) => !p.features?.is_collab);
 
   const ranked = [...relevant].sort((a, b) => (b.viral_score ?? 0) - (a.viral_score ?? 0));
   const topCount = Math.max(MIN_TOP_POSTS, Math.ceil(ranked.length * TOP_FRACTION));
@@ -210,7 +299,15 @@ export function synthesizeRegion(region: string, posts: AnalyzedPost[]): RegionS
     winning_hooks: null,
     winning_themes: null,
     winning_structures: null,
+    winning_formats: null,
+    winning_ctas: null,
+    winning_timeliness: null,
     visual_mix: null,
+    visual_lift: null,
+    copy_shape: null,
+    timing: null,
+    company_pages: companyPages(relevant),
+    excluded_collabs: eligible.length - relevant.length,
     // Antes era `topic`, texto libre que produjo 907 valores distintos sobre
     // 983 posts: prácticamente uno por post, así que el ranking en pantalla era
     // arbitrario. `claim_object` es vocabulario acotado del rubro y sí agrega.
@@ -258,6 +355,23 @@ export function synthesizeRegion(region: string, posts: AnalyzedPost[]): RegionS
       relevant.map((p) => ({ key: p.analysis.theme, author: p.author_handle })),
     ),
     visual_mix: visualMix(top),
+    visual_lift: visualLift(top, relevant),
+    winning_formats: computeLift(
+      top.map((p) => ({ key: p.features?.format_detail, author: p.author_handle })),
+      relevant.map((p) => ({ key: p.features?.format_detail, author: p.author_handle })),
+    ),
+    // Solo sobre posts clasificados con la versión que tiene cta_type: una
+    // fila vieja sin el campo no es "ninguno", es "no sabemos".
+    winning_ctas: computeLift(
+      top.map((p) => ({ key: p.analysis.cta_type, author: p.author_handle })),
+      relevant.map((p) => ({ key: p.analysis.cta_type, author: p.author_handle })),
+    ),
+    winning_timeliness: computeLift(
+      top.map((p) => ({ key: p.analysis.timeliness, author: p.author_handle })),
+      relevant.map((p) => ({ key: p.analysis.timeliness, author: p.author_handle })),
+    ),
+    copy_shape: copyShape(top, relevant),
+    timing: timing(top, relevant),
     // structure ya se extraía y no la leía nadie. Es un eje bastante menos
     // superficial que el hook: el hook son las primeras quince palabras, la
     // estructura es la forma del argumento entero.
@@ -311,6 +425,182 @@ function visualMix(
     .sort((a, b) => b.posts - a.posts);
 }
 
+/** Mínimo de piezas analizadas en cada lado para comparar lo visual. */
+const MIN_VISUAL_TOP = 10;
+const MIN_VISUAL_REST = 15;
+
+/**
+ * Corte superior contra el resto, sin pasar por "el total".
+ *
+ * `computeLift` compara contra el total, y para lo visual el total no existe:
+ * el corte se analiza entero y el resto solo por muestra, así que sumarlos
+ * sobre-representa el corte en la base. Acá se comparan los dos lados por
+ * separado, y un valor tiene que tener voces en LOS DOS: con tres posts
+ * arriba y cero en el control, el lift es infinito y no significa nada.
+ */
+export function computeContrast(
+  top: LiftObservation[],
+  rest: LiftObservation[],
+  minTopCount = MIN_PATTERN_COUNT,
+  minRestCount = 2,
+): PatternContrast[] {
+  const topCounts = tally(top.map((t) => t.key));
+  const restCounts = tally(rest.map((r) => r.key));
+  const topAuthors = tallyAuthors(top);
+  const topTotal = [...topCounts.values()].reduce((a, b) => a + b, 0);
+  const restTotal = [...restCounts.values()].reduce((a, b) => a + b, 0);
+  if (!topTotal || !restTotal) return [];
+
+  return [...topCounts.entries()]
+    .filter(
+      ([key, count]) =>
+        count >= minTopCount &&
+        (topAuthors.get(key)?.size ?? 0) >= MIN_PATTERN_AUTHORS &&
+        (restCounts.get(key) ?? 0) >= minRestCount,
+    )
+    .map(([key, count]) => {
+      const topShare = count / topTotal;
+      const restCount = restCounts.get(key) ?? 0;
+      const restShare = restCount / restTotal;
+      return {
+        key,
+        top_count: count,
+        top_authors: topAuthors.get(key)?.size ?? 0,
+        top_share: Number(topShare.toFixed(3)),
+        rest_count: restCount,
+        rest_share: Number(restShare.toFixed(3)),
+        lift: Number((topShare / restShare).toFixed(2)),
+      };
+    })
+    .sort((a, b) => b.lift - a.lift || b.top_count - a.top_count);
+}
+
+function visualLift(top: AnalyzedPost[], relevant: AnalyzedPost[]): RegionSynthesis["visual_lift"] {
+  const topIds = new Set(top.map((p) => p.post_id));
+  const topV = top.filter((p) => p.visual?.visual_format);
+  const restV = relevant.filter((p) => !topIds.has(p.post_id) && p.visual?.visual_format);
+  if (topV.length < MIN_VISUAL_TOP || restV.length < MIN_VISUAL_REST) return null;
+
+  const axis = (pick: (v: NonNullable<AnalyzedPost["visual"]>) => string | undefined) =>
+    computeContrast(
+      topV.map((p) => ({ key: pick(p.visual!), author: p.author_handle })),
+      restV.map((p) => ({ key: pick(p.visual!), author: p.author_handle })),
+    );
+
+  return {
+    visual_format: axis((v) => v.visual_format),
+    production_level: axis((v) => v.production_level),
+    person_framing: axis((v) => v.person_framing),
+    text_on_image: axis((v) => v.text_on_image),
+    top_n: topV.length,
+    rest_n: restV.length,
+  };
+}
+
+function medianOf(values: number[]): number | null {
+  const sorted = values.filter((v) => Number.isFinite(v)).sort((a, b) => a - b);
+  if (!sorted.length) return null;
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+/**
+ * Cómo está escrito lo que funciona, contra cómo está escrito el resto.
+ *
+ * Es lo que un copywriter copia de verdad y el clasificador no veía: la
+ * longitud de la primera línea, el aire entre párrafos, si lleva link. Todo
+ * contado, nada inferido.
+ */
+function copyShape(top: AnalyzedPost[], relevant: AnalyzedPost[]): CopyShapeRow[] | null {
+  const topIds = new Set(top.map((p) => p.post_id));
+  const topF = top.filter((p) => p.features);
+  const restF = relevant.filter((p) => !topIds.has(p.post_id) && p.features);
+  if (topF.length < MIN_TOP_POSTS || restF.length < MIN_TOP_POSTS) return null;
+
+  const rows: CopyShapeRow[] = [];
+  const numeric = (
+    metric: CopyShapeRow["metric"],
+    pick: (p: AnalyzedPost) => number | null | undefined,
+  ) => {
+    const t = topF.map(pick).filter((v): v is number => typeof v === "number");
+    const r = restF.map(pick).filter((v): v is number => typeof v === "number");
+    const tm = medianOf(t);
+    const rm = medianOf(r);
+    if (tm === null || rm === null || t.length < MIN_TOP_POSTS) return;
+    rows.push({ metric, top: tm, rest: rm, kind: "median", top_n: t.length, rest_n: r.length });
+  };
+  const share = (metric: CopyShapeRow["metric"], pick: (p: AnalyzedPost) => boolean) => {
+    const t = topF.filter(pick).length / topF.length;
+    const r = restF.filter(pick).length / restF.length;
+    rows.push({
+      metric,
+      top: Number(t.toFixed(3)),
+      rest: Number(r.toFixed(3)),
+      kind: "share",
+      top_n: topF.length,
+      rest_n: restF.length,
+    });
+  };
+
+  numeric("first_line_chars", (p) => p.features!.first_line_chars);
+  numeric("paragraphs", (p) => p.features!.paragraphs);
+  numeric("emoji_count", (p) => p.features!.emoji_count);
+  numeric("copy_length", (p) => p.analysis.copy_length);
+  numeric("slide_count", (p) => p.features!.slide_count);
+  share("has_external_link", (p) => p.features!.has_external_link);
+  share("ends_with_question", (p) => p.features!.ends_with_question);
+  return rows;
+}
+
+function timing(top: AnalyzedPost[], relevant: AnalyzedPost[]): RegionSynthesis["timing"] {
+  // Solo la muestra cronológica de perfil: ver el comentario del tipo.
+  const chrono = (p: AnalyzedPost) => p.baseline_eligible !== false && p.features?.weekday;
+  const t = top.filter(chrono);
+  const all = relevant.filter(chrono);
+  if (t.length < MIN_TOP_POSTS) return null;
+  return {
+    weekday: computeLift(
+      t.map((p) => ({ key: p.features!.weekday, author: p.author_handle })),
+      all.map((p) => ({ key: p.features!.weekday, author: p.author_handle })),
+    ),
+    daypart: computeLift(
+      t.map((p) => ({ key: p.features!.daypart, author: p.author_handle })),
+      all.map((p) => ({ key: p.features!.daypart, author: p.author_handle })),
+    ),
+    sample: all.length,
+  };
+}
+
+const MIN_COMPANY_POSTS = 3;
+
+function companyPages(relevant: AnalyzedPost[]): RegionSynthesis["company_pages"] {
+  const companies = relevant.filter((p) => p.features?.author_type === "empresa");
+  // Con uno o dos posts no hay nada que mirar: "rinde 0,7×" sobre un post es
+  // una anécdota con formato de dato.
+  if (companies.length < MIN_COMPANY_POSTS) return null;
+  const people = relevant.filter((p) => p.features?.author_type === "persona");
+  const outliers = (list: AnalyzedPost[]) =>
+    list.map((p) => p.outlier_factor).filter((v): v is number => v !== null);
+  const round = (v: number | null) => (v === null ? null : Number(v.toFixed(2)));
+
+  return {
+    posts: companies.length,
+    authors: new Set(companies.map((p) => p.author_handle)).size,
+    median_outlier: round(medianOf(outliers(companies))),
+    person_median_outlier: round(medianOf(outliers(people))),
+    examples: [...companies]
+      .sort((a, b) => (b.viral_score ?? 0) - (a.viral_score ?? 0))
+      .slice(0, 3)
+      .map((p) => ({
+        author_handle: p.author_handle,
+        post_url: p.post_url,
+        hook: p.analysis.hook,
+        format: p.features?.format_detail ?? null,
+        outlier_factor: p.outlier_factor,
+      })),
+  };
+}
+
 /** Sintetiza todos los mercados presentes en el set. */
 export function synthesizeAll(posts: AnalyzedPost[]): RegionSynthesis[] {
   const byRegion = new Map<string, AnalyzedPost[]>();
@@ -346,6 +636,8 @@ export type OwnBrandComparison = {
   overused_patterns: Array<{ key: string; lift: number; own_share: number }>;
   /** Temas que funcionan y no estamos tocando. */
   missing_themes: Array<{ key: string; lift: number }>;
+  /** Formatos que ganan en el mercado y no publicamos, o casi. */
+  missing_formats?: Array<{ key: string; lift: number; own_share: number }>;
 };
 
 function median(values: number[]): number | null {
@@ -377,6 +669,7 @@ export function compareOwnBrand(
   const refMedian = median(referencePosts.map(engagementOf));
 
   const ownHooks = shareByKey(ownPosts.map((p) => p.analysis.hook_pattern));
+  const ownFormats = shareByKey(ownPosts.map((p) => p.features?.format_detail));
   const ownThemes = shareByKey(ownPosts.map((p) => p.analysis.theme));
 
   const winningHooks = (synthesis.winning_hooks ?? []).filter((h) => h.lift > 1);
@@ -408,5 +701,12 @@ export function compareOwnBrand(
     missing_themes: winningThemes
       .filter((t) => (ownThemes.get(t.key) ?? 0) === 0)
       .map((t) => ({ key: t.key, lift: t.lift })),
+    missing_formats: (synthesis.winning_formats ?? [])
+      .filter((f) => f.lift > 1 && (ownFormats.get(f.key) ?? 0) < 0.1)
+      .map((f) => ({
+        key: f.key,
+        lift: f.lift,
+        own_share: Number((ownFormats.get(f.key) ?? 0).toFixed(2)),
+      })),
   };
 }

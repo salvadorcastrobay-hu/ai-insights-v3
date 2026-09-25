@@ -61,25 +61,29 @@ jobs:
             done
           done
 
-      - name: Analizar el creativo del corte superior
+      - name: Analizar el creativo (corte superior y control)
         env:
           ENGINE_URL: ${{ secrets.CONTENT_ENGINE_URL }}
           ENGINE_TOKEN: ${{ secrets.CONTENT_ENGINE_TOKEN }}
         run: |
           set -uo pipefail
 
-          # Solo el corte superior de cada mercado. El analisis del creativo usa
-          # un modelo multimodal y cuesta por imagen; sobre las mil y pico de
-          # posts seria pagar por lo que nadie mira.
+          # El corte superior de cada mercado y una muestra de control del
+          # resto: sin el control no hay denominador y lo visual no se puede
+          # comparar contra nada. Sobre las mil y pico de posts seria pagar por
+          # lo que nadie mira.
+          #
+          # `limit` es imagenes por request (lotes de 4, ~10s cada uno). En
+          # regimen es poco —lo nuevo de la semana—; la primera vez son ~250.
           #
           # En tandas y con || true: que falle el creativo no puede impedir que
           # corra la sintesis, que es lo que produce el calendario.
-          for round in 1 2 3; do
+          for round in 1 2 3 4 5 6 7 8 9 10; do
             RESPONSE=$(curl -sS --fail-with-body -X POST \
               -H "Authorization: Bearer ${ENGINE_TOKEN}" \
               -H "content-type: application/json" \
               -H "x-acting-user: github-actions" \
-              -d '{"kind":"analyze_visual","limit":20}' \
+              -d '{"kind":"analyze_visual","limit":40}' \
               "${ENGINE_URL}/api/internal/content/runs") || {
                 echo "::warning::el analisis del creativo fallo en la tanda ${round}"
                 break

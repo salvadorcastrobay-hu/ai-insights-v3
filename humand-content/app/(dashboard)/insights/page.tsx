@@ -2,9 +2,12 @@ import { Badge, Bar, Callout, Card, EmptyState, PageHeader, SectionLabel } from 
 import { loadOwnBrandComparisons, loadSyntheses } from "@/lib/content/queries";
 import {
   regionLabel,
+  type CopyShapeRow,
   type MarketPosition,
   type OwnBrandComparison,
+  type PatternContrast,
   type PatternLift,
+  type RegionSynthesis,
 } from "@/lib/content/types";
 
 export const dynamic = "force-dynamic";
@@ -96,6 +99,194 @@ function Tension({ position }: { position: MarketPosition }) {
   );
 }
 
+/** Etiquetas legibles para los enums nuevos. Lo que no está acá se muestra con espacios. */
+const KEY_LABELS: Record<string, string> = {
+  texto: "solo texto",
+  multi_imagen: "varias imágenes",
+  articulo_link: "link a artículo",
+  pregunta_abierta: "pregunta al lector",
+  // Rinde porque pide comentarios, y los comentarios pesan más en el ranking.
+  comentar_palabra_clave: "comentá palabra (lead magnet, infla comentarios)",
+  guardar_o_compartir: "guardá / compartí",
+  ir_a_link: "ir a un link",
+  inscribirse_evento: "inscribite a un evento",
+  contacto_comercial: "contacto comercial",
+  ninguno: "no pide nada",
+  efemeride: "efeméride",
+  casero: "casero (celular, sin diseño)",
+  plantilla: "plantilla (tipo Canva)",
+  producido: "producido",
+  sin_persona: "sin persona",
+  primer_plano: "primer plano",
+  plano_medio: "plano medio",
+  escenario_evento: "en un escenario",
+  titular_corto: "titular corto",
+  manana: "mañana",
+  lun: "lunes",
+  mar: "martes",
+  mie: "miércoles",
+  jue: "jueves",
+  vie: "viernes",
+  sab: "sábado",
+  dom: "domingo",
+};
+
+function label(key: string): string {
+  return KEY_LABELS[key] ?? key.replace(/_/g, " ");
+}
+
+function pct(value: number): string {
+  return `${Math.round(value * 100)}%`;
+}
+
+/**
+ * Lift contra una muestra de control. Se muestran las dos proporciones y no
+ * solo el múltiplo: "2×" sobre 4% contra 2% y sobre 60% contra 30% no son la
+ * misma noticia.
+ */
+function ContrastList({ title, rows }: { title: string; rows: PatternContrast[] }) {
+  const winners = rows.filter((r) => r.lift > 1).slice(0, 4);
+  if (!winners.length) return null;
+  const max = Math.max(...winners.map((r) => r.lift));
+  return (
+    <div>
+      <SectionLabel>{title}</SectionLabel>
+      <ul className="space-y-2.5">
+        {winners.map((row) => (
+          <li key={row.key}>
+            <div className="mb-1 flex items-baseline gap-2 text-[14px] leading-[1.4]">
+              <span className="min-w-0 flex-1 truncate" title={row.key}>
+                {label(row.key)}
+              </span>
+              <span className="shrink-0 font-semibold tabular-nums">{row.lift}×</span>
+              <span className="shrink-0 text-[12px] text-[var(--faint)] tabular-nums">
+                {pct(row.top_share)} arriba · {pct(row.rest_share)} resto
+              </span>
+            </div>
+            <Bar value={row.lift} max={max} />
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+const COPY_METRICS: Record<CopyShapeRow["metric"], string> = {
+  first_line_chars: "Largo de la primera línea (caracteres)",
+  paragraphs: "Párrafos",
+  emoji_count: "Emojis",
+  copy_length: "Largo total (caracteres)",
+  slide_count: "Placas por carrusel",
+  has_external_link: "Lleva link externo",
+  ends_with_question: "Cierra con pregunta",
+};
+
+/**
+ * Cómo está escrito lo que funciona. Es lo que se copia de un post sin copiar
+ * su tema, y todo sale contado, no inferido.
+ */
+function CopyShape({ rows }: { rows: CopyShapeRow[] }) {
+  // Solo las filas donde arriba y resto difieren de verdad: una tabla donde
+  // todo es igual no le dice nada a quien escribe.
+  const notable = rows.filter((r) => {
+    if (r.kind === "share") return Math.abs(r.top - r.rest) >= 0.08;
+    const base = Math.max(1, r.rest);
+    return Math.abs(r.top - r.rest) / base >= 0.2;
+  });
+  if (!notable.length) return null;
+  const fmt = (r: CopyShapeRow, v: number) =>
+    r.kind === "share" ? pct(v) : Math.round(v).toLocaleString("es");
+
+  return (
+    <div className="mb-5">
+      <SectionLabel>Cómo está escrito lo que funciona</SectionLabel>
+      <table className="w-full text-[14px] leading-[1.4]">
+        <thead>
+          <tr className="text-left text-[12px] text-[var(--faint)]">
+            <th className="pb-1 font-normal">Mediana o proporción</th>
+            <th className="pb-1 text-right font-semibold text-[var(--text)]">Arriba</th>
+            <th className="pb-1 text-right font-normal">Resto</th>
+          </tr>
+        </thead>
+        <tbody>
+          {notable.map((r) => (
+            <tr key={r.metric} className="border-t border-[var(--border)]">
+              <td className="py-1.5">{COPY_METRICS[r.metric]}</td>
+              <td className="py-1.5 text-right font-semibold tabular-nums">{fmt(r, r.top)}</td>
+              <td className="py-1.5 text-right tabular-nums text-[var(--muted)]">{fmt(r, r.rest)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function Timing({ timing }: { timing: NonNullable<RegionSynthesis["timing"]> }) {
+  const days = timing.weekday.filter((r) => r.lift > 1).slice(0, 3);
+  const parts = timing.daypart.filter((r) => r.lift > 1).slice(0, 2);
+  if (!days.length && !parts.length) return null;
+  return (
+    <div className="mb-5">
+      <SectionLabel>Cuándo publican los que funcionan</SectionLabel>
+      <p className="mb-2 text-[12px] leading-[1.4] text-[var(--faint)]">
+        Descriptivo, no una receta: sobre {timing.sample} posts de perfiles seguidos en orden
+        cronológico, en hora del mercado (Hispam con ±2h de error). Dice cuándo publica quien
+        rinde, no que publicar ese día haga rendir.
+      </p>
+      <div className="flex flex-wrap gap-1">
+        {[...days, ...parts].map((r) => (
+          <Badge key={r.key} tone="brand">
+            {label(r.key)} · {r.lift}×
+          </Badge>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Humand publica como empresa, y casi todo el corpus son personas. Con tan
+ * pocas páginas no hay lift posible: se muestran los casos.
+ */
+function CompanyPages({ data }: { data: NonNullable<RegionSynthesis["company_pages"]> }) {
+  return (
+    <div className="mb-5 rounded-[var(--r-m)] border border-[var(--border)] p-3">
+      <SectionLabel>Páginas de empresa</SectionLabel>
+      <p className="mb-2 text-[14px] leading-[1.4]">
+        {data.posts} posts de {data.authors} {data.authors === 1 ? "página" : "páginas"}
+        {data.median_outlier !== null && data.person_median_outlier !== null
+          ? ` · rinden ${data.median_outlier}× su promedio, contra ${data.person_median_outlier}× de las personas`
+          : ""}
+        .
+      </p>
+      <p className="mb-2 text-[12px] leading-[1.4] text-[var(--faint)]">
+        Son pocos para sacar un patrón: son casos para mirar, no una tendencia. Lo que rinde a una
+        persona —su historia, su cara— no se traslada solo a una marca.
+      </p>
+      <ul className="space-y-1">
+        {data.examples.map((e) => (
+          <li key={e.post_url ?? e.hook ?? e.author_handle} className="text-[14px] leading-[1.4]">
+            <span className="text-[var(--muted)]">“{e.hook ?? "(sin texto)"}”</span>{" "}
+            {e.post_url ? (
+              <a
+                href={e.post_url}
+                target="_blank"
+                rel="noreferrer"
+                className="whitespace-nowrap text-[12px] text-[var(--brand-ink)] hover:underline"
+              >
+                @{e.author_handle}
+                {e.format ? ` · ${label(e.format)}` : ""}
+                {e.outlier_factor ? ` · ${e.outlier_factor.toFixed(1)}×` : ""} ↗
+              </a>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function LiftList({ title, rows }: { title: string; rows: PatternLift[] }) {
   const winners = rows.filter((r) => r.lift > 1).slice(0, 6);
   if (!winners.length) return null;
@@ -109,7 +300,7 @@ function LiftList({ title, rows }: { title: string; rows: PatternLift[] }) {
           <li key={row.key}>
             <div className="mb-1 flex items-baseline gap-2 text-[14px] leading-[1.4]">
               <span className="min-w-0 flex-1 truncate" title={row.key}>
-                {row.key.replace(/_/g, " ")}
+                {label(row.key)}
               </span>
               <span className="shrink-0 font-semibold tabular-nums">{row.lift}×</span>
               <span className="shrink-0 text-[12px] text-[var(--faint)]">
@@ -145,6 +336,11 @@ function OwnBrand({ cmp }: { cmp: OwnBrandComparison }) {
       tone: "brand" as const,
     },
     {
+      title: "Formatos que funcionan y casi no publicamos",
+      items: (cmp.missing_formats ?? []).map((f) => `${label(f.key)} · ${f.lift}×`),
+      tone: "brand" as const,
+    },
+    {
       title: "Temas que funcionan y no tocamos",
       items: cmp.missing_themes.map((t) => `${t.key.replace(/_/g, " ")} · ${t.lift}×`),
       tone: "brand" as const,
@@ -177,7 +373,7 @@ function OwnBrand({ cmp }: { cmp: OwnBrandComparison }) {
       </p>
 
       {blocks.length ? (
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2">
           {blocks.map((block) => (
             <div key={block.title}>
               <p className="mb-1.5 text-[12px] font-semibold leading-[1.4]">{block.title}</p>
@@ -230,6 +426,9 @@ export default async function InsightsPage() {
               <h2 className="text-[18px] font-semibold leading-[1.4]">{regionLabel(s.region)}</h2>
               <span className="text-[12px] text-[var(--faint)]">
                 {s.posts_considered} posts relevantes · corte superior {s.top_posts_count}
+                {s.excluded_collabs
+                  ? ` · ${s.excluded_collabs} collabs fuera del cálculo (alcance compartido)`
+                  : ""}
               </span>
             </div>
 
@@ -271,15 +470,28 @@ export default async function InsightsPage() {
               </div>
             ) : null}
 
-            {s.visual_mix?.length ? (
+            {s.visual_lift ? (
+              <div className="mb-5">
+                <SectionLabel>Cómo se ve lo que funciona</SectionLabel>
+                <p className="mb-3 text-[12px] leading-[1.4] text-[var(--faint)]">
+                  {s.visual_lift.top_n} piezas del corte superior contra una muestra de{" "}
+                  {s.visual_lift.rest_n} del resto del mercado. Es asociación, no causa: dice qué
+                  aparece más en lo que rinde.
+                </p>
+                <div className="grid gap-6 sm:grid-cols-2">
+                  <ContrastList title="Tipo de pieza" rows={s.visual_lift.visual_format} />
+                  <ContrastList title="Nivel de producción" rows={s.visual_lift.production_level} />
+                  <ContrastList title="Cómo aparece la persona" rows={s.visual_lift.person_framing} />
+                  <ContrastList title="Texto sobre la imagen" rows={s.visual_lift.text_on_image} />
+                </div>
+              </div>
+            ) : s.visual_mix?.length ? (
               <div className="mb-5">
                 <SectionLabel>Cómo se ve lo que funciona</SectionLabel>
                 {/*
-                  A propósito NO se llama lift ni se compara contra una base:
-                  el análisis del creativo corre solo sobre el corte superior,
-                  así que no hay denominador. Esto compara entre los que
-                  funcionaron, y decirlo importa — presentarlo como lift sería
-                  afirmar algo que el dato no sostiene.
+                  Sin muestra de control todavía: se compara DENTRO del corte,
+                  no contra el resto, y llamarlo lift sería afirmar algo que el
+                  dato no sostiene.
                 */}
                 <p className="mb-2 text-[12px] leading-[1.4] text-[var(--faint)]">
                   Sobre las piezas del corte superior que pudimos analizar visualmente. Es
@@ -291,7 +503,7 @@ export default async function InsightsPage() {
                       key={v.key}
                       className="flex items-baseline gap-2 text-[14px] leading-[1.4]"
                     >
-                      <span className="min-w-0 flex-1 truncate">{v.key.replace(/_/g, " ")}</span>
+                      <span className="min-w-0 flex-1 truncate">{label(v.key)}</span>
                       <span className="shrink-0 tabular-nums text-[var(--muted)]">
                         {v.posts} posts · {v.authors} autores
                       </span>
@@ -306,10 +518,20 @@ export default async function InsightsPage() {
               </div>
             ) : null}
 
+            {s.copy_shape?.length ? <CopyShape rows={s.copy_shape} /> : null}
+
             <div className="grid gap-6 sm:grid-cols-2">
               <LiftList title="Hooks que ganan" rows={s.winning_hooks ?? []} />
               <LiftList title="Temas que ganan" rows={s.winning_themes ?? []} />
               <LiftList title="Estructuras que ganan" rows={s.winning_structures ?? []} />
+              <LiftList title="Formatos que ganan" rows={s.winning_formats ?? []} />
+              <LiftList title="Qué le piden al lector" rows={s.winning_ctas ?? []} />
+              <LiftList title="Vigencia" rows={s.winning_timeliness ?? []} />
+            </div>
+
+            <div className="mt-5">
+              {s.timing ? <Timing timing={s.timing} /> : null}
+              {s.company_pages ? <CompanyPages data={s.company_pages} /> : null}
             </div>
 
             {s.top_topics.length ? (

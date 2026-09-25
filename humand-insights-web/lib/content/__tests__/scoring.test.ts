@@ -422,3 +422,48 @@ test("sin volumen suficiente el ratio de comentarios no se mide", () => {
   const scores = scorePosts(posts, new Date(), "instagram");
   assert.ok(scores.every((s) => s.debate_factor === null), "sin volumen no hay debate medible");
 });
+
+test("un collab no entra a la mediana del autor", () => {
+  // Ocho posts normales de 100 y cuatro collabs de 5000. Si los collabs
+  // entraran, la mediana subiría y el post de 400 dejaría de ser un outlier.
+  const base = baselineFor("marca", 10_000, 100);
+  const collabs = Array.from({ length: 4 }, (_, i) =>
+    post({
+      post_id: `collab-${i}`,
+      author_handle: "marca",
+      likes_count: 5000,
+      posted_at: daysAgo(30 + i),
+      is_collab: true,
+    }),
+  );
+  const baselines = authorBaselines([...base, ...collabs], NOW);
+  assert.equal(baselines.get("marca")?.sample, 8);
+  assert.equal(baselines.get("marca")?.median, engagementTotal(base[0]));
+
+  // El collab igual se puntúa: que explotó es un dato, solo que no del contenido.
+  const scored = scorePosts([...base, ...collabs], NOW);
+  assert.ok((scored.find((s) => s.post_id === "collab-0")?.outlier_factor ?? 0) > 10);
+});
+
+test("un lead magnet no tiene debate_factor ni alimenta el del autor", () => {
+  // Autor con ratio de comentarios normal (~2%) y un post "comentá GUIA" con
+  // 40% de comentarios: eso es un pedido, no fricción.
+  const base = baselineFor("autora", 10_000, 500);
+  const bait = post({
+    post_id: "bait",
+    author_handle: "autora",
+    likes_count: 300,
+    comments_count: 200,
+    comment_bait: true,
+  });
+  const normal = post({
+    post_id: "normal",
+    author_handle: "autora",
+    likes_count: 300,
+    comments_count: 200,
+  });
+  const scored = scorePosts([...base, bait, normal], NOW);
+  assert.equal(scored.find((s) => s.post_id === "bait")?.debate_factor, null);
+  // El mismo ratio SIN pedido sí se lee como debate.
+  assert.ok((scored.find((s) => s.post_id === "normal")?.debate_factor ?? 0) >= 2);
+});

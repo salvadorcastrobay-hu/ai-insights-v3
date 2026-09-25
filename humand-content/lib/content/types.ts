@@ -75,6 +75,12 @@ export type PostAnalysis = {
   claim_stance: "a_favor" | "en_contra" | "condicional" | "descriptivo" | null;
   /** Qué lo hace funcionar más allá del tema. Es lo único transferible. */
   transferable_mechanism: string | null;
+  /** Qué le pide al lector. Falta en filas anteriores a la versión 2026-09-23. */
+  cta_type?: string;
+  /** evergreen · coyuntura · efemeride. Si la idea tiene ventana o no. */
+  timeliness?: "evergreen" | "coyuntura" | "efemeride";
+  /** "primera_linea" cuando el hook del modelo no era la apertura real. */
+  hook_source?: "modelo" | "primera_linea";
   copy_length: number;
   hashtag_count: number;
 };
@@ -87,6 +93,22 @@ export type OwnBrandComparison = {
   missing_patterns: Array<{ key: string; lift: number; own_share: number }>;
   overused_patterns: Array<{ key: string; lift: number; own_share: number }>;
   missing_themes: Array<{ key: string; lift: number }>;
+  missing_formats?: Array<{ key: string; lift: number; own_share: number }>;
+};
+
+/**
+ * Lo contable del post, calculado sin LLM en el motor (post-features.ts).
+ * Solo se tipan los campos que la app usa.
+ */
+export type PostFeatures = {
+  format_detail: string;
+  slide_count: number | null;
+  video_length: string | null;
+  first_line_chars: number | null;
+  is_collab: boolean;
+  comment_bait: boolean;
+  author_type: "persona" | "empresa" | null;
+  is_sponsored: boolean;
 };
 
 export type ContentPost = {
@@ -111,6 +133,7 @@ export type ContentPost = {
   debate_factor: number | null;
   viral_score: number | null;
   analysis: PostAnalysis | null;
+  features?: PostFeatures | null;
   /**
    * Foto de portada. Ojo: las URLs de los CDN vienen firmadas y vencen —Instagram
    * en menos de una semana, LinkedIn con un `e=` explícito en la query—, así que
@@ -209,7 +232,61 @@ export type RegionSynthesis = {
     outlier_factor: number | null;
   }>;
   positions?: MarketPosition[];
+  winning_formats?: PatternLift[] | null;
+  winning_ctas?: PatternLift[] | null;
+  winning_timeliness?: PatternLift[] | null;
+  /** Corte superior contra una muestra de control del resto. */
+  visual_lift?: {
+    visual_format: PatternContrast[];
+    production_level: PatternContrast[];
+    person_framing: PatternContrast[];
+    text_on_image: PatternContrast[];
+    top_n: number;
+    rest_n: number;
+  } | null;
+  copy_shape?: CopyShapeRow[] | null;
+  timing?: { weekday: PatternLift[]; daypart: PatternLift[]; sample: number } | null;
+  company_pages?: {
+    posts: number;
+    authors: number;
+    median_outlier: number | null;
+    person_median_outlier: number | null;
+    examples: Array<{
+      author_handle: string;
+      post_url: string | null;
+      hook: string | null;
+      format: string | null;
+      outlier_factor: number | null;
+    }>;
+  } | null;
+  excluded_collabs?: number;
   insufficient_sample?: string;
+};
+
+export type PatternContrast = {
+  key: string;
+  top_count: number;
+  top_authors: number;
+  top_share: number;
+  rest_count: number;
+  rest_share: number;
+  lift: number;
+};
+
+export type CopyShapeRow = {
+  metric:
+    | "first_line_chars"
+    | "paragraphs"
+    | "emoji_count"
+    | "copy_length"
+    | "has_external_link"
+    | "ends_with_question"
+    | "slide_count";
+  top: number;
+  rest: number;
+  kind: "median" | "share";
+  top_n: number;
+  rest_n: number;
 };
 
 /** Un post real que respalda una pieza del calendario. */
