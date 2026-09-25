@@ -23,7 +23,12 @@ const PLATFORMS = [
   { value: "instagram", label: "Instagram" },
 ];
 
-type Params = { region?: string; audience?: string; platform?: string };
+const ORDENES = [
+  { value: "", label: "Alcance" },
+  { value: "debate", label: "Discusión" },
+];
+
+type Params = { region?: string; audience?: string; platform?: string; sortBy?: string };
 
 function FilterGroup({
   label,
@@ -43,6 +48,10 @@ function FilterGroup({
         <a
           key={option.value}
           href={build(option.value)}
+          // El rótulo del grupo se ve pero no está asociado: sin esto hay dos
+          // links "Todas" que en el árbol son indistinguibles.
+          aria-label={`${label}: ${option.label}`}
+          aria-current={current === option.value ? "true" : undefined}
           className={`rounded-full border px-3 py-1 text-[12px] leading-[1.4] transition-colors ${
             current === option.value
               ? "border-transparent bg-[var(--brand-soft-2)] font-semibold text-[var(--brand-deep)]"
@@ -64,6 +73,7 @@ export default async function DiscoveryPage({
   const params = await searchParams;
   const region = params.region ?? "";
   const platform = params.platform ?? "";
+  const sortBy = params.sortBy === "debate" ? "debate" : "";
   // Por defecto se muestra la audiencia de RRHH: un post que explota entre
   // candidatos enseña formato, pero su tema no sirve para el calendario.
   const audience = params.audience ?? "hr_leader";
@@ -72,6 +82,7 @@ export default async function DiscoveryPage({
     region: region || undefined,
     audience: audience || undefined,
     platform: platform || undefined,
+    sortBy: sortBy === "debate" ? "debate" : undefined,
     onlyRelevant: true,
     // Solo posts de cuentas con línea base conocida: sin eso no se puede decir
     // que un post haya funcionado, solo que tuvo volumen.
@@ -80,7 +91,7 @@ export default async function DiscoveryPage({
   });
 
   const link = (next: Partial<Params>) => {
-    const merged = { region, audience, platform, ...next };
+    const merged = { region, audience, platform, sortBy, ...next };
     const qs = new URLSearchParams(
       Object.entries(merged).filter(([, v]) => v) as Array<[string, string]>,
     ).toString();
@@ -94,7 +105,11 @@ export default async function DiscoveryPage({
     <>
       <PageHeader
         title="Qué funciona"
-        subtitle="Posts de referentes del rubro ordenados por cuánto superaron el promedio de su propio autor. Solo entran cuentas con historial suficiente para medirlo."
+        subtitle={
+          sortBy === "debate"
+            ? "Posts que se discutieron mucho más de lo normal para su autor. La discusión marca un tema sobre el que el mercado no se puso de acuerdo — y eso es material para escribir, aunque el post no haya tenido alcance."
+            : "Posts de referentes del rubro ordenados por cuánto superaron el promedio de su propio autor. Solo entran cuentas con historial suficiente para medirlo."
+        }
       />
 
       {/* En mobile los filtros scrollean en horizontal: envueltos se comían tres
@@ -118,6 +133,12 @@ export default async function DiscoveryPage({
           current={platform}
           build={(value) => link({ platform: value })}
         />
+        <FilterGroup
+          label="Ordenar por"
+          options={ORDENES}
+          current={sortBy}
+          build={(value) => link({ sortBy: value })}
+        />
       </div>
 
       {!posts.length ? (
@@ -130,7 +151,11 @@ export default async function DiscoveryPage({
           {/* El podio le da forma visible al pedido original: "los 5 que más
               engagement tuvieron". Sin esto el #1 y el #37 se ven idénticos. */}
           <section className="mb-8">
-            <SectionLabel>Los que más superaron su propio promedio</SectionLabel>
+            <SectionLabel>
+              {sortBy === "debate"
+                ? "Los que más se discutieron"
+                : "Los que más superaron su propio promedio"}
+            </SectionLabel>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {podium.map((post, index) => (
                 <PostCard key={post.id} post={post} rank={index + 1} hero />

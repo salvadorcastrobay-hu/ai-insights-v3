@@ -1,5 +1,5 @@
 import { requireInternalToken } from "@/lib/auth/internal";
-import { runAnalysis, startDiscoveryJob, type DiscoveryOptions } from "@/lib/content/discovery-job";
+import { runVisualAnalysis, runAnalysis, startDiscoveryJob, type DiscoveryOptions } from "@/lib/content/discovery-job";
 import { runSynthesis } from "@/lib/content/pipeline";
 import type { Platform } from "@/lib/content/scoring";
 import { findActiveJob, reapStaleJobs } from "@/lib/content/store";
@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 type RunBody = {
-  kind?: "discovery" | "analyze" | "synthesize";
+  kind?: "discovery" | "analyze" | "analyze_visual" | "synthesize";
   sourceIds?: string[];
   options?: DiscoveryOptions;
   /** Solo para kind "analyze". */
@@ -38,6 +38,14 @@ export async function POST(request: Request): Promise<Response> {
       return Response.json({ error: "Falta OPENAI_API_KEY en el motor." }, { status: 500 });
     }
     const result = await runAnalysis(body.platform ?? "linkedin", body.limit ?? 100);
+    return Response.json({ kind, ...result });
+  }
+
+  if (kind === "analyze_visual") {
+    // Corre sobre el corte superior de cada mercado y una muestra de control
+    // del resto, no sobre todo el corpus. `limit` es cuántas imágenes en ESTE
+    // request: sincrónico como analyze, y por eso va en tandas chicas.
+    const result = await runVisualAnalysis(body.limit ?? 40);
     return Response.json({ kind, ...result });
   }
 

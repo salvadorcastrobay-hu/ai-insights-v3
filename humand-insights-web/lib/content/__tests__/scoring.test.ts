@@ -366,3 +366,104 @@ test("el piso de alcance se calcula por mercado, no global", () => {
     "el que sobresale en su mercado debe ganarle al que rinde normal en uno más grande",
   );
 });
+
+test("debate_factor detecta el post que se discutió más de lo normal de su autor", () => {
+  // Un autor cuyo ratio habitual de comentarios es ~2%. Un post que salta a 20%
+  // no tuvo más alcance: tuvo más fricción. viral_score no los distingue.
+  const base = (id: string, likes: number, comments: number, dias: number) => ({
+    post_id: id,
+    author_handle: "@referente",
+    likes_count: likes,
+    comments_count: comments,
+    video_views: null,
+    shares_count: null,
+    author_followers_at_fetch: 10_000,
+    posted_at: new Date(Date.now() - dias * 864e5).toISOString(),
+    is_pinned: false,
+    region: "br",
+  });
+
+  const posts = [
+    ...Array.from({ length: 6 }, (_, i) => base(`normal-${i}`, 490, 10, 20 + i)),
+    base("polemico", 400, 100, 10),
+  ];
+
+  const scores = scorePosts(posts, new Date(), "instagram");
+  const byId = new Map(scores.map((s) => [s.post_id, s]));
+
+  const polemico = byId.get("polemico")!;
+  const normal = byId.get("normal-0")!;
+
+  assert.ok(polemico.debate_factor !== null, "el post polémico tiene debate medido");
+  assert.ok(
+    polemico.debate_factor! > 5,
+    `esperaba un debate alto, dio ${polemico.debate_factor}`,
+  );
+  assert.ok(
+    (normal.debate_factor ?? 0) < 2,
+    "un post con el ratio habitual del autor no es debate",
+  );
+});
+
+test("sin volumen suficiente el ratio de comentarios no se mide", () => {
+  // 1 like y 1 comentario da 50% de ratio y no significa nada.
+  const posts = Array.from({ length: 6 }, (_, i) => ({
+    post_id: `chico-${i}`,
+    author_handle: "@cuenta_chica",
+    likes_count: 1,
+    comments_count: 1,
+    video_views: null,
+    shares_count: null,
+    author_followers_at_fetch: 100,
+    posted_at: new Date(Date.now() - (20 + i) * 864e5).toISOString(),
+    is_pinned: false,
+    region: "br",
+  }));
+  const scores = scorePosts(posts, new Date(), "instagram");
+  assert.ok(scores.every((s) => s.debate_factor === null), "sin volumen no hay debate medible");
+});
+
+test("un collab no entra a la mediana del autor", () => {
+  // Ocho posts normales de 100 y cuatro collabs de 5000. Si los collabs
+  // entraran, la mediana subiría y el post de 400 dejaría de ser un outlier.
+  const base = baselineFor("marca", 10_000, 100);
+  const collabs = Array.from({ length: 4 }, (_, i) =>
+    post({
+      post_id: `collab-${i}`,
+      author_handle: "marca",
+      likes_count: 5000,
+      posted_at: daysAgo(30 + i),
+      is_collab: true,
+    }),
+  );
+  const baselines = authorBaselines([...base, ...collabs], NOW);
+  assert.equal(baselines.get("marca")?.sample, 8);
+  assert.equal(baselines.get("marca")?.median, engagementTotal(base[0]));
+
+  // El collab igual se puntúa: que explotó es un dato, solo que no del contenido.
+  const scored = scorePosts([...base, ...collabs], NOW);
+  assert.ok((scored.find((s) => s.post_id === "collab-0")?.outlier_factor ?? 0) > 10);
+});
+
+test("un lead magnet no tiene debate_factor ni alimenta el del autor", () => {
+  // Autor con ratio de comentarios normal (~2%) y un post "comentá GUIA" con
+  // 40% de comentarios: eso es un pedido, no fricción.
+  const base = baselineFor("autora", 10_000, 500);
+  const bait = post({
+    post_id: "bait",
+    author_handle: "autora",
+    likes_count: 300,
+    comments_count: 200,
+    comment_bait: true,
+  });
+  const normal = post({
+    post_id: "normal",
+    author_handle: "autora",
+    likes_count: 300,
+    comments_count: 200,
+  });
+  const scored = scorePosts([...base, bait, normal], NOW);
+  assert.equal(scored.find((s) => s.post_id === "bait")?.debate_factor, null);
+  // El mismo ratio SIN pedido sí se lee como debate.
+  assert.ok((scored.find((s) => s.post_id === "normal")?.debate_factor ?? 0) >= 2);
+});

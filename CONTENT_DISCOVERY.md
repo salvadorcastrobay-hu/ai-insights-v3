@@ -66,7 +66,9 @@ En GitHub Actions, como secrets: `CONTENT_ENGINE_URL` y `CONTENT_ENGINE_TOKEN`.
             migrations/2026_09_14b_seed_linkedin_referentes.py \
             migrations/2026_09_14c_linkedin_columns.py \
             migrations/2026_09_14d_seed_linkedin_queries.py \
-            migrations/2026_09_16_content_feedback.py; do
+            migrations/2026_09_16_content_feedback.py \
+            migrations/2026_09_22_visual_analysis.py \
+            migrations/2026_09_23_post_features.py; do
      python3 "$m"
    done
    ```
@@ -115,6 +117,35 @@ Cuatro reglas impiden afirmar de más, y cada una salió de un bug real:
 - Con menos de 8 posts en el corte superior, la síntesis dice que no alcanza en
   vez de inventar patrones.
 
+## Qué se extrae de cada post
+
+Tres capas, de la más barata a la más cara:
+
+| Capa | Quién | Sobre qué | Campos |
+|---|---|---|---|
+| `features` | código (`post-features.ts`), gratis | todos | formato real, placas, duración, primera línea, párrafos, emojis, link, menciones, cierra con pregunta, collab, lead magnet, audio original/música, persona/empresa, patrocinado, día y franja en hora del mercado, % de reacciones que no son like |
+| `analysis` | gpt-4o-mini, texto | lo puntuado | relevancia, tema, audiencia, perfiles, hook, patrón de hook, estructura, tono, hashtags, replicabilidad, claim/contraclaim/objeto/postura, mecanismo, vigencia; y en una pasada aparte `cta` y `cta_type` |
+| `visual_analysis` | gpt-4o, imagen | corte superior + control | tipo de pieza, texto encima (OCR), paleta, cara, marca, nivel de producción, encuadre de la persona |
+
+Reglas que no son obvias:
+
+- **El hook es la apertura real.** Si el modelo devuelve algo que no está en los
+  primeros ~300 caracteres del texto, se reemplaza por la primera línea
+  (`hook_source: "primera_linea"`).
+- **Los collabs no cuentan.** Suman dos audiencias: no entran a la mediana del
+  autor ni al corte que define patrones. En el feed se muestran marcados.
+- **Un lead magnet no es debate.** "Comentá GUIA y te la mando" pierde el
+  `debate_factor`; lo detecta una regla, y la regla manda sobre el modelo.
+- **Día y hora solo sobre muestra cronológica de perfil.** Un scrape de hashtag
+  trae todo del mismo día y fabrica un "mejor día".
+- **Lo visual tiene control.** Se analiza el corte superior y una muestra
+  sistemática del resto del mismo tamaño; el lift visual compara los dos.
+
+`analysis_version` marca con qué prompt se clasificó cada fila. Antes de
+reclasificar, `scripts/backfill-content-features.ts` copia el análisis anterior
+a `content_posts_analysis_archive`. El QA del clasificador está en
+`scripts/qa-content-classify.ts` (juez gpt-4o).
+
 ## Costo
 
 Plan Apify **FREE**: USD 5/mes. **El plan FREE no alcanza para correr esto a
@@ -160,5 +191,7 @@ subirlo multiplica el costo diario para siempre.
 ## Lo que todavía no hace
 
 Está detallado en `artifacts/brief_gap_analysis.md`, pero en corto: solo cubre
-LinkedIn e Instagram (el brief pide seis redes), 8 de 53 competidores, no analiza
-lo visual, no toca ads propios ni Google Analytics ni HubSpot, y no hay chatbot.
+LinkedIn e Instagram (el brief pide seis redes), 8 de 53 competidores, lo
+visual es solo la portada (sin audio ni frames de video), no toca ads propios
+ni Google Analytics ni HubSpot, y no hay chatbot. Tampoco mide la curva de vida
+de un post (24h/72h/7d): hace falta tomar snapshots repetidos y hoy se toma uno.

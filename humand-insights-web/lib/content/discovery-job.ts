@@ -24,7 +24,9 @@
  * globalThis: acá el que pollea es otra app, y un redeploy de Railway no puede
  * llevarse el job puesto.
  */
+import { classifyVisuals, type AnalyzableImage } from "./classify-visual";
 import { archiveMediaFor } from "./media-archive-batch";
+import { signedMediaUrl } from "./media-archive";
 import { createHash, randomUUID } from "crypto";
 
 import {
@@ -52,12 +54,16 @@ import {
   upsertAuthors,
   linkPostsToAuthors,
   loadHandlesWithUnscoredPosts,
+  loadTopPostsForVisual,
+  saveVisualAnalyses,
   upsertPosts,
   type ContentPostUpsert,
   type ContentSource,
   type RefreshJob,
+  type StoredContentPost,
 } from "./store";
 import { classifyPosts } from "./classify";
+import { computeFeatures, linkedInFormat, type PostFeatures } from "./post-features";
 import {
   fetchLinkedInProfilePosts,
   searchLinkedInPosts,
@@ -244,7 +250,9 @@ function mapLinkedInPost(raw: RawLinkedInPost): ContentPostUpsert | null {
     author_handle: handle,
     post_url: raw.linkedinUrl ?? null,
     // LinkedIn no declara formato como Instagram; se infiere de lo que trae.
-    format: images.length ? "image" : "text",
+    // Antes era `images.length ? "image" : "text"`, y dejaba videos, carruseles
+    // PDF, links y newsletters —153 de 621 posts— como "text" o "image".
+    format: linkedInFormat(raw),
     caption: content,
     caption_length: content ? content.length : null,
     hashtags: [...(content ?? "").matchAll(/#([\p{L}\p{N}_]+)/gu)].map((m) => m[1]),
@@ -283,6 +291,16 @@ function mapLinkedInPost(raw: RawLinkedInPost): ContentPostUpsert | null {
  * ahí los resultados se rankean directo.
  */
 async function fetchSource(
+  source: ContentSource,
+  maxItems: number,
+): Promise<ContentPostUpsert[]> {
+  const mapped = await fetchAndMap(source, maxItems);
+  // La región es de la fuente, no del post: por eso se calcula acá y no en el
+  // mapper. Es la que decide el huso horario de `weekday` y `daypart`.
+  return mapped.map((p) => ({ ...p, features: computeFeatures(p, source.region) }));
+}
+
+async function fetchAndMap(
   source: ContentSource,
   maxItems: number,
 ): Promise<ContentPostUpsert[]> {
@@ -462,6 +480,11 @@ export async function rescoreStragglers(platform: Platform): Promise<number> {
   return rescoreAuthors(platform, handles);
 }
 
+function scoringFlags(p: StoredContentPost): { is_collab: boolean; comment_bait: boolean } {
+  const f: PostFeatures = p.features ?? computeFeatures(p, p.region ?? null);
+  return { is_collab: f.is_collab, comment_bait: f.comment_bait };
+}
+
 export async function rescoreAuthors(platform: Platform, handles: string[]): Promise<number> {
   const posts = await loadPostsForAuthors(platform, handles);
   if (!posts.length) return 0;
@@ -481,6 +504,9 @@ export async function rescoreAuthors(platform: Platform, handles: string[]): Pro
     is_pinned: p.is_pinned,
     region: p.region ?? null,
     baseline_eligible: p.baseline_eligible,
+    // Posts viejos sin features: se calculan al vuelo con la misma función,
+    // así el scoring no depende de que el backfill haya corrido.
+    ...scoringFlags(p),
   }));
 
   const scores = scorePosts(scorable, new Date(), platform);
@@ -525,6 +551,8 @@ export async function runAnalysis(
     posts.map((p) => ({
       post_id: p.post_id,
       caption: p.caption,
+      comment_bait: (p.features ?? computeFeatures(p, p.region ?? null)).comment_bait,
+      language: (p.features ?? computeFeatures(p, p.region ?? null)).language,
       hashtags: p.hashtags,
       format: p.format,
       author_label: p.author_handle,
@@ -540,6 +568,46 @@ export async function runAnalysis(
     process.env.CONTENT_ANALYSIS_MODEL ?? process.env.COMPETITOR_ADS_MODEL ?? "gpt-4o-mini",
   );
   return { analyzed: saved, skipped: posts.length - saved };
+}
+
+/**
+ * Analiza el creativo del corte superior de cada mercado.
+ *
+ * Las imágenes viven en nuestro bucket privado, así que hay que firmarlas antes
+ * de pasárselas al modelo — la URL dura una hora, de sobra para el lote.
+ */
+export async function runVisualAnalysis(
+  maxImages = 40,
+): Promise<{ analyzed: number; skipped: number; top: number; control: number }> {
+  // `maxImages` es el presupuesto de ESTE request, no el tamaño del corte: el
+  // endpoint es sincrónico con maxDuration=300, y cada lote de 4 imágenes
+  // tarda ~10s. El workflow llama en loop hasta vaciar la cola. El corte
+  // superior va primero para que, si se corta, lo analizado sea lo que se mira.
+  const all = await loadTopPostsForVisual();
+  const pending = [
+    ...all.filter((p) => p.sample === "top"),
+    ...all.filter((p) => p.sample === "control"),
+  ].slice(0, maxImages);
+  const top = pending.filter((p) => p.sample === "top").length;
+  const control = pending.length - top;
+  if (!pending.length) return { analyzed: 0, skipped: 0, top, control };
+
+  const images: AnalyzableImage[] = [];
+  for (const item of pending) {
+    const url = await signedMediaUrl(item.storedPath).catch(() => null);
+    // Una firma que falla es un post menos, no una corrida caída.
+    if (url) images.push({ post_id: item.post_id, image_url: url });
+  }
+  if (!images.length) return { analyzed: 0, skipped: pending.length, top, control };
+
+  const results = await classifyVisuals(images);
+  // Las inutilizables también se guardan: con `unusable` y sin visual_format,
+  // la síntesis las ignora y el loader no las vuelve a pedir.
+  const saved = await saveVisualAnalyses(
+    [...results.entries()].map(([post_id, visual]) => ({ post_id, visual })),
+  );
+  const unusable = [...results.values()].filter((v) => "unusable" in v).length;
+  return { analyzed: saved - unusable, skipped: pending.length - saved + unusable, top, control };
 }
 
 // ─── Orquestación ────────────────────────────────────────────────────────────

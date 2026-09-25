@@ -310,6 +310,7 @@ export default async function SistemaPage({
           <a
             key={t.value}
             href={`/sistema?tab=${t.value}`}
+            aria-current={tab === t.value ? "page" : undefined}
             className={`-mb-px border-b-2 px-3 pb-2 text-[14px] transition-colors ${
               tab === t.value
                 ? "border-[var(--brand)] font-semibold text-[var(--text)]"

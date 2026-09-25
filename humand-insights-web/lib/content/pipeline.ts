@@ -7,6 +7,14 @@
  * llamar. Antes esto existía como scripts locales, o sea que no era reproducible.
  */
 import { generateCalendar } from "./calendar";
+import { embedTexts } from "./embeddings";
+import { computeFeatures } from "./post-features";
+import {
+  buildCanonicalVocabulary,
+  buildPositions,
+  normalizeObject,
+  snapToCanonical,
+} from "./propositions";
 import type { PostAnalysis } from "./classify";
 import { suggestionKey, takeCoverageSnapshot } from "./metrics";
 import {
@@ -29,6 +37,7 @@ function toAnalyzable(post: StoredContentPost): AnalyzedPost {
   const raw = post as unknown as {
     viral_score: number | null;
     outlier_factor: number | null;
+    debate_factor: number | null;
   };
   return {
     post_id: post.post_id,
@@ -37,6 +46,12 @@ function toAnalyzable(post: StoredContentPost): AnalyzedPost {
     region: post.region ?? null,
     viral_score: raw.viral_score,
     outlier_factor: raw.outlier_factor,
+    debate_factor: raw.debate_factor ?? null,
+    visual: (post as unknown as { visual_analysis?: never }).visual_analysis ?? null,
+    // Las filas anteriores al backfill no tienen `features`: se calculan con la
+    // misma función, así la síntesis no depende de que el backfill haya corrido.
+    features: post.features ?? computeFeatures(post, post.region ?? null),
+    baseline_eligible: post.baseline_eligible,
     likes_count: post.likes_count,
     comments_count: post.comments_count,
     shares_count: post.shares_count ?? null,
@@ -76,12 +91,85 @@ export async function runSynthesis(
   const own = posts.filter((p) => ownHandles.has(p.author_handle));
   const reference = posts.filter((p) => !ownHandles.has(p.author_handle));
 
-  for (const synthesis of synthesizeAll(posts)) {
+  // El mercado se sintetiza SIN lo propio. Antes iba `posts`, y @humand.es
+  // aparecía dentro de las posiciones del mercado —y en su corte superior—
+  // como si fuera un referente más: Humand terminaba comparándose contra un
+  // patrón que ella misma inflaba.
+  for (const synthesis of synthesizeAll(reference)) {
     if (NON_MARKET_REGIONS.has(synthesis.region)) continue;
+
+    /*
+     * Posiciones y tensiones del mercado.
+     *
+     * Es el paso que faltaba: hasta acá se contaban categorías, que es un hecho
+     * sobre nuestras propias etiquetas. Agrupar las AFIRMACIONES por el objeto
+     * del que hablan, y separarlas por postura, convierte "nueve posts sobre
+     * clima" en "nueve posts que discuten si la encuesta de clima sirve, y el
+     * lado que dice que no rinde el triple".
+     *
+     * Se corre sobre los posts relevantes del mercado, no solo el corte
+     * superior: el denominador es parte del dato.
+     */
+    const claims = reference
+      .filter(
+        (p) =>
+          p.region === synthesis.region &&
+          p.analysis?.is_relevant_to_hr &&
+          p.analysis.claim &&
+          p.analysis.claim_object &&
+          p.analysis.claim_stance,
+      )
+      .map((p) => ({
+        post_id: p.post_id,
+        post_url: p.post_url,
+        author_handle: p.author_handle,
+        claim: p.analysis.claim as string,
+        counterclaim: p.analysis.counterclaim ?? null,
+        claim_object: p.analysis.claim_object as string,
+        claim_stance: p.analysis.claim_stance as string,
+        outlier_factor: p.outlier_factor,
+        debate_factor: p.debate_factor ?? null,
+      }));
+
+    const embeddings = await embedTexts(
+      claims.map((c) => normalizeObject(c.claim_object)),
+    ).catch((err: unknown) => {
+      console.warn("[pipeline] sin embeddings, agrupo por texto exacto:", err);
+      return new Map<string, number[]>();
+    });
+
+    /*
+     * Antes de agrupar, se ancla cada objeto a un vocabulario derivado del
+     * propio corpus.
+     *
+     * Sin esto el agregado no existe: `claim_object` es texto libre y el 86% de
+     * los objetos seguía siendo nuevo a los 700 claims. La curva es lineal, no
+     * saturante, así que más posts no densifican nada — diez mil darían ocho
+     * mil objetos con la misma densidad de 1,2.
+     *
+     * Medido sobre el mismo corpus, sin un solo post nuevo: de 0 tensiones a 6.
+     */
+    const canon = buildCanonicalVocabulary(
+      claims.map((c) => c.claim_object),
+      embeddings,
+    );
+    const anchored = claims.map((c) => ({
+      ...c,
+      claim_object: snapToCanonical(c.claim_object, canon, embeddings) ?? c.claim_object,
+    }));
+
+    const positions = buildPositions(anchored, embeddings);
+    const withPositions = { ...synthesis, positions };
+    if (positions.length) {
+      const tensiones = positions.filter((p) => p.is_tension).length;
+      console.log(
+        `[pipeline] ${synthesis.region}: ${positions.length} posiciones, ${tensiones} tensiones`,
+      );
+    }
 
     await saveRegionInsight(
       synthesis.region,
-      synthesis,
+      withPositions,
       synthesis.posts_considered,
       "deterministic-v1",
     );

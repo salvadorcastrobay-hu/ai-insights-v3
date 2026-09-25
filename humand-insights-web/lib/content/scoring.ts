@@ -37,6 +37,12 @@ export const MIN_AGE_HOURS = 48;
 export const DECAY_HALFLIFE_DAYS = 45;
 
 /** El outlier satura acá: 8x y 30x son "explotó", no hace falta distinguirlos. */
+/** Debajo de esto el ratio de comentarios es ruido, no señal. */
+export const MIN_ENGAGEMENT_FOR_DEBATE = 20;
+
+/** Mismo techo que el outlier: 8x ya es "muchísimo" y más no agrega. */
+export const DEBATE_CAP = 8;
+
 export const OUTLIER_CAP = 8;
 
 /** Sin esta cantidad de posts previos del autor no hay mediana confiable. */
@@ -112,6 +118,17 @@ export type ScorablePost = {
    * se pega al máximo y outlier_factor colapsa a ~1 para todos.
    */
   baseline_eligible?: boolean;
+  /**
+   * Collab de Instagram: se publica en dos perfiles y suma las dos audiencias.
+   * No entra a la mediana del autor —la subiría con alcance prestado— pero sí
+   * se puntúa: que explotó es un dato, solo que no del contenido.
+   */
+  is_collab?: boolean;
+  /**
+   * Pide comentar una palabra a cambio de algo. Sus comentarios son pedidos,
+   * no fricción: no tiene debate_factor ni alimenta el del autor.
+   */
+  comment_bait?: boolean;
 };
 
 export type PostScore = {
@@ -120,6 +137,19 @@ export type PostScore = {
   engagement_rate: number | null;
   outlier_factor: number | null;
   viral_score: number | null;
+  /**
+   * Cuánto MÁS discutido fue este post que lo normal de su autor.
+   *
+   * `viral_score` mide atención: un post con 500 likes y 2 comentarios y otro
+   * con 500 likes y 200 comentarios puntúan casi igual, y no son lo mismo. El
+   * segundo tocó un nervio. Para contenido B2B la fricción es mejor señal que
+   * el asentimiento: un post que se discute marca un tema sobre el que el
+   * mercado no se puso de acuerdo, y eso es material para escribir.
+   *
+   * Se mide contra la propia base del autor por la misma razón que
+   * outlier_factor: hay autores que siempre generan debate y autores que no.
+   */
+  debate_factor: number | null;
   /** Por qué quedó fuera del ranking, si quedó fuera. */
   excluded_reason: "immature" | "pinned" | null;
 };
@@ -218,6 +248,7 @@ export function authorBaselines(
     // Los posts que no vienen de una muestra cronológica del autor quedan
     // afuera: ver el comentario de baseline_eligible en ScorablePost.
     if (post.baseline_eligible === false) continue;
+    if (post.is_collab) continue;
     const list = byAuthor.get(post.author_handle) ?? [];
     list.push(engagementTotal(post, platform));
     byAuthor.set(post.author_handle, list);
@@ -227,6 +258,50 @@ export function authorBaselines(
   for (const [handle, values] of byAuthor) {
     const med = median(values);
     if (med !== null) out.set(handle, { median: med, sample: values.length });
+  }
+  return out;
+}
+
+/** Proporción de la interacción que fue comentario, no like. */
+function commentRatio(post: ScorablePost): number | null {
+  const likes = post.likes_count ?? 0;
+  const comments = post.comments_count ?? 0;
+  const total = likes + comments;
+  // Sin volumen el ratio es puro ruido: 1 comentario y 1 like da 0,5.
+  if (total < MIN_ENGAGEMENT_FOR_DEBATE) return null;
+  return comments / total;
+}
+
+/**
+ * Ratio de comentarios habitual de cada autor.
+ *
+ * Mismas exclusiones que authorBaselines: solo posts maduros y de muestra
+ * cronológica, porque un resultado de búsqueda es el techo del autor y no su
+ * comportamiento normal.
+ */
+export function authorDebateBaselines(
+  posts: ScorablePost[],
+  now: Date = new Date(),
+  platform: Platform = "instagram",
+): Map<string, { median: number; sample: number }> {
+  const byAuthor = new Map<string, number[]>();
+  for (const post of posts) {
+    if (!isMature(post, now, platform)) continue;
+    if (post.baseline_eligible === false) continue;
+    if (post.is_collab || post.comment_bait) continue;
+    const ratio = commentRatio(post);
+    if (ratio === null) continue;
+    const list = byAuthor.get(post.author_handle) ?? [];
+    list.push(ratio);
+    byAuthor.set(post.author_handle, list);
+  }
+
+  const out = new Map<string, { median: number; sample: number }>();
+  for (const [handle, values] of byAuthor) {
+    const med = median(values);
+    // Un autor cuyo ratio mediano es 0 no da denominador: se omite en vez de
+    // dividir por cero y fabricar un debate infinito.
+    if (med !== null && med > 0) out.set(handle, { median: med, sample: values.length });
   }
   return out;
 }
@@ -289,12 +364,23 @@ export function scorePosts(
     cohorts.set(key, list);
   }
 
+  // Ratio de comentarios habitual por autor. Es el denominador de debate_factor.
+  const debateBase = authorDebateBaselines(posts, now, platform);
+
   return enriched.map(({ post, engagement, rate, age, outlier, tier }) => {
+    const ratio = post.comment_bait ? null : commentRatio(post);
+    const authorRatio = debateBase.get(post.author_handle);
+    const debate =
+      ratio !== null && authorRatio && authorRatio.sample >= MIN_BASELINE_SAMPLE
+        ? Math.min(DEBATE_CAP, ratio / authorRatio.median)
+        : null;
+
     const base: Omit<PostScore, "viral_score" | "excluded_reason"> = {
       post_id: post.post_id,
       engagement_total: engagement,
       engagement_rate: rate,
       outlier_factor: outlier,
+      debate_factor: debate === null ? null : Number(debate.toFixed(2)),
     };
 
     if (post.is_pinned) {

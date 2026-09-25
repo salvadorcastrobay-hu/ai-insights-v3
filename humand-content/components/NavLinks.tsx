@@ -34,11 +34,20 @@ export function NavLinks({ pending }: { pending: number }) {
   return (
     <div className="flex items-center gap-4 overflow-x-auto">
       {NAV.map((item) => (
-        <Link key={item.href} href={item.href} className={className(item.href)}>
+        <Link
+          key={item.href}
+          href={item.href}
+          aria-current={isActive(item.href) ? "page" : undefined}
+          className={className(item.href)}
+        >
           {item.label}
         </Link>
       ))}
-      <Link href="/sistema" className={`${className("/sistema")} flex items-center gap-1.5`}>
+      <Link
+        href="/sistema"
+        aria-current={isActive("/sistema") ? "page" : undefined}
+        className={`${className("/sistema")} flex items-center gap-1.5`}
+      >
         Sistema
         {pending > 0 ? (
           <span className="rounded-full bg-[var(--brand-soft-2)] px-1.5 text-[10px] font-semibold leading-[1.6] text-[var(--brand-deep)]">
