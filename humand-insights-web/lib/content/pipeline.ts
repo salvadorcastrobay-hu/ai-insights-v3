@@ -95,6 +95,78 @@ export async function runSynthesis(
   // aparecía dentro de las posiciones del mercado —y en su corte superior—
   // como si fuera un referente más: Humand terminaba comparándose contra un
   // patrón que ella misma inflaba.
+  /*
+   * El vocabulario de prácticas se arma UNA VEZ sobre todos los mercados, no
+   * por mercado.
+   *
+   * Construido por mercado colapsaba: con ~100 claims por región y objetos casi
+   * únicos, casi nada se repite las dos veces que el vocabulario exige, así que
+   * quedaba en 2-6 términos y el anclaje devolvía null para todo. Resultado:
+   * cero posiciones en los tres mercados, cuando agrupando los tres había seis
+   * tensiones.
+   *
+   * Y es lo correcto además de lo que funciona: "encuestas de clima" es la
+   * misma práctica en Brasil que en España. Lo que cambia entre mercados es la
+   * distribución y la postura, no el vocabulario — y esos sí se calculan por
+   * mercado, más abajo.
+   */
+  const allObjects = reference
+    .filter((p) => p.analysis?.is_relevant_to_hr && p.analysis.claim_object)
+    .map((p) => p.analysis.claim_object as string);
+  const vocabEmbeddings = await embedTexts(allObjects.map(normalizeObject)).catch(
+    (err: unknown) => {
+      console.warn("[pipeline] sin embeddings para el vocabulario:", err);
+      return new Map<string, number[]>();
+    },
+  );
+  const canon = buildCanonicalVocabulary(allObjects, vocabEmbeddings);
+  console.log(`[pipeline] vocabulario de prácticas: ${canon.length} términos`);
+
+  /*
+   * Las tensiones se calculan sobre TODOS los mercados juntos, no por mercado.
+   *
+   * Medido: por mercado hay 106, 92 y 60 claims relevantes, y con ~1,2 objetos
+   * por claim ninguna práctica junta los tres autores que exige una posición
+   * más los dos de cada lado que exige una tensión. Agrupando los tres: 579
+   * claims y seis tensiones.
+   *
+   * Y tiene sentido de fondo: que el rubro discuta si la encuesta de clima
+   * sirve no es un debate brasileño ni español, es del rubro. Lo que sí es por
+   * mercado es qué lado rinde, y eso se sigue calculando abajo con el lift y la
+   * mezcla visual de cada región.
+   */
+  const pooledClaims = reference
+    .filter(
+      (p) =>
+        p.analysis?.is_relevant_to_hr &&
+        p.analysis.claim &&
+        p.analysis.claim_object &&
+        p.analysis.claim_stance,
+    )
+    .map((p) => ({
+      post_id: p.post_id,
+      post_url: p.post_url,
+      author_handle: p.author_handle,
+      claim: p.analysis.claim as string,
+      counterclaim: p.analysis.counterclaim ?? null,
+      claim_object:
+        snapToCanonical(p.analysis.claim_object as string, canon, vocabEmbeddings) ??
+        (p.analysis.claim_object as string),
+      claim_stance: p.analysis.claim_stance as string,
+      outlier_factor: p.outlier_factor,
+      debate_factor: p.debate_factor ?? null,
+    }));
+
+  const marketPositions = buildPositions(pooledClaims, vocabEmbeddings);
+  const tensiones = marketPositions.filter((p) => p.is_tension).length;
+  console.log(
+    `[pipeline] rubro: ${marketPositions.length} posiciones, ${tensiones} tensiones ` +
+      `sobre ${pooledClaims.length} claims`,
+  );
+  await saveRegionInsight("rubro", { region: "rubro", positions: marketPositions }, pooledClaims.length, "deterministic-v1").catch(
+    (err: unknown) => console.warn("[pipeline] no pude guardar las posiciones del rubro:", err),
+  );
+
   for (const synthesis of synthesizeAll(reference)) {
     if (NON_MARKET_REGIONS.has(synthesis.region)) continue;
 
@@ -131,12 +203,9 @@ export async function runSynthesis(
         debate_factor: p.debate_factor ?? null,
       }));
 
-    const embeddings = await embedTexts(
-      claims.map((c) => normalizeObject(c.claim_object)),
-    ).catch((err: unknown) => {
-      console.warn("[pipeline] sin embeddings, agrupo por texto exacto:", err);
-      return new Map<string, number[]>();
-    });
+    // Se reusan los embeddings del vocabulario: ya cubren todos los objetos del
+    // corpus y el cache evita volver a pedirlos.
+    const embeddings = vocabEmbeddings;
 
     /*
      * Antes de agrupar, se ancla cada objeto a un vocabulario derivado del
@@ -149,10 +218,6 @@ export async function runSynthesis(
      *
      * Medido sobre el mismo corpus, sin un solo post nuevo: de 0 tensiones a 6.
      */
-    const canon = buildCanonicalVocabulary(
-      claims.map((c) => c.claim_object),
-      embeddings,
-    );
     const anchored = claims.map((c) => ({
       ...c,
       claim_object: snapToCanonical(c.claim_object, canon, embeddings) ?? c.claim_object,
