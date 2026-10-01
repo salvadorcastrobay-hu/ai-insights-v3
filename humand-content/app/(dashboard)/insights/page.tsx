@@ -411,10 +411,18 @@ const AXIS_GROUPS: Array<{
   },
 ];
 
+/**
+ * Por debajo de esto el "ganador" es ruido: con un corte de veinte posts, 1,03×
+ * es un post de diferencia. Los ejes nuevos tienen muchos valores casi
+ * parejos y sin este piso la sección se llenaba de empates.
+ */
+const MIN_AXIS_LIFT = 1.15;
+
 function Axes({ axes }: { axes: Partial<Record<SynthesisAxis, PatternLift[]>> }) {
+  const strong = (key: SynthesisAxis) => (axes[key] ?? []).filter((r) => r.lift >= MIN_AXIS_LIFT);
   const groups = AXIS_GROUPS.map((g) => ({
     ...g,
-    axes: g.axes.filter(([key]) => axes[key]?.some((r) => r.lift > 1)),
+    axes: g.axes.filter(([key]) => strong(key).length),
   })).filter((g) => g.axes.length);
   if (!groups.length) return null;
   return (
@@ -427,7 +435,7 @@ function Axes({ axes }: { axes: Partial<Record<SynthesisAxis, PatternLift[]>> })
           ) : null}
           <div className="grid gap-6 sm:grid-cols-2">
             {g.axes.map(([key, title]) => (
-              <LiftList key={key} title={title} rows={axes[key] ?? []} />
+              <LiftList key={key} title={title} rows={strong(key)} />
             ))}
           </div>
         </div>

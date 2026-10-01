@@ -657,7 +657,8 @@ export function firstLineSignals(line: string | null): {
   if (!line) return { hasNumber: false, isQuestion: false, words: null };
   return {
     hasNumber: /\d/.test(line),
-    isQuestion: /\?/.test(line),
+    // "¿" cuenta: una apertura en negrita Unicode o cortada suele perder el "?".
+    isQuestion: /[?¿]/.test(line),
     words: (line.match(/[\p{L}\p{N}]+/gu) ?? []).length,
   };
 }

@@ -379,19 +379,26 @@ export async function refreshAuthorSegments(platform: string): Promise<number> {
   const rows = (authors ?? []) as Array<{ id: string; handle: string; biography: string | null }>;
   if (!rows.length) return 0;
 
-  const { data: links, error: linkError } = await sb
-    .from("content_posts")
-    .select("author_handle, content_post_sources(content_sources(kind))")
-    .eq("platform", platform)
-    .limit(10000);
-  if (linkError) throw linkError;
+  // Paginado: PostgREST devuelve como mucho 1000 filas aunque se pida más.
+  const links: unknown[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error: linkError } = await sb
+      .from("content_posts")
+      .select("author_handle, content_post_sources(content_sources(kind))")
+      .eq("platform", platform)
+      .order("id")
+      .range(from, from + 999);
+    if (linkError) throw linkError;
+    links.push(...(data ?? []));
+    if (!data || data.length < 1000) break;
+  }
 
   const kindsByHandle = new Map<string, string[]>();
   type LinkRow = {
     author_handle: string;
     content_post_sources: Array<{ content_sources: { kind: string } | null }> | null;
   };
-  for (const row of (links ?? []) as unknown as LinkRow[]) {
+  for (const row of links as LinkRow[]) {
     const kinds = kindsByHandle.get(row.author_handle) ?? [];
     for (const l of row.content_post_sources ?? []) {
       if (l.content_sources?.kind) kinds.push(l.content_sources.kind);
@@ -783,17 +790,25 @@ export async function insertMetricSnapshots(
 /** Posts ya clasificados y puntuados, con su región, para sintetizar. */
 export async function loadAnalyzedPosts(platform?: string): Promise<StoredContentPost[]> {
   return safeRead("loadAnalyzedPosts", [], async () => {
-    let query = getSupabase()
-      .from("content_posts")
-      // El rol del autor viaja con el post: la síntesis segmenta por quién firma.
-      .select("*, author:content_authors(author_role, is_top_voice)")
-      .not("analysis", "is", null)
-      .not("viral_score", "is", null);
-    if (platform) query = query.eq("platform", platform);
-
-    const { data, error } = await query;
-    if (error) throw error;
-    const posts = (data ?? []) as StoredContentPost[];
+    // Paginado: PostgREST corta en 1000 filas sin avisar, y la síntesis estuvo
+    // viendo 1000 de 1856 posts — los que el orden por defecto dejaba primero.
+    const PAGE = 1000;
+    const posts: StoredContentPost[] = [];
+    for (let from = 0; ; from += PAGE) {
+      let query = getSupabase()
+        .from("content_posts")
+        // El rol del autor viaja con el post: la síntesis segmenta por quién firma.
+        .select("*, author:content_authors(author_role, is_top_voice)")
+        .not("analysis", "is", null)
+        .not("viral_score", "is", null)
+        .order("id")
+        .range(from, from + PAGE - 1);
+      if (platform) query = query.eq("platform", platform);
+      const { data, error } = await query;
+      if (error) throw error;
+      posts.push(...((data ?? []) as StoredContentPost[]));
+      if (!data || data.length < PAGE) break;
+    }
     if (!posts.length) return posts;
 
     const regionByPost = await loadRegionsByPost(posts.map((p) => p.id));
