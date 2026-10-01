@@ -19,6 +19,9 @@ import { openai } from "@ai-sdk/openai";
 import { generateObject } from "ai";
 import { z } from "zod";
 
+import { firstLine, firstLineSignals } from "./post-features";
+
+
 function classifyModel(): string {
   return (
     process.env.CONTENT_ANALYSIS_MODEL ??
@@ -39,21 +42,36 @@ export const CONTENT_THEMES = [
   "dei",
   "futuro_del_trabajo",
   "reclutamiento",
+  // Sumados en la auditoría de content: entre los posts relevantes, "otro" era
+  // el 13% en Instagram, y mirando esos posts faltaban justamente estos temas.
+  "compensacion_beneficios",
+  "nomina_administracion",
+  "legal_laboral",
+  "bienestar_salud_mental",
+  "desarrollo_aprendizaje",
+  "tecnologia_ia_rrhh",
+  "employer_branding",
   "otro",
 ] as const;
 
 /** Patrón de apertura. Es lo más replicable de un post que funcionó. */
+/*
+ * Rearmado en la auditoría de content. Del enum anterior: `anuncio` (17-20%)
+ * no es un patrón de apertura sino una intención y pasó a `content_intent`;
+ * `tutorial` tenía 0%; `contrarian` se pisaba con el mecanismo
+ * `tension_con_el_consenso`; y `pov` mezclaba el meme "POV:" de Instagram con
+ * un post de opinión. Cada valor de este enum describe CÓMO ARRANCA el texto.
+ */
 export const HOOK_PATTERNS = [
   "pregunta",
-  "dato_shock",
-  "listicle",
-  "storytelling",
-  "contrarian",
-  "pov",
-  "tutorial",
-  "humor",
-  "anuncio",
+  "dato_numero",
+  "afirmacion_tajante",
+  "confesion_personal",
+  "escena_narrativa",
+  "promesa_lista",
+  "situacion_identificable",
   "cita",
+  "anuncio_novedad",
   "otro",
 ] as const;
 
@@ -91,12 +109,12 @@ export const TARGET_PROFILES = [
  */
 export const MECHANISMS = [
   "tension_con_el_consenso",
-  "dato_propietario",
+  // `dato_propietario` y `caso_con_numeros` salieron: los mide `evidence_type`,
+  // que es la pregunta correcta ("¿con qué lo sostiene?") en vez de un truco.
   "admision_de_error",
   "ritual_interno_concreto",
   "desmontar_practica_comun",
   "checklist_operable",
-  "caso_con_numeros",
   "pregunta_diagnostica",
   "reencuadre_de_un_termino",
   "ninguno",
@@ -115,7 +133,7 @@ export const CTA_TYPES = [
   "guardar_o_compartir",
   "etiquetar",
   "ir_a_link",
-  "seguir",
+  // `seguir` salió: 0% en el corpus.
   "inscribirse_evento",
   "contacto_comercial",
 ] as const;
@@ -131,7 +149,7 @@ export const TIMELINESS = ["evergreen", "coyuntura", "efemeride"] as const;
  * dos versiones conviviendo, un agregado que las mezcla sin saberlo compara
  * campos que no existían en la mitad de las filas.
  */
-export const ANALYSIS_VERSION = "2026-09-23g.pasada-enfocada";
+export const ANALYSIS_VERSION = "2026-10-01c.auditoria-content";
 
 export const TONES = [
   "educativo",
@@ -146,18 +164,84 @@ export const TONES = [
   "celebratorio",
 ] as const;
 
+/*
+ * Rearmado en la auditoría: `opinion` era un cajón (30-37%) y se parte en
+ * `tesis_y_argumentos` —afirma y lo sostiene— y `reflexion_breve` —opina sin
+ * desarrollo—; `anuncio` duplicaba la intención; `comparacion` tenía 0-1%.
+ */
 export const COPY_STRUCTURES = [
   "lista",
   "caso",
-  "opinion",
-  "how_to",
-  "comparacion",
-  "dato_y_lectura",
   "anecdota",
+  "how_to",
+  "dato_y_lectura",
   "pregunta_y_respuesta",
-  "anuncio",
+  "tesis_y_argumentos",
+  "reflexion_breve",
   "otro",
 ] as const;
+
+/**
+ * Para qué existe la pieza.
+ *
+ * Es la confusión más grande del corpus: la promo de producto de un competidor
+ * se comparaba de igual a igual con la opinión de una referente. Absorbe el
+ * `anuncio` que estaba repartido entre hook y estructura.
+ */
+export const CONTENT_INTENTS = [
+  "opinion_liderazgo",
+  "educativo_practico",
+  "promocion_producto",
+  "evento_webinar",
+  "cultura_propia_employer_brand",
+  "dato_o_noticia",
+  "celebracion_logro",
+  "vacante",
+  "personal",
+] as const;
+
+/** Con qué sostiene lo que dice. La credibilidad es lo que diferencia en B2B. */
+export const EVIDENCE_TYPES = [
+  "ninguna",
+  "experiencia_personal",
+  "dato_propio",
+  "dato_externo_citado",
+  "caso_empresa_cliente",
+  "cita_autoridad",
+] as const;
+
+/**
+ * De quién es la historia. Reemplaza a `replicability`, que era una opinión
+ * del modelo (venía casi pareja, 20/42/38): esto es observable, y separa lo
+ * que depende de la persona de lo que una marca puede contar.
+ */
+export const PROTAGONISTS = [
+  "autor",
+  "equipo_empleados",
+  "cliente",
+  "experto_externo",
+  "el_lector",
+  "nadie",
+] as const;
+
+/**
+ * Qué emoción busca provocar. Reemplaza a `tone`: el 64% caía en informativo o
+ * reflexivo, `tecnico` tenía un post, y varios valores se pisaban. Se puede
+ * validar contra `dominant_reaction`, que es lo que la audiencia hizo.
+ */
+export const EMOTIONAL_TRIGGERS = [
+  "orgullo",
+  "indignacion_frustracion",
+  "identificacion_humor",
+  "inspiracion",
+  "inquietud_miedo",
+  "curiosidad",
+  "ternura",
+  "neutra",
+] as const;
+
+/** Qué tan concreto es: nombres, cifras, lugares y fechas contra lo genérico. */
+export const SPECIFICITY = ["generico", "algo_concreto", "muy_concreto"] as const;
 
 /** Qué hace con los hashtags. La ausencia también es una decisión. */
 export const HASHTAG_STRATEGIES = [
@@ -188,30 +272,81 @@ const PostAnalysisSchema = z.object({
       "hr_leader: le habla a quien gestiona personas. candidate: le habla a quien " +
         "busca trabajo. general: a cualquiera.",
     ),
-  target_profiles: z
-    .array(z.enum(TARGET_PROFILES))
+  /*
+   * Salieron en la auditoría de content: `hook` (coincidía con la primera línea
+   * en el 93-97% de los casos y era el campo más largo del lote: ahora se toma
+   * de la primera línea en código), `target_profiles` ("hr_manager" en el 89%
+   * de lo no vacío: no discriminaba), `replicability` (opinión del modelo),
+   * `hashtag_strategy` (es un conteo: pasó a post-features) y `tone` (saturado).
+   * Sacarlos acorta la respuesta, que es lo que hacía volver lotes incompletos.
+   */
+  content_intent: z
+    .enum(CONTENT_INTENTS)
     .describe(
-      "A cuáles de nuestros perfiles objetivo le interesaría esta pieza. " +
-        "Vacío si no le sirve a ninguno.",
+      "Para qué existe la pieza. promocion_producto: vende o muestra un producto o " +
+        "funcionalidad. cultura_propia_employer_brand: muestra cómo es trabajar en la " +
+        "empresa que publica, incluidas sus celebraciones internas. opinion_liderazgo: " +
+        "el autor sostiene una postura, aunque la cuente con una anécdota. " +
+        "educativo_practico: enseña algo aplicable, con pasos o consejos. " +
+        "dato_o_noticia: informa un hecho, una norma o un estudio. celebracion_logro: " +
+        "celebra un logro, premio o aniversario concreto. personal: vida personal o " +
+        "humor sin relación con el trabajo.",
     ),
-
-  // ── Copy in: el texto DENTRO de la pieza ──────────────────────────────────
-  hook: z.string().nullable().describe("La frase de apertura que engancha, textual, máximo 15 palabras."),
-  hook_pattern: z.enum(HOOK_PATTERNS).describe("Qué estructura usa la apertura."),
-  structure: z.enum(COPY_STRUCTURES).describe("Qué forma tiene el desarrollo."),
-  tone: z
-    .enum(TONES)
-    .describe("El registro dominante del texto."),
-
-  // ── Copy out: el texto que acompaña ───────────────────────────────────────
-  hashtag_strategy: z
-    .enum(HASHTAG_STRATEGIES)
-    .describe("Qué hace con los hashtags. 'ninguno' también es una decisión válida y frecuente."),
-  replicability: z
-    .enum(["alta", "media", "baja"])
+  hook_pattern: z
+    .enum(HOOK_PATTERNS)
     .describe(
-      "¿Humand podría hacer algo parecido? alta: formato y tema reutilizables. " +
-        "baja: depende de la persona, su historia o su autoridad personal.",
+      "CÓMO ARRANCA el texto, mirando solo la primera línea. pregunta: abre con una " +
+        "pregunta. dato_numero: una cifra es la protagonista de la línea ('El 70% de…'); " +
+        "un número suelto en una frase ('2 tipos de líder') no alcanza. " +
+        "afirmacion_tajante: una tesis rotunda sobre el mundo. confesion_personal: el " +
+        "autor admite algo propio ('Me equivoqué…', 'Yo desconfío de…'). " +
+        "escena_narrativa: arranca contando una situación ('Estaba hablando con…', 'Un " +
+        "directivo me contó…'). promesa_lista: '5 errores que…'. " +
+        "situacion_identificable: 'Cuando tu jefe te dice…'. cita: abre citando a otro. " +
+        "anuncio_novedad: SOLO si anuncia algo nuevo de quien publica (lanzamiento, " +
+        "evento, noticia propia); una afirmación general es afirmacion_tajante.",
+    ),
+  structure: z
+    .enum(COPY_STRUCTURES)
+    .describe(
+      "Qué forma tiene el desarrollo, después de la primera línea. tesis_y_argumentos: " +
+        "afirma algo y da razones. reflexion_breve: opina sin desarrollar.",
+    ),
+  evidence_type: z
+    .enum(EVIDENCE_TYPES)
+    .describe(
+      "Con qué sostiene lo que dice. dato_propio: un número que generó el autor o su " +
+        "empresa. dato_externo_citado: un número o estudio de otra fuente que nombra. " +
+        "experiencia_personal: algo que le pasó o le contaron al autor, en primera " +
+        "persona ('me pasó', 'un cliente me dijo'). caso_empresa_cliente: el caso de una " +
+        "empresa con nombre. cita_autoridad: se apoya en lo que dijo alguien reconocido. " +
+        "ninguna: afirma sin sostener.",
+    ),
+  protagonist: z
+    .enum(PROTAGONISTS)
+    .describe(
+      "De quién es la historia que se cuenta. autor: el que escribe. equipo_empleados: " +
+        "el equipo o la gente de la empresa. cliente: un cliente. experto_externo: un " +
+        "tercero que se cita o se cuenta. el_lector: le habla al lector como protagonista " +
+        "('vos que liderás…'). nadie: no hay historia, es expositivo.",
+    ),
+  emotional_trigger: z
+    .enum(EMOTIONAL_TRIGGERS)
+    .describe(
+      "La emoción principal que busca provocar en quien lo lee. identificacion_humor: " +
+        "chiste, ironía o 'a todos nos pasó'. inspiracion: motivar a ser mejor. " +
+        "indignacion_frustracion: enojo con una práctica o situación. inquietud_miedo: " +
+        "alerta sobre un riesgo. orgullo: celebrar algo propio. curiosidad: dejar una " +
+        "intriga o una pregunta. ternura: conmover. neutra: informa sin buscar emoción.",
+    ),
+  specificity: z
+    .enum(SPECIFICITY)
+    .describe(
+      "Qué tan concreto es. muy_concreto: trae VARIOS datos verificables —nombres " +
+        "propios, cifras, fechas, lugares, un caso con detalle—. algo_concreto: uno solo, " +
+        "o un ejemplo sin nombres. generico: podría haberlo escrito cualquiera sobre " +
+        "cualquier empresa. Una frase general con un número suelto es algo_concreto, no " +
+        "muy_concreto. Ante la duda, el valor más bajo.",
     ),
 
   // ── Qué AFIRMA el post ────────────────────────────────────────────────────
@@ -286,6 +421,11 @@ type LlmAnalysis = Omit<z.infer<typeof PostAnalysisSchema>, "post_index">;
  * modelo: son contables y pedirle que cuente es invitarlo a equivocarse.
  */
 export type PostAnalysis = LlmAnalysis & {
+  /**
+   * La primera línea real del post: lo que se lee antes del "ver más". Ya no
+   * se le pide al modelo (coincidía en el 93-97% de los casos); se calcula.
+   */
+  hook: string | null;
   /** Sale de la pasada de CTA (`classifyCtas`), no del lote principal. */
   cta: string | null;
   /** Opcionales en el tipo porque las filas anteriores a ANALYSIS_VERSION no los tienen. */
@@ -334,14 +474,13 @@ const SYSTEM = [
   "   fin de semana tuvo un post popular, no un post útil para nosotros.",
   "2. audience_signal — distinguí si le habla a quien GESTIONA personas o a quien",
   "   BUSCA trabajo. Son audiencias distintas y solo la primera es nuestro comprador.",
-  "3. target_profiles — nuestra audiencia son HR Managers, People, CHROs, CEOs,",
-  "   dueños de PyME y Operations. No alcanza con que la pieza sea viral: tiene",
-  "   que interesarle a alguno de ellos. Si no le interesa a ninguno, dejalo vacío.",
+  "3. content_intent — separá la pieza que VENDE (promo de producto, evento) de la",
+  "   que APORTA (opinión, educativa). Una promo de un competidor que rindió no es",
+  "   un modelo editorial, es pauta orgánica.",
   "",
-  "Para copy in y copy out citá lo que el texto dice de verdad. No inventes",
-  "hashtags que no aparecen: la ausencia es un dato válido.",
-  "`hook` es COPIA LITERAL de la apertura —lo primero que se lee—, no la mejor",
-  "frase del post: no la resumas, no la corrijas y no la busques más abajo.",
+  "Elegí cada categoría por lo que el texto HACE, no por lo que parece querer",
+  "hacer. Si dudás entre dos valores, elegí el más específico. `otro` es para lo",
+  "que de verdad no entra, no para lo que da trabajo clasificar.",
   "",
   "Si el texto es largo te llega cortado con […].",
   "",
@@ -379,9 +518,7 @@ const SYSTEM = [
   "aunque el post esté en portugués. El análisis es nuestro, no del post: lo lee",
   "el equipo de Content, que trabaja en español.",
   "",
-  "La única excepción es `hook`, que es una CITA y va textual en el idioma",
-  "original — traducirlo lo convertiría en otra cosa que la que se publicó.",
-  "",
+
   "Devolvé un objeto por post, con su post_index.",
 ].join("\n");
 
@@ -473,6 +610,23 @@ export function groundHook(
   };
 }
 
+/**
+ * Corrige lo que el texto desmiente. `dato_numero` sin una cifra en la línea
+ * (en la muestra de la auditoría, 3 de 4) y `pregunta` sin signo de pregunta
+ * no son opiniones discutibles: son errores, y el patrón de apertura es el eje
+ * que más pesa en el calendario.
+ */
+export function checkHookPattern(
+  pattern: (typeof HOOK_PATTERNS)[number],
+  opening: string | null,
+): (typeof HOOK_PATTERNS)[number] {
+  if (!opening) return pattern;
+  const { hasNumber, isQuestion } = firstLineSignals(opening);
+  if (pattern === "dato_numero" && !hasNumber) return isQuestion ? "pregunta" : "afirmacion_tajante";
+  if (pattern === "pregunta" && !isQuestion) return hasNumber ? "dato_numero" : "afirmacion_tajante";
+  return pattern;
+}
+
 function renderPost(post: ClassifiablePost, index: number): string {
   const parts = [`POST ${index}`];
   if (post.author_label) parts.push(`autor: ${post.author_label}`);
@@ -481,11 +635,16 @@ function renderPost(post: ClassifiablePost, index: number): string {
     const names = { pt: "portugués", es: "español", en: "inglés" } as const;
     // El idioma se le pasa para que entienda el texto y cite bien el hook, no
     // para que responda en él: el análisis va siempre en español.
-    parts.push(`idioma del post: ${names[post.language]} (el hook se cita en este idioma; el análisis va en español)`);
+    parts.push(`idioma del post: ${names[post.language]} (el análisis va en español)`);
   }
   if (post.likes_count != null) {
     parts.push(`engagement: ${post.likes_count} likes, ${post.comments_count ?? 0} comentarios`);
   }
+  // La apertura va aparte: hook_pattern se juzga SOLO sobre ella, y con el
+  // texto entero delante el modelo etiquetaba por lo que pasaba después
+  // (dato_numero en primeras líneas sin una sola cifra).
+  const opening = firstLine(post.caption);
+  if (opening) parts.push(`primera línea: «${opening}»`);
   const caption = clipCaption(post.caption);
   parts.push(caption ? `texto: ${caption}` : "texto: (sin texto)");
   if (post.hashtags?.length) parts.push(`hashtags: ${post.hashtags.slice(0, 12).join(" ")}`);
@@ -735,13 +894,15 @@ async function classifyBatch(
     if (!post) continue;
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { post_index, ...llm } = item;
-    const grounded = groundHook(llm.hook, post.caption);
     out.set(post.post_id, {
       ...llm,
+      hook_pattern: checkHookPattern(llm.hook_pattern, firstLine(post.caption)),
       // Los completa la pasada de CTA al final de classifyPosts.
       cta: null,
-      hook: grounded.hook,
-      hook_source: grounded.source,
+      // La primera línea real, cortada en quince palabras: es lo que el lector
+      // ve antes del "ver más", y el titular de la tarjeta.
+      hook: groundHook(null, post.caption).hook,
+      hook_source: "primera_linea",
       // Contables: se calculan acá en vez de pedírselos al modelo.
       copy_length: (post.caption ?? "").length,
       hashtag_count: post.hashtags?.length ?? 0,

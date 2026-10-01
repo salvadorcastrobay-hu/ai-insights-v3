@@ -49,7 +49,9 @@ export type CalendarSlot = {
 export function allocateByLift(
   patterns: Array<{ key: string; lift: number }>,
   slots: number,
-  fallback = "pov",
+  // "pov" salió del enum de hooks en la auditoría; pregunta es el patrón que
+  // existe en todos los mercados y no depende de la persona.
+  fallback = "pregunta",
 ): string[] {
   const winners = patterns.filter((p) => p.lift > 1);
   if (!winners.length || slots <= 0) return Array(Math.max(0, slots)).fill(fallback);
@@ -200,11 +202,11 @@ export function planSlots(
     dates = dates.slice(0, cap);
   }
 
-  const hooks = allocateByLift(synthesis.winning_hooks ?? [], dates.length, "pov");
+  const hooks = allocateByLift(synthesis.winning_hooks ?? [], dates.length, "pregunta");
   const themes = allocateByLift(themeCandidates(synthesis), dates.length, "clima_cultura");
   return dates.map((date, i) => ({
     date,
-    hook_pattern: hooks[i] ?? "pov",
+    hook_pattern: hooks[i] ?? "pregunta",
     theme: themes[i] ?? "clima_cultura",
   }));
 }
@@ -317,9 +319,20 @@ function buildBrief(
     (k) => CTA_DESCRIPTIONS[k] ?? k.replace(/_/g, " "),
   );
   if (synthesis.visual_lift) {
-    liftLine("CÓMO SE VE LO QUE RINDE (contra el resto)", synthesis.visual_lift.visual_format);
+    liftLine("CÓMO SE VE LO QUE RINDE (contra el resto)", synthesis.visual_lift.creative_type);
     liftLine("NIVEL DE PRODUCCIÓN QUE RINDE", synthesis.visual_lift.production_level);
+    liftLine("QUIÉN APARECE EN LO QUE RINDE", synthesis.visual_lift.person_identity);
+    liftLine("ESTILO DE VIDEO QUE RINDE (entre videos)", synthesis.visual_lift.video_style);
   }
+  // Los ejes de la auditoría que cambian cómo se escribe la pieza. El rol del
+  // autor y la cadencia no entran: Humand no elige quién firma cada post desde
+  // el calendario, así que darle ese dato al modelo solo lo distrae.
+  const axes = synthesis.winning_axes ?? {};
+  liftLine("PARA QUÉ ESTÁN HECHOS LOS QUE RINDEN", axes.content_intent);
+  liftLine("CON QUÉ RESPALDAN LO QUE DICEN", axes.evidence_type);
+  liftLine("QUÉ TAN CONCRETOS SON", axes.specificity);
+  liftLine("DESDE QUÉ VOZ ESCRIBEN", axes.narrative_voice);
+  liftLine("CÓMO ABRE LA PRIMERA LÍNEA", axes.first_line);
   const firstLine = synthesis.copy_shape?.find((r) => r.metric === "first_line_chars");
   if (firstLine) {
     lines.push(
@@ -331,8 +344,8 @@ function buildBrief(
   if (synthesis.top_topics.length) {
     lines.push("\nDE QUÉ SE HABLA: " + synthesis.top_topics.map((t) => t.key).join(", "));
   }
-  if (synthesis.tone_mix.length) {
-    lines.push("TONOS: " + synthesis.tone_mix.map((t) => t.key).join(", "));
+  if (synthesis.emotion_mix?.length) {
+    lines.push("EMOCIONES QUE BUSCA LO QUE FUNCIONA: " + synthesis.emotion_mix.map((t) => t.key).join(", "));
   }
   if (synthesis.replicable_ideas.length) {
     // Numerados: el modelo devuelve el número y el código lo mapea al post real.

@@ -53,6 +53,7 @@ import {
   updateJob,
   upsertAuthors,
   linkPostsToAuthors,
+  refreshAuthorSegments,
   loadHandlesWithUnscoredPosts,
   loadTopPostsForVisual,
   saveVisualAnalyses,
@@ -384,7 +385,8 @@ async function persistLinkedInAuthors(raw: RawLinkedInPost[]): Promise<void> {
       // persona, que es lo que permite juzgar si es referente del rubro.
       biography: a.info,
       platform_author_id: a.urn,
-      author_kind: "influencer",
+      // author_kind no se escribe acá: lo decide refreshAuthorSegments según
+      // la fuente que trajo los posts.
     })),
   );
 }
@@ -596,12 +598,12 @@ export async function runVisualAnalysis(
   for (const item of pending) {
     const url = await signedMediaUrl(item.storedPath).catch(() => null);
     // Una firma que falla es un post menos, no una corrida caída.
-    if (url) images.push({ post_id: item.post_id, image_url: url });
+    if (url) images.push({ post_id: item.post_id, image_url: url, is_video: item.is_video });
   }
   if (!images.length) return { analyzed: 0, skipped: pending.length, top, control };
 
   const results = await classifyVisuals(images);
-  // Las inutilizables también se guardan: con `unusable` y sin visual_format,
+  // Las inutilizables también se guardan: con `unusable` y sin creative_type,
   // la síntesis las ignora y el loader no las vuelve a pedir.
   const saved = await saveVisualAnalyses(
     [...results.entries()].map(([post_id, visual]) => ({ post_id, visual })),
@@ -773,6 +775,10 @@ async function runDiscovery(job: RefreshJob, options: DiscoveryOptions): Promise
     for (const platform of touchedByPlatform.keys()) {
       await linkPostsToAuthors(platform).catch((err) => {
         console.warn(`[discovery-job] no se pudo vincular autores de ${platform}:`, err);
+        return 0;
+      });
+      await refreshAuthorSegments(platform).catch((err) => {
+        console.warn(`[discovery-job] no se pudo segmentar autores de ${platform}:`, err);
         return 0;
       });
     }

@@ -7,6 +7,8 @@
  */
 import type { PostFeatures } from "./post-features";
 import { ANALYSIS_VERSION } from "./classify";
+import { VISUAL_VERSION } from "./classify-visual";
+import { authorKind, authorRole, isTopVoice } from "./author-segment";
 import { MIN_TOP_POSTS, TOP_FRACTION } from "./synthesize";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
@@ -360,6 +362,60 @@ export async function linkPostsToAuthors(platform: string): Promise<number> {
   return linked;
 }
 
+/**
+ * Recalcula tipo, rol y Top Voice de los autores de una plataforma.
+ *
+ * El tipo sale de las fuentes que trajeron sus posts, no del paso que insertó
+ * al autor: antes LinkedIn escribía "influencer" a todos —también a los que
+ * aparecieron en una búsqueda— e Instagram no escribía nada (350 en null).
+ */
+export async function refreshAuthorSegments(platform: string): Promise<number> {
+  const sb = getSupabase();
+  const { data: authors, error } = await sb
+    .from("content_authors")
+    .select("id, handle, biography")
+    .eq("platform", platform);
+  if (error) throw error;
+  const rows = (authors ?? []) as Array<{ id: string; handle: string; biography: string | null }>;
+  if (!rows.length) return 0;
+
+  const { data: links, error: linkError } = await sb
+    .from("content_posts")
+    .select("author_handle, content_post_sources(content_sources(kind))")
+    .eq("platform", platform)
+    .limit(10000);
+  if (linkError) throw linkError;
+
+  const kindsByHandle = new Map<string, string[]>();
+  type LinkRow = {
+    author_handle: string;
+    content_post_sources: Array<{ content_sources: { kind: string } | null }> | null;
+  };
+  for (const row of (links ?? []) as unknown as LinkRow[]) {
+    const kinds = kindsByHandle.get(row.author_handle) ?? [];
+    for (const l of row.content_post_sources ?? []) {
+      if (l.content_sources?.kind) kinds.push(l.content_sources.kind);
+    }
+    kindsByHandle.set(row.author_handle, kinds);
+  }
+
+  let updated = 0;
+  for (const a of rows) {
+    const kind = authorKind(kindsByHandle.get(a.handle) ?? []);
+    const { error: upError } = await sb
+      .from("content_authors")
+      .update({
+        author_kind: kind,
+        author_role: authorRole(a.biography, kind === "competitor" || kind === "own_brand"),
+        is_top_voice: isTopVoice(a.biography),
+      })
+      .eq("id", a.id);
+    if (upError) throw upError;
+    updated += 1;
+  }
+  return updated;
+}
+
 /** Vincula posts a la fuente que los trajo. Un post puede venir de varias. */
 export async function linkPostsToSource(
   source: ContentSource,
@@ -548,6 +604,7 @@ export type VisualCandidate = {
   region: string;
   storedPath: string;
   sample: "top" | "control";
+  is_video?: boolean;
 };
 
 export async function loadTopPostsForVisual(
@@ -571,11 +628,13 @@ export async function loadTopPostsForVisual(
     // sobre el ranking completo, no sobre lo que falta analizar.
     const { data, error } = await getSupabase()
       .from("content_posts")
-      .select("id, post_id, stored_media, viral_score, visual_analysis")
-      .not("viral_score", "is", null)
+      .select("id, post_id, stored_media, outlier_factor, visual_analysis, format_detail:features->>format_detail")
+      // El mismo orden que el corte superior de la síntesis: si el visual se
+      // analizara sobre otro ranking, el lift visual compararía otro grupo.
+      .not("outlier_factor", "is", null)
       .eq("analysis->>is_relevant_to_hr", "true")
       .eq("analysis->>audience_signal", "hr_leader")
-      .order("viral_score", { ascending: false })
+      .order("outlier_factor", { ascending: false })
       .limit(1000);
     if (error) throw error;
 
@@ -598,7 +657,18 @@ type VisualRow = {
   post_id: string;
   stored_media: { images?: string[] } | null;
   visual_analysis: unknown | null;
+  format_detail?: string | null;
 };
+
+const VIDEO_FORMATS = new Set(["video", "reel"]);
+
+type StoredVisual = { unusable?: string; visual_version?: string; creative_type?: string } | null;
+
+/** Analizado con el schema vigente. Uno viejo cuenta como pendiente. */
+function isCurrentVisual(value: unknown): boolean {
+  const v = value as StoredVisual;
+  return Boolean(v?.creative_type) && v?.visual_version === VISUAL_VERSION;
+}
 
 /**
  * Parte un mercado ya ordenado por score en corte superior y control.
@@ -612,12 +682,18 @@ export function pickVisualSample(
   limitPerRegion: number,
   controlPerRegion: number,
 ): VisualCandidate[] {
-  const pending = (row: VisualRow) => !row.visual_analysis && Boolean(row.stored_media?.images?.[0]);
+  // Una imagen inutilizable no se vuelve a pagar; una analizada con el schema
+  // anterior sí, porque le faltan los campos que se agregan.
+  const pending = (row: VisualRow) =>
+    !(row.visual_analysis as StoredVisual)?.unusable &&
+    !isCurrentVisual(row.visual_analysis) &&
+    Boolean(row.stored_media?.images?.[0]);
   const toCandidate = (row: VisualRow, sample: "top" | "control"): VisualCandidate => ({
     post_id: row.post_id,
     region,
     storedPath: row.stored_media!.images![0],
     sample,
+    is_video: VIDEO_FORMATS.has(row.format_detail ?? ""),
   });
 
   const topSize = Math.min(
@@ -632,8 +708,7 @@ export function pickVisualSample(
   // El control se completa hasta el cupo y no se vuelve a pagar cada semana.
   const target = Math.min(controlPerRegion, topSize);
   // Solo cuenta lo analizado de verdad: una imagen inutilizable no llena cupo.
-  const analyzed = (r: VisualRow) =>
-    Boolean((r.visual_analysis as { visual_format?: string } | null)?.visual_format);
+  const analyzed = (r: VisualRow) => isCurrentVisual(r.visual_analysis);
   const need = Math.max(0, target - rest.filter(analyzed).length);
   const candidates = rest.filter(pending);
   if (!need || !candidates.length) return out;
@@ -710,7 +785,8 @@ export async function loadAnalyzedPosts(platform?: string): Promise<StoredConten
   return safeRead("loadAnalyzedPosts", [], async () => {
     let query = getSupabase()
       .from("content_posts")
-      .select("*")
+      // El rol del autor viaja con el post: la síntesis segmenta por quién firma.
+      .select("*, author:content_authors(author_role, is_top_voice)")
       .not("analysis", "is", null)
       .not("viral_score", "is", null);
     if (platform) query = query.eq("platform", platform);

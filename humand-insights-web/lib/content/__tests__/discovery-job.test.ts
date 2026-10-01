@@ -33,6 +33,7 @@ test("una corrida sin fuentes no cuenta como fallida", () => {
 });
 
 import { pickVisualSample } from "../store";
+import { VISUAL_VERSION } from "../classify-visual";
 
 test("pickVisualSample: corte superior entero y control repartido en el resto", () => {
   const rows = Array.from({ length: 100 }, (_, i) => ({
@@ -59,8 +60,28 @@ test("pickVisualSample: no vuelve a pagar el control que ya está hecho", () => 
     id: `id${i}`,
     post_id: `p${i}`,
     stored_media: { images: [`img${i}.jpg`] },
-    visual_analysis: i >= 20 && i < 35 ? { visual_format: "meme" } : null,
+    visual_analysis:
+      i >= 20 && i < 35 ? { creative_type: "meme", visual_version: VISUAL_VERSION } : null,
   }));
   const control = pickVisualSample("br", rows, 60, 60).filter((o) => o.sample === "control");
   assert.equal(control.length, 5);
+});
+
+test("pickVisualSample: un análisis del schema anterior se vuelve a pedir, uno inutilizable no", () => {
+  const rows = Array.from({ length: 10 }, (_, i) => ({
+    id: `id${i}`,
+    post_id: `p${i}`,
+    stored_media: { images: [`img${i}.jpg`] },
+    format_detail: i === 1 ? "reel" : "imagen",
+    visual_analysis:
+      i === 0
+        ? { visual_format: "meme" }
+        : i === 2
+          ? { unusable: "imagen_invalida" }
+          : { creative_type: "meme", visual_version: VISUAL_VERSION },
+  }));
+  rows[1].visual_analysis = { visual_format: "video_editado" };
+  const top = pickVisualSample("br", rows, 60, 0).filter((o) => o.sample === "top");
+  assert.deepEqual(top.map((t) => t.post_id), ["p0", "p1"]);
+  assert.equal(top.find((t) => t.post_id === "p1")?.is_video, true, "el reel llega marcado como video");
 });

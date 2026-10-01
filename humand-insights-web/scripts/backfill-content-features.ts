@@ -7,8 +7,8 @@
  *
  *   --features     calcula `features` y corrige `format` de LinkedIn. Gratis.
  *   --reclassify   ARCHIVA el análisis actual en content_posts_analysis_archive
- *                  y reclasifica con el prompt nuevo (cta_type, timeliness,
- *                  caption con cabeza y cola). ~USD 0,50 con gpt-4o-mini.
+ *                  y reclasifica con el prompt vigente (ANALYSIS_VERSION).
+ *                  ~USD 0,50 con gpt-4o-mini.
  *   --refocus      corre SOLO la pasada enfocada (cta, cta_type, timeliness)
  *                  sobre lo ya clasificado y parchea esos tres campos. No toca
  *                  claims ni el resto: es para cuando cambia solo esa pasada.
@@ -57,6 +57,7 @@ type Row = {
   hashtags: string[] | null;
   likes_count: number | null;
   comments_count: number | null;
+  author_followers_at_fetch: number | null;
   viral_score: number | null;
   analysis: unknown | null;
   analysis_model: string | null;
@@ -72,7 +73,7 @@ async function loadAll(client: SupabaseClient): Promise<Row[]> {
       .from("content_posts")
       .select(
         "id, platform, post_id, author_handle, caption, format, media, posted_at, duration_secs, " +
-          "is_paid_partnership, mentions, reactions, hashtags, likes_count, comments_count, " +
+          "is_paid_partnership, mentions, reactions, hashtags, likes_count, comments_count, author_followers_at_fetch, " +
           "viral_score, analysis, analysis_model, analysis_version, analyzed_at, raw",
       )
       .order("id")

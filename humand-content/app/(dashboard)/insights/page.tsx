@@ -12,6 +12,7 @@ import {
   type PatternContrast,
   type PatternLift,
   type RegionSynthesis,
+  type SynthesisAxis,
 } from "@/lib/content/types";
 
 export const dynamic = "force-dynamic";
@@ -123,7 +124,83 @@ const KEY_LABELS: Record<string, string> = {
   sin_persona: "sin persona",
   primer_plano: "primer plano",
   plano_medio: "plano medio",
-  escenario_evento: "en un escenario",
+  cuerpo_entero: "cuerpo entero",
+  // Tipo de pieza
+  foto_real: "foto real",
+  foto_stock: "foto de stock",
+  placa_texto: "placa de texto",
+  infografia_dato: "infografía o dato",
+  // Persona y lugar
+  persona_real: "persona real",
+  modelo_stock: "modelo de stock",
+  persona_ilustrada: "persona ilustrada",
+  fondo_diseno: "fondo de diseño, sin lugar",
+  casa_remoto: "en casa / remoto",
+  evento_escenario: "evento o escenario",
+  estudio_fondo_liso: "estudio, fondo liso",
+  logo_discreto: "logo discreto",
+  marca_dominante: "la marca es protagonista",
+  // Video, juzgado por la portada
+  cabeza_parlante: "alguien hablando a cámara",
+  pov_situacion: "POV / situación actuada",
+  animacion_motion: "animación",
+  entrevista_dialogo: "entrevista o diálogo",
+  tutorial_pantalla: "tutorial grabando pantalla",
+  registro_evento: "registro de un evento",
+  montaje_broll: "montaje de tomas",
+  // Palabras sobre la portada, por tramo
+  "0": "sin texto",
+  "1-8": "1 a 8 palabras",
+  "9-25": "9 a 25 palabras",
+  ">25": "más de 25 palabras",
+  // Intención y evidencia
+  opinion_liderazgo: "opinión / liderazgo de ideas",
+  educativo_practico: "educativo, práctico",
+  promocion_producto: "promoción de producto",
+  evento_webinar: "evento o webinar",
+  cultura_propia_employer_brand: "cultura propia (employer brand)",
+  dato_o_noticia: "dato o noticia",
+  celebracion_logro: "celebración de un logro",
+  ninguna: "sin respaldo",
+  experiencia_personal: "experiencia personal",
+  dato_propio: "dato propio",
+  dato_externo_citado: "dato externo citado",
+  caso_empresa_cliente: "caso de una empresa",
+  cita_autoridad: "cita de autoridad",
+  equipo_empleados: "el equipo / empleados",
+  autor: "el propio autor",
+  experto_externo: "un experto externo",
+  el_lector: "el lector",
+  nadie: "nadie en particular",
+  inquietud_miedo: "inquietud o miedo",
+  neutra: "neutra",
+  indignacion_frustracion: "indignación o frustración",
+  identificacion_humor: "identificación o humor",
+  generico: "genérico",
+  algo_concreto: "algo concreto",
+  muy_concreto: "muy concreto (nombres, cifras, casos)",
+  // Escritura
+  yo: "primera persona (yo)",
+  nosotros: "nosotros",
+  vos_usted: "le habla al lector",
+  impersonal: "impersonal",
+  con_numero: "abre con un número",
+  pregunta: "pregunta",
+  ni_numero_ni_pregunta: "ni número ni pregunta",
+  con_lista: "con lista",
+  sin_lista: "sin lista",
+  sin_link: "sin link",
+  en_comentario: "link en el comentario",
+  // Quién firma
+  ceo_fundador: "CEO o fundador",
+  lider_rrhh: "líder de RRHH (CHRO, Head of People)",
+  rrhh_operativo: "RRHH operativo (analista, recruiter)",
+  consultor_coach: "consultor o coach",
+  creador_contenido: "creador de contenido",
+  empresa: "cuenta de empresa",
+  menos_de_1_por_semana: "menos de 1 post por semana",
+  "1_a_3_por_semana": "1 a 3 por semana",
+  mas_de_3_por_semana: "más de 3 por semana",
   titular_corto: "titular corto",
   manana: "mañana",
   lun: "lunes",
@@ -287,6 +364,74 @@ function CompanyPages({ data }: { data: NonNullable<RegionSynthesis["company_pag
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+/**
+ * Los ejes que sumó la auditoría, agrupados por la decisión que informan.
+ * Agrupados y no en una grilla única: doce listas sueltas se leen como un
+ * volcado, y lo que Content decide es qué decir, cómo escribirlo y —en el
+ * caso del rol— si el resultado es trasladable a una cuenta de empresa.
+ */
+const AXIS_GROUPS: Array<{
+  title: string;
+  hint?: string;
+  axes: Array<[SynthesisAxis, string]>;
+}> = [
+  {
+    title: "Qué dice lo que funciona",
+    axes: [
+      ["content_intent", "Para qué está hecho"],
+      ["evidence_type", "Con qué respalda lo que dice"],
+      ["protagonist", "De quién habla"],
+      ["emotional_trigger", "Qué emoción busca"],
+      ["specificity", "Qué tan concreto es"],
+    ],
+  },
+  {
+    title: "Cómo está escrito",
+    axes: [
+      ["narrative_voice", "Desde qué voz"],
+      ["first_line", "Cómo abre"],
+      ["has_list", "Listas"],
+      ["link_placement", "Dónde va el link"],
+      ["aspect_ratio", "Formato de pantalla"],
+    ],
+  },
+  {
+    title: "Quién lo firma",
+    hint:
+      "Si lo que rinde lo firman CEOs, parte del resultado es la autoridad del cargo y no el copy: " +
+      "ojo antes de trasladarlo tal cual a la cuenta de Humand.",
+    axes: [
+      ["author_role", "Rol de quien firma"],
+      ["author_cadence", "Cuánto publica"],
+    ],
+  },
+];
+
+function Axes({ axes }: { axes: Partial<Record<SynthesisAxis, PatternLift[]>> }) {
+  const groups = AXIS_GROUPS.map((g) => ({
+    ...g,
+    axes: g.axes.filter(([key]) => axes[key]?.some((r) => r.lift > 1)),
+  })).filter((g) => g.axes.length);
+  if (!groups.length) return null;
+  return (
+    <div className="mt-5 space-y-5">
+      {groups.map((g) => (
+        <div key={g.title}>
+          <h3 className="mb-1 text-[14px] font-semibold leading-[1.4]">{g.title}</h3>
+          {g.hint ? (
+            <p className="mb-2 text-[12px] leading-[1.4] text-[var(--faint)]">{g.hint}</p>
+          ) : null}
+          <div className="grid gap-6 sm:grid-cols-2">
+            {g.axes.map(([key, title]) => (
+              <LiftList key={key} title={title} rows={axes[key] ?? []} />
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -513,10 +658,16 @@ export default async function InsightsPage() {
                   aparece más en lo que rinde.
                 </p>
                 <div className="grid gap-6 sm:grid-cols-2">
-                  <ContrastList title="Tipo de pieza" rows={s.visual_lift.visual_format} />
+                  <ContrastList title="Tipo de pieza" rows={s.visual_lift.creative_type} />
                   <ContrastList title="Nivel de producción" rows={s.visual_lift.production_level} />
+                  <ContrastList title="Quién aparece" rows={s.visual_lift.person_identity ?? []} />
                   <ContrastList title="Cómo aparece la persona" rows={s.visual_lift.person_framing} />
+                  <ContrastList title="Dónde transcurre" rows={s.visual_lift.setting ?? []} />
+                  <ContrastList title="Cuánto se ve la marca" rows={s.visual_lift.brand_treatment ?? []} />
                   <ContrastList title="Texto sobre la imagen" rows={s.visual_lift.text_on_image} />
+                  <ContrastList title="Palabras en la portada" rows={s.visual_lift.cover_text ?? []} />
+                  {/* Leído de la portada, no del video entero: por eso solo entre videos. */}
+                  <ContrastList title="Estilo de video (entre videos)" rows={s.visual_lift.video_style ?? []} />
                 </div>
               </div>
             ) : s.visual_mix?.length ? (
@@ -562,6 +713,8 @@ export default async function InsightsPage() {
               <LiftList title="Qué le piden al lector" rows={s.winning_ctas ?? []} />
               <LiftList title="Vigencia" rows={s.winning_timeliness ?? []} />
             </div>
+
+            {s.winning_axes ? <Axes axes={s.winning_axes} /> : null}
 
             <div className="mt-5">
               {s.timing ? <Timing timing={s.timing} /> : null}

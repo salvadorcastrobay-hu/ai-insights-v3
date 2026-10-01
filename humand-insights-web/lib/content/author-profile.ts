@@ -24,6 +24,7 @@ export type ProfilablePost = {
   viral_score: number | null;
   outlier_factor: number | null;
   analysis: PostAnalysis | null;
+  features?: { hashtag_strategy?: string | null } | null;
 };
 
 export type AuthorProfile = {
@@ -49,8 +50,10 @@ export type AuthorProfile = {
   content_pillars: Array<{ key: string; count: number; share: number }>;
   format_mix: Array<{ key: string; count: number; share: number }>;
   hook_mix: Array<{ key: string; count: number; share: number }>;
-  tone_mix: Array<{ key: string; count: number; share: number }>;
-  audience_profiles: Array<{ key: string; count: number; share: number }>;
+  /** Qué emoción busca. Reemplaza a tone_mix, que estaba saturado. */
+  emotion_mix: Array<{ key: string; count: number; share: number }>;
+  /** Para qué publica: cuánto vende, cuánto opina, cuánto enseña. */
+  intent_mix: Array<{ key: string; count: number; share: number }>;
 
   /** Cómo comunica, derivado de lo anterior. */
   strategy: {
@@ -158,8 +161,8 @@ export function buildAuthorProfile(
     content_pillars: tally(analyses.map((a) => a.theme)),
     format_mix: tally(posts.map((p) => p.format)),
     hook_mix: tally(analyses.map((a) => a.hook_pattern)),
-    tone_mix: tally(analyses.map((a) => a.tone)),
-    audience_profiles: tally(analyses.flatMap((a) => a.target_profiles ?? [])),
+    emotion_mix: tally(analyses.map((a) => a.emotional_trigger)),
+    intent_mix: tally(analyses.map((a) => a.content_intent)),
 
     strategy: {
       hr_focus: analyses.length ? Number((relevant.length / analyses.length).toFixed(2)) : 0,
@@ -167,12 +170,18 @@ export function buildAuthorProfile(
         ? Number((analyses.filter((a) => a.cta).length / analyses.length).toFixed(2))
         : 0,
       median_copy_length: median(analyses.map((a) => a.copy_length ?? 0).filter((n) => n > 0)),
-      dominant_hashtag_strategy: tally(analyses.map((a) => a.hashtag_strategy))[0]?.key ?? null,
+      // Ya no la decide el LLM: es un conteo y vive en post-features.
+      dominant_hashtag_strategy:
+        tally(
+          posts.map((p) => p.features?.hashtag_strategy),
+        )[0]?.key ?? null,
     },
 
     best_posts: [...posts]
-      .filter((p) => p.viral_score !== null)
-      .sort((a, b) => (b.viral_score ?? 0) - (a.viral_score ?? 0))
+      // Los mejores de un autor son los que más superaron SU línea base, no los
+      // de mayor score de feed (que premia alcance y recencia).
+      .filter((p) => p.outlier_factor !== null)
+      .sort((a, b) => (b.outlier_factor ?? 0) - (a.outlier_factor ?? 0))
       .slice(0, 5)
       .map((p) => ({
         post_id: p.post_id,

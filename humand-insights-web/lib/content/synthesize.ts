@@ -41,14 +41,26 @@ export type AnalyzedPost = {
   comments_count: number | null;
   shares_count?: number | null;
   analysis: PostAnalysis;
+  /** Quién firma. Ver author-segment.ts. */
+  author_role?: string | null;
+  posted_at?: string | null;
   /** Qué se ve en el creativo. Lo tienen el corte superior y una muestra de control. */
   visual?: {
-    visual_format: string;
+    creative_type: string;
     text_on_image: string;
     visual_text: string | null;
     production_level?: string;
     person_framing?: string;
-    face_present?: boolean;
+    person_identity?: string;
+    people_count?: string;
+    setting?: string;
+    brand_treatment?: string;
+    screenshot_of?: string;
+    video_style?: string;
+    product_ui_visible?: boolean;
+    cover_is_designed?: boolean;
+    burned_captions?: boolean;
+    cover_bucket?: string;
   } | null;
   /** Lo contable del post. Ver post-features.ts. */
   features?: PostFeatures | null;
@@ -134,15 +146,28 @@ export type RegionSynthesis = {
    * resto. null si el control no alcanza, y entonces se cae a `visual_mix`.
    */
   visual_lift?: {
-    visual_format: PatternContrast[];
+    creative_type: PatternContrast[];
     production_level: PatternContrast[];
     person_framing: PatternContrast[];
+    person_identity: PatternContrast[];
+    setting: PatternContrast[];
+    brand_treatment: PatternContrast[];
     text_on_image: PatternContrast[];
+    /** Palabras sobre la portada, en tramos. Sale del OCR, se cuenta en código. */
+    cover_text: PatternContrast[];
+    /** Solo entre videos: comparar el estilo de un video contra imágenes no dice nada. */
+    video_style: PatternContrast[];
     top_n: number;
     rest_n: number;
   } | null;
   /** Cómo está escrito lo que funciona contra el resto. Determinístico. */
   copy_shape?: CopyShapeRow[] | null;
+  /**
+   * Los ejes que sumó la auditoría de contenido, todos con el mismo cálculo de
+   * lift. Van en un mapa y no en un campo cada uno para que sumar un eje no
+   * obligue a tocar el tipo, el loader y la pantalla: la UI los recorre.
+   */
+  winning_axes?: Partial<Record<SynthesisAxis, PatternLift[]>> | null;
   /**
    * Cuándo publican los que funcionan. Solo sobre muestras cronológicas de
    * perfil: un scrape de hashtag trae "lo último", o sea todo del mismo día, y
@@ -169,7 +194,8 @@ export type RegionSynthesis = {
   /** Cuántos collabs se dejaron fuera del corte: su alcance es prestado. */
   excluded_collabs?: number;
   top_topics: Array<{ key: string; count: number }>;
-  tone_mix: Array<{ key: string; count: number }>;
+  /** Qué emoción busca el corte superior. Reemplaza a tone_mix, saturado. */
+  emotion_mix: Array<{ key: string; count: number }>;
   replicable_ideas: Array<{
     post_url: string | null;
     author_handle: string;
@@ -276,6 +302,87 @@ export function computeLift(
  * un post que explota entre candidatos enseña formato, pero su tema no sirve
  * para el calendario de Humand.
  */
+export const SYNTHESIS_AXES = [
+  "content_intent",
+  "evidence_type",
+  "protagonist",
+  "emotional_trigger",
+  "specificity",
+  "narrative_voice",
+  "first_line",
+  "has_list",
+  "link_placement",
+  "aspect_ratio",
+  "author_role",
+  "author_cadence",
+] as const;
+export type SynthesisAxis = (typeof SYNTHESIS_AXES)[number];
+
+/** Cómo abre: número, pregunta o ninguno. Las dos señales se excluyen para que sumen 100%. */
+function firstLineKey(f: PostFeatures | null | undefined): string | undefined {
+  if (!f) return undefined;
+  if (f.first_line_has_number) return "con_numero";
+  if (f.first_line_is_question) return "pregunta";
+  return "ni_numero_ni_pregunta";
+}
+
+/**
+ * Cuánto publica el autor, medido sobre lo observado. Es la pregunta "¿rinde
+ * más el que publica poco y cuida cada pieza?", que con la ventana corta que
+ * tenemos solo se puede contestar en tramos gruesos.
+ */
+function cadenceByAuthor(posts: AnalyzedPost[]): Map<string, string> {
+  const byAuthor = new Map<string, number[]>();
+  for (const p of posts) {
+    // Solo la muestra cronológica de perfil: la búsqueda trae los mejores
+    // posts del autor, salteados, y haría parecer que publica menos.
+    if (p.baseline_eligible === false) continue;
+    const t = p.posted_at ? Date.parse(p.posted_at) : NaN;
+    if (!Number.isFinite(t)) continue;
+    byAuthor.set(p.author_handle, [...(byAuthor.get(p.author_handle) ?? []), t]);
+  }
+  const out = new Map<string, string>();
+  for (const [author, times] of byAuthor) {
+    // Con menos de 3 posts no hay cadencia, hay casualidad.
+    if (times.length < 3) continue;
+    const weeks = Math.max(1, (Math.max(...times) - Math.min(...times)) / (7 * 86_400_000));
+    const perWeek = times.length / weeks;
+    out.set(author, perWeek < 1 ? "menos_de_1_por_semana" : perWeek <= 3 ? "1_a_3_por_semana" : "mas_de_3_por_semana");
+  }
+  return out;
+}
+
+function winningAxes(
+  top: AnalyzedPost[],
+  relevant: AnalyzedPost[],
+): Partial<Record<SynthesisAxis, PatternLift[]>> {
+  const cadence = cadenceByAuthor(relevant);
+  const pick: Record<SynthesisAxis, (p: AnalyzedPost) => string | null | undefined> = {
+    content_intent: (p) => p.analysis.content_intent,
+    evidence_type: (p) => p.analysis.evidence_type,
+    protagonist: (p) => p.analysis.protagonist,
+    emotional_trigger: (p) => p.analysis.emotional_trigger,
+    specificity: (p) => p.analysis.specificity,
+    narrative_voice: (p) => p.features?.narrative_voice,
+    first_line: (p) => firstLineKey(p.features),
+    has_list: (p) => (p.features ? (p.features.has_list ? "con_lista" : "sin_lista") : undefined),
+    link_placement: (p) => p.features?.link_placement,
+    // El formato de pantalla solo existe donde hay media.
+    aspect_ratio: (p) => p.features?.aspect_ratio ?? undefined,
+    author_role: (p) => p.author_role,
+    author_cadence: (p) => cadence.get(p.author_handle),
+  };
+  const out: Partial<Record<SynthesisAxis, PatternLift[]>> = {};
+  for (const axis of SYNTHESIS_AXES) {
+    const lifts = computeLift(
+      top.map((p) => ({ key: pick[axis](p), author: p.author_handle })),
+      relevant.map((p) => ({ key: pick[axis](p), author: p.author_handle })),
+    );
+    if (lifts.length) out[axis] = lifts;
+  }
+  return out;
+}
+
 export function synthesizeRegion(region: string, posts: AnalyzedPost[]): RegionSynthesis {
   /*
    * El corte superior se arma por `outlier_factor`, no por `viral_score`.
@@ -324,6 +431,7 @@ export function synthesizeRegion(region: string, posts: AnalyzedPost[]): RegionS
     visual_mix: null,
     visual_lift: null,
     copy_shape: null,
+    winning_axes: null,
     timing: null,
     company_pages: companyPages(relevant),
     excluded_collabs: eligible.length - relevant.length,
@@ -331,7 +439,7 @@ export function synthesizeRegion(region: string, posts: AnalyzedPost[]): RegionS
     // 983 posts: prácticamente uno por post, así que el ranking en pantalla era
     // arbitrario. `claim_object` es vocabulario acotado del rubro y sí agrega.
     top_topics: toSortedList(tally(top.map((p) => p.analysis.claim_object)), 10),
-    tone_mix: toSortedList(tally(top.map((p) => p.analysis.tone)), 6),
+    emotion_mix: toSortedList(tally(top.map((p) => p.analysis.emotional_trigger)), 6),
     // Se filtra por tener CLAIM, no por replicability: un post sin afirmación
     // no le da al calendario nada sobre qué escribir, por replicable que sea
     // su formato.
@@ -390,6 +498,7 @@ export function synthesizeRegion(region: string, posts: AnalyzedPost[]): RegionS
       relevant.map((p) => ({ key: p.analysis.timeliness, author: p.author_handle })),
     ),
     copy_shape: copyShape(top, relevant),
+    winning_axes: winningAxes(top, relevant),
     timing: timing(top, relevant),
     // structure ya se extraía y no la leía nadie. Es un eje bastante menos
     // superficial que el hook: el hook son las primeras quince palabras, la
@@ -410,13 +519,13 @@ export function synthesizeRegion(region: string, posts: AnalyzedPost[]): RegionS
 function visualMix(
   top: AnalyzedPost[],
 ): Array<{ key: string; posts: number; authors: number; median_outlier: number | null }> | null {
-  const conVisual = top.filter((p) => p.visual?.visual_format);
+  const conVisual = top.filter((p) => p.visual?.creative_type);
   // Con pocas piezas analizadas la mezcla es anecdótica, no un patrón.
   if (conVisual.length < 10) return null;
 
   const byFormat = new Map<string, AnalyzedPost[]>();
   for (const p of conVisual) {
-    const key = p.visual!.visual_format;
+    const key = p.visual!.creative_type;
     byFormat.set(key, [...(byFormat.get(key) ?? []), p]);
   }
 
@@ -496,8 +605,8 @@ export function computeContrast(
 
 function visualLift(top: AnalyzedPost[], relevant: AnalyzedPost[]): RegionSynthesis["visual_lift"] {
   const topIds = new Set(top.map((p) => p.post_id));
-  const topV = top.filter((p) => p.visual?.visual_format);
-  const restV = relevant.filter((p) => !topIds.has(p.post_id) && p.visual?.visual_format);
+  const topV = top.filter((p) => p.visual?.creative_type);
+  const restV = relevant.filter((p) => !topIds.has(p.post_id) && p.visual?.creative_type);
   if (topV.length < MIN_VISUAL_TOP || restV.length < MIN_VISUAL_REST) return null;
 
   const axis = (pick: (v: NonNullable<AnalyzedPost["visual"]>) => string | undefined) =>
@@ -507,10 +616,21 @@ function visualLift(top: AnalyzedPost[], relevant: AnalyzedPost[]): RegionSynthe
     );
 
   return {
-    visual_format: axis((v) => v.visual_format),
+    creative_type: axis((v) => v.creative_type),
     production_level: axis((v) => v.production_level),
     person_framing: axis((v) => v.person_framing),
+    person_identity: axis((v) => v.person_identity),
+    setting: axis((v) => v.setting),
+    brand_treatment: axis((v) => v.brand_treatment),
     text_on_image: axis((v) => v.text_on_image),
+    cover_text: axis((v) => v.cover_bucket),
+    // `no_es_video` queda afuera de los dos lados: si entrara, el eje mediría
+    // "video contra imagen", que ya mide el formato.
+    video_style: axis((v) =>
+      v.video_style && v.video_style !== "no_es_video" && v.video_style !== "no_determinable"
+        ? v.video_style
+        : undefined,
+    ),
     top_n: topV.length,
     rest_n: restV.length,
   };

@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
+import { checkHookPattern } from "../classify";
+
 import {
   aspectRatio,
   brandMention,
@@ -176,4 +178,12 @@ test("la primera persona se detecta aunque el español y el portugués omitan el
   assert.equal(narrativeVoice("Que honra fechar o mês sabendo que estou na lista. Sou muito grata por isso."), "yo");
   assert.equal(narrativeVoice("Estamos en tiempos de fatiga de cambio y tenemos que repensar cómo acompañamos."), "nosotros");
   assert.equal(narrativeVoice("Há algum tempo eu buscava uma forma diferente de trabalhar escuta e confiança."), "yo");
+});
+
+test("checkHookPattern corrige lo que la primera línea desmiente", () => {
+  assert.equal(checkHookPattern("dato_numero", "Las empresas se rompen por el..."), "afirmacion_tajante");
+  assert.equal(checkHookPattern("dato_numero", "El 70% de los líderes no escucha"), "dato_numero");
+  assert.equal(checkHookPattern("pregunta", "como pode né"), "afirmacion_tajante");
+  assert.equal(checkHookPattern("pregunta", "¿Qué te parece?"), "pregunta");
+  assert.equal(checkHookPattern("escena_narrativa", "Estaba hablando con un gerente"), "escena_narrativa");
 });
