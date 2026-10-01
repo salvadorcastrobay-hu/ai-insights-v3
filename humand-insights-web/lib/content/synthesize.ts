@@ -277,18 +277,37 @@ export function computeLift(
  * para el calendario de Humand.
  */
 export function synthesizeRegion(region: string, posts: AnalyzedPost[]): RegionSynthesis {
+  /*
+   * El corte superior se arma por `outlier_factor`, no por `viral_score`.
+   *
+   * `viral_score` está hecho para el feed: suma al outlier un piso de alcance
+   * absoluto (que en LinkedIn pesa 0,45), el percentil de cohorte y un
+   * decaimiento por antigüedad. Usarlo para decidir qué patrón "gana" mezclaba
+   * qué tiene la pieza con qué tan grande es el autor y qué tan reciente es el
+   * post — lo de moda ganaba lift por ser nuevo, no por funcionar.
+   *
+   * Lo que explica el rendimiento de UNA pieza es cuánto superó lo normal de
+   * su propio autor. Por eso solo entran los posts que tienen esa medida: si
+   * un post no puede estar arriba, tampoco debe estar en el denominador.
+   */
   const eligible = posts.filter(
     (p) =>
       p.analysis.is_relevant_to_hr &&
       p.analysis.audience_signal === "hr_leader" &&
-      p.viral_score !== null,
+      p.outlier_factor !== null,
   );
-  // Los collabs se publican en dos perfiles y suman las dos audiencias: su
-  // rendimiento mide la distribución, no el contenido. En el feed se muestran
-  // marcados; acá, donde se decide qué patrón gana, quedan afuera.
-  const relevant = eligible.filter((p) => !p.features?.is_collab);
+  // Los collabs y el alcance prestado (etiquetas, menciones) suman la audiencia
+  // de otro: su rendimiento mide la distribución, no el contenido. En el feed
+  // se muestran marcados; acá, donde se decide qué patrón gana, quedan afuera.
+  const relevant = eligible.filter(
+    (p) =>
+      !p.features?.is_collab &&
+      p.features?.distribution_boost !== "collab" &&
+      p.features?.distribution_boost !== "varios" &&
+      p.features?.is_repost !== "repost_puro",
+  );
 
-  const ranked = [...relevant].sort((a, b) => (b.viral_score ?? 0) - (a.viral_score ?? 0));
+  const ranked = [...relevant].sort((a, b) => (b.outlier_factor ?? 0) - (a.outlier_factor ?? 0));
   const topCount = Math.max(MIN_TOP_POSTS, Math.ceil(ranked.length * TOP_FRACTION));
   const top = ranked.slice(0, Math.min(topCount, ranked.length));
 
@@ -589,7 +608,7 @@ function companyPages(relevant: AnalyzedPost[]): RegionSynthesis["company_pages"
     median_outlier: round(medianOf(outliers(companies))),
     person_median_outlier: round(medianOf(outliers(people))),
     examples: [...companies]
-      .sort((a, b) => (b.viral_score ?? 0) - (a.viral_score ?? 0))
+      .sort((a, b) => (b.outlier_factor ?? 0) - (a.outlier_factor ?? 0))
       .slice(0, 3)
       .map((p) => ({
         author_handle: p.author_handle,

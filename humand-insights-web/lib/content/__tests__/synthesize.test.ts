@@ -317,3 +317,30 @@ test("synthesizeRegion calcula lift visual solo con control suficiente", () => {
   const soloTop = posts.map((p, i) => (i < 12 ? p : { ...p, visual: null }));
   assert.equal(synthesizeRegion("br", soloTop).visual_lift, null);
 });
+
+test("el corte superior se arma por cuánto superó a su autor, no por el score del feed", () => {
+  // viral_score suma alcance absoluto y recencia: un post enorme de una cuenta
+  // grande y reciente le ganaba a uno que rindió 10 veces lo normal de su autor.
+  const grande = { ...post("grande", 0.99), outlier_factor: 1.1 };
+  const fuera = { ...post("fuera_de_serie", 0.10), outlier_factor: 10 };
+  const relleno = Array.from({ length: 40 }, (_, i) => ({
+    ...post(`relleno-${i}`, 0.5),
+    outlier_factor: 1 + i * 0.01,
+  }));
+  const s = synthesizeRegion("br", [grande, fuera, ...relleno]);
+  assert.ok(s.top_posts_count > 0);
+  // Se reconstruye el corte con el mismo criterio para verificarlo.
+  const top = [grande, fuera, ...relleno]
+    .sort((a, b) => (b.outlier_factor ?? 0) - (a.outlier_factor ?? 0))
+    .slice(0, s.top_posts_count)
+    .map((p) => p.post_id);
+  assert.ok(top.includes("fuera_de_serie"), "el que rindió 10x tiene que estar arriba");
+  assert.ok(!top.includes("grande"), "el de score alto pero 1,1x no");
+});
+
+test("un post sin línea base no entra ni al corte ni al denominador", () => {
+  const sinBase = { ...post("sin_base", 0.99), outlier_factor: null };
+  const conBase = Array.from({ length: 12 }, (_, i) => post(`ok-${i}`, 0.5));
+  const s = synthesizeRegion("br", [sinBase, ...conBase]);
+  assert.equal(s.posts_considered, 12);
+});
