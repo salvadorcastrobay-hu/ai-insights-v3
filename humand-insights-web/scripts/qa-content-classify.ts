@@ -4,8 +4,9 @@
  * Mismo criterio que `qa_evaluator.py` del pipeline de transcripts: el juez es
  * siempre gpt-4o, nunca el mini que clasifica — un modelo no se audita a sí
  * mismo. Revisa los campos donde el error cambia una decisión: el hook (que
- * es lo que se muestra), el CTA y su tipo, la vigencia, y si el lead magnet
- * detectado por regla es de verdad un lead magnet.
+ * es lo que se muestra), el CTA y su tipo, la vigencia, si el lead magnet
+ * detectado por regla es de verdad un lead magnet, y los ejes de contenido
+ * que alimentan la síntesis y el calendario.
  *
  * Uso:
  *   npx tsx scripts/qa-content-classify.ts --sample 40
@@ -19,7 +20,18 @@ import { createClient } from "@supabase/supabase-js";
 import { generateObject } from "ai";
 import { z } from "zod";
 
-import { ANALYSIS_VERSION, CTA_TYPES, TIMELINESS, clipCaption } from "../lib/content/classify";
+import {
+  ANALYSIS_VERSION,
+  CONTENT_INTENTS,
+  CTA_TYPES,
+  EMOTIONAL_TRIGGERS,
+  EVIDENCE_TYPES,
+  HOOK_PATTERNS,
+  PROTAGONISTS,
+  SPECIFICITY,
+  TIMELINESS,
+  clipCaption,
+} from "../lib/content/classify";
 
 const JUDGE_MODEL = "gpt-4o";
 
@@ -32,6 +44,19 @@ const Verdict = z.object({
   comment_bait_ok: z
     .boolean()
     .describe("¿`comment_bait` (pide comentar una palabra a cambio de algo) es correcto?"),
+  // Los ejes de la auditoría de content: van a la síntesis y al calendario.
+  hook_pattern_ok: z.boolean(),
+  hook_pattern_expected: z.enum(HOOK_PATTERNS),
+  content_intent_ok: z.boolean(),
+  content_intent_expected: z.enum(CONTENT_INTENTS),
+  evidence_type_ok: z.boolean(),
+  evidence_type_expected: z.enum(EVIDENCE_TYPES),
+  protagonist_ok: z.boolean(),
+  protagonist_expected: z.enum(PROTAGONISTS),
+  emotional_trigger_ok: z.boolean(),
+  emotional_trigger_expected: z.enum(EMOTIONAL_TRIGGERS),
+  specificity_ok: z.boolean(),
+  specificity_expected: z.enum(SPECIFICITY),
   notes: z.string().describe("Una línea: qué está mal, si algo está mal. Vacío si todo bien."),
 });
 
@@ -57,6 +82,23 @@ const SYSTEM = [
   "  ley, una noticia, un estudio de este año, un lanzamiento). Un evento con",
   "  fecha es coyuntura, NO efeméride.",
   "- evergreen: todo lo demás. Un tema de moda sin hecho concreto es evergreen.",
+  "",
+  "",
+  "Los ejes de contenido, con las mismas definiciones que el clasificador:",
+  "- hook_pattern: CÓMO ARRANCA la primera línea, solo ella. dato_numero exige una",
+  "  cifra protagonista; escena_narrativa arranca contando una situación;",
+  "  confesion_personal admite algo propio; anuncio_novedad solo si anuncia algo",
+  "  nuevo de quien publica; una tesis general es afirmacion_tajante.",
+  "- content_intent: para qué existe la pieza (opinion_liderazgo, educativo_practico,",
+  "  promocion_producto, evento_webinar, cultura_propia_employer_brand,",
+  "  dato_o_noticia, celebracion_logro, vacante, personal).",
+  "- evidence_type: con qué sostiene lo que dice. experiencia_personal incluye lo que",
+  "  le pasó o le contaron al autor. ninguna si afirma sin sostener.",
+  "- protagonist: de quién es la historia. nadie si es expositivo.",
+  "- emotional_trigger: la emoción principal que busca. neutra si informa.",
+  "- specificity: muy_concreto exige VARIOS datos verificables; uno solo es",
+  "  algo_concreto. Ante la duda, el valor más bajo.",
+  "Cuando dos valores son defendibles, aceptá el extraído: medí errores, no gustos.",
   "",
   "Marcá `_ok: false` solo si tu valor esperado es DISTINTO del extraído.",
 ].join("\n");
@@ -118,6 +160,12 @@ async function main() {
       cta_type: row.analysis.cta_type,
       timeliness: row.analysis.timeliness,
       comment_bait: row.features?.comment_bait ?? null,
+      hook_pattern: row.analysis.hook_pattern,
+      content_intent: row.analysis.content_intent,
+      evidence_type: row.analysis.evidence_type,
+      protagonist: row.analysis.protagonist,
+      emotional_trigger: row.analysis.emotional_trigger,
+      specificity: row.analysis.specificity,
     };
     const { object } = await generateObject({
       model: openai(JUDGE_MODEL),
@@ -138,6 +186,12 @@ async function main() {
     cta_type: rate("cta_type_ok"),
     timeliness: rate("timeliness_ok"),
     comment_bait: rate("comment_bait_ok"),
+    hook_pattern: rate("hook_pattern_ok"),
+    content_intent: rate("content_intent_ok"),
+    evidence_type: rate("evidence_type_ok"),
+    protagonist: rate("protagonist_ok"),
+    emotional_trigger: rate("emotional_trigger_ok"),
+    specificity: rate("specificity_ok"),
     // Lo que decide el calendario es si la pieza vence o no; coyuntura contra
     // efeméride es un matiz. Se reporta aparte para no esconder ninguno.
     timeliness_vence_o_no: `${Math.round(

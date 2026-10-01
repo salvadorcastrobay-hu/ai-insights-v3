@@ -73,7 +73,7 @@ test("planSlots respeta el lift y no inventa fechas fuera del mes", () => {
     winning_structures: null,
     visual_mix: null,
     top_topics: [],
-    tone_mix: [],
+    emotion_mix: [],
     replicable_ideas: [],
   } satisfies RegionSynthesis;
 
@@ -97,7 +97,7 @@ test("themeCandidates garantiza variedad cuando hay un solo tema ganador", () =>
     winning_structures: null,
     visual_mix: null,
     top_topics: [],
-    tone_mix: [],
+    emotion_mix: [],
     replicable_ideas: [],
   } satisfies RegionSynthesis;
 
@@ -123,13 +123,13 @@ test("planSlots acorta el calendario cuando la evidencia no alcanza", () => {
     winning_structures: null,
     visual_mix: null,
     top_topics: [],
-    tone_mix: [],
+    emotion_mix: [],
     replicable_ideas: [
       {
         post_url: "https://x/1",
         author_handle: "a",
         hook: "Comparar es Medir",
-        hook_pattern: "pov",
+        hook_pattern: "pregunta",
         theme: "comunicacion_interna",
         claim: "Medir la comunicación interna",
         counterclaim: null,
@@ -211,7 +211,7 @@ test("las fechas ya decididas salen del reparto de slots nuevos", () => {
     winning_structures: null,
     visual_mix: null,
     top_topics: [{ key: "cultura", count: 9 }],
-    tone_mix: [{ key: "cercano", count: 7 }],
+    emotion_mix: [{ key: "cercano", count: 7 }],
     replicable_ideas: [],
   } as never;
 

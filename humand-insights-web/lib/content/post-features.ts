@@ -83,7 +83,90 @@ export type PostFeatures = {
   non_like_share: number | null;
   /** Idioma del texto, por palabras frecuentes. null si es muy corto o no se distingue. */
   language: Language | null;
+
+  // ── Auditoría de content (oct-2026) ──────────────────────────────────────
+  // Todo lo de abajo es determinístico: se calcula del caption, la metadata y
+  // el raw del scraper, sin pasar por ningún modelo. Ver el comentario de cada
+  // función para el porqué de cada variable.
+
+  /** Personas mencionadas. En LinkedIn sale de `contentAttributes`, no del texto. */
+  person_mentions: number;
+  /** Empresas mencionadas (LinkedIn). Mencionar una empresa suele ser colaboración. */
+  company_mentions: number;
+  /** Alcance prestado: el engagement viene de la distribución, no del contenido. */
+  distribution_boost: DistributionBoost;
+  /** Persona gramatical dominante: el primer driver de LinkedIn. */
+  narrative_voice: NarrativeVoice | null;
+  /** Líneas con viñeta, número o emoji-viñeta. */
+  list_lines: number;
+  has_list: boolean;
+  /** Caracteres promedio por línea: lo corto con salto de línea retiene en el móvil. */
+  avg_line_chars: number | null;
+  /** Qué parte de los párrafos es de una sola línea. */
+  single_line_paragraph_share: number | null;
+  first_line_has_number: boolean;
+  first_line_is_question: boolean;
+  first_line_words: number | null;
+  /** Dónde está el link. LinkedIn castiga el link en el texto. */
+  link_placement: LinkPlacement;
+  aspect_ratio: AspectRatio | null;
+  question_count: number;
+  sponsored_signal: SponsoredSignal;
+  /** Si nombra un producto del rubro: hablar del producto propio rinde distinto que del problema. */
+  brand_mention: BrandMention;
+  /** Artículo nativo de LinkedIn contra link que saca de la plataforma. */
+  article_type: ArticleType | null;
+  /** Reacción no-like que predomina. Es resultado, no driver: valida la emoción. */
+  dominant_reaction: string | null;
+  /** El idioma del post no es el del mercado. Higiene. */
+  language_mismatch: boolean | null;
+  comments_disabled: boolean;
+  is_repost: RepostKind;
+  /** Antes lo decidía el LLM; se cuenta en código. */
+  hashtag_strategy: HashtagStrategy;
+  /** Reels de Instagram: likes por reproducción, mejor que likes solos. */
+  likes_per_play: number | null;
+  plays_per_follower: number | null;
 };
+
+export const DISTRIBUTION_BOOSTS = ["ninguno", "etiquetas", "menciones", "collab", "varios"] as const;
+export type DistributionBoost = (typeof DISTRIBUTION_BOOSTS)[number];
+
+export const NARRATIVE_VOICES = ["yo", "nosotros", "vos_usted", "impersonal"] as const;
+export type NarrativeVoice = (typeof NARRATIVE_VOICES)[number];
+
+export const LINK_PLACEMENTS = [
+  "ninguno",
+  "en_texto",
+  "en_comentarios",
+  "en_bio",
+  "preview_articulo",
+] as const;
+export type LinkPlacement = (typeof LINK_PLACEMENTS)[number];
+
+export const ASPECT_RATIOS = ["vertical_9_16", "vertical_4_5", "cuadrado", "horizontal"] as const;
+export type AspectRatio = (typeof ASPECT_RATIOS)[number];
+
+export const SPONSORED_SIGNALS = ["ninguna", "utm_influencer", "hashtag_publi", "paid_partnership"] as const;
+export type SponsoredSignal = (typeof SPONSORED_SIGNALS)[number];
+
+export const BRAND_MENTIONS = ["ninguno", "propio", "competidor", "tercero"] as const;
+export type BrandMention = (typeof BRAND_MENTIONS)[number];
+
+export const ARTICLE_TYPES = ["articulo_nativo_li", "newsletter", "link_externo", "youtube"] as const;
+export type ArticleType = (typeof ARTICLE_TYPES)[number];
+
+export const REPOST_KINDS = ["original", "repost_con_texto", "repost_puro"] as const;
+export type RepostKind = (typeof REPOST_KINDS)[number];
+
+export const HASHTAG_STRATEGIES = [
+  "ninguno",
+  "pocos_genericos",
+  "muchos_genericos",
+  "de_nicho",
+  "mixto",
+] as const;
+export type HashtagStrategy = (typeof HASHTAG_STRATEGIES)[number];
 
 export type FeaturablePost = {
   platform: string;
@@ -96,6 +179,9 @@ export type FeaturablePost = {
   mentions?: string[] | null;
   reactions?: unknown;
   raw: unknown;
+  hashtags?: string[] | null;
+  likes_count?: number | null;
+  author_followers_at_fetch?: number | null;
 };
 
 // ─── Formato ─────────────────────────────────────────────────────────────────
@@ -175,9 +261,16 @@ function formatDetail(post: FeaturablePost): FormatDetail {
   return "imagen";
 }
 
-/** Placas de un carrusel. En LinkedIn el PDF no expone páginas: null. */
+/**
+ * Placas de un carrusel.
+ *
+ * Decía que en LinkedIn el PDF no expone páginas y devolvía null para todos los
+ * carruseles de esa red. Las expone, en `document.totalPageCount`: los 17
+ * carruseles de LinkedIn del corpus lo traían y ninguno tenía slide_count.
+ */
 function slideCount(post: FeaturablePost, detail: FormatDetail): number | null {
   if (detail === "multi_imagen") return post.media?.images?.length ?? null;
+  if (detail === "carrusel" && post.platform === "linkedin") return linkedInPageCount(post.raw);
   if (detail !== "carrusel" || post.platform !== "instagram") return null;
   const raw = (post.raw ?? {}) as InstagramRawShape;
   const children = Array.isArray(raw.childPosts) ? raw.childPosts.length : 0;
@@ -382,6 +475,442 @@ export function detectLanguage(text: string | null | undefined): Language | null
   return best[0];
 }
 
+// ─── Auditoría de content: extractores determinísticos ───────────────────────
+
+type ContentAttribute = { type?: string | null };
+type LinkedInExtras = {
+  contentAttributes?: ContentAttribute[] | null;
+  header?: { text?: string | null } | null;
+  article?: { link?: string | null; subtitle?: string | null } | null;
+  repost?: unknown;
+  document?: { totalPageCount?: number | null } | null;
+  postImages?: Array<{ width?: number | null; height?: number | null }> | null;
+};
+type InstagramExtras = {
+  taggedUsers?: unknown[] | null;
+  coauthorProducers?: unknown[] | null;
+  dimensionsWidth?: number | null;
+  dimensionsHeight?: number | null;
+  isCommentsDisabled?: boolean | null;
+  videoPlayCount?: number | null;
+  videoViewCount?: number | null;
+};
+
+/**
+ * Menciones de LinkedIn.
+ *
+ * El comentario viejo decía que en LinkedIn "es honesto que dé cero" porque las
+ * menciones vienen como nombres y no como @handle. Era falso: el scraper las
+ * trae marcadas en `contentAttributes`, como PROFILE_MENTION (personas) y
+ * COMPANY_NAME (empresas). Medido: 158 posts daban cero menciones teniéndolas.
+ */
+export function linkedInMentions(raw: unknown): { persons: number; companies: number } {
+  const attrs = ((raw ?? {}) as LinkedInExtras).contentAttributes;
+  if (!Array.isArray(attrs)) return { persons: 0, companies: 0 };
+  let persons = 0;
+  let companies = 0;
+  for (const a of attrs) {
+    if (a?.type === "PROFILE_MENTION") persons += 1;
+    else if (a?.type === "COMPANY_NAME") companies += 1;
+  }
+  return { persons, companies };
+}
+
+/**
+ * Páginas del carrusel PDF de LinkedIn.
+ *
+ * El documento es el formato de mayor tiempo de lectura de LinkedIn y su largo
+ * importa. `slideCount` devolvía null para todos porque asumía que el PDF no
+ * expone páginas: lo expone, en `document.totalPageCount`.
+ */
+export function linkedInPageCount(raw: unknown): number | null {
+  const n = ((raw ?? {}) as LinkedInExtras).document?.totalPageCount;
+  return typeof n === "number" && n > 0 ? n : null;
+}
+
+/**
+ * Alcance prestado.
+ *
+ * Etiquetar, mencionar o publicar en collab mete el post en la red de otro. El
+ * engagement que sale de ahí es de distribución, no del contenido, y mezclarlo
+ * en la síntesis es el mismo problema que ya se resolvió con `is_collab`.
+ */
+export function distributionBoost(
+  platform: string,
+  raw: unknown,
+  mentions: number,
+): DistributionBoost {
+  const signals: DistributionBoost[] = [];
+  if (platform === "instagram") {
+    const r = (raw ?? {}) as InstagramExtras;
+    if (Array.isArray(r.taggedUsers) && r.taggedUsers.length) signals.push("etiquetas");
+    if (Array.isArray(r.coauthorProducers) && r.coauthorProducers.length) signals.push("collab");
+  } else {
+    const header = ((raw ?? {}) as LinkedInExtras).header?.text ?? "";
+    if (/collaborat|colabor/i.test(header)) signals.push("collab");
+  }
+  if (mentions > 0) signals.push("menciones");
+  if (!signals.length) return "ninguno";
+  return signals.length === 1 ? signals[0] : "varios";
+}
+
+/*
+ * Pronombres y posesivos por persona gramatical, en los tres idiomas del corpus.
+ * Se cuentan palabras sueltas y no conjugaciones: la conjugación necesitaría un
+ * analizador morfológico, y los pronombres alcanzan para decidir la voz
+ * dominante de un post.
+ */
+const VOICE_WORDS: Record<Exclude<NarrativeVoice, "impersonal">, string[]> = {
+  yo: [
+    "yo", "mí", "mi", "mis", "conmigo", "eu", "meu", "minha", "meus", "minhas", "comigo",
+    "i", "my", "mine", "me",
+    // El español y el portugués omiten el pronombre: "aprendí que…", no "yo
+    // aprendí". Contando solo pronombres, la primera persona salía en 16% de
+    // LinkedIn cuando a ojo es bastante más. Estas son las formas verbales de
+    // primera persona más frecuentes en posts de opinión y de experiencia.
+    "soy", "estoy", "tengo", "creo", "pienso", "siento", "quiero", "puedo",
+    "aprendí", "pensé", "trabajé", "empecé", "decidí", "estuve", "tuve", "hice",
+    "dije", "llegué", "viví", "conocí", "comparto", "recuerdo", "confieso", "admito",
+    "sou", "estou", "tenho", "acho", "penso", "sinto", "quero", "posso",
+    "aprendi", "pensei", "trabalhei", "comecei", "estive", "tive", "fiz",
+    "disse", "cheguei", "vivi", "conheci", "compartilho", "lembro", "confesso", "buscava",
+  ],
+  nosotros: [
+    "nosotros", "nosotras", "nuestro", "nuestra", "nuestros", "nuestras", "nos",
+    "nós", "nosso", "nossa", "nossos", "nossas",
+    "we", "us", "our", "ours",
+    // Mismo motivo: "estamos", "tuvimos", "lanzamos" no llevan pronombre.
+    "somos", "estamos", "tenemos", "creemos", "hicimos", "aprendimos", "lanzamos",
+    "vivimos", "tuvimos", "fuimos", "queremos", "podemos", "trabajamos", "compartimos",
+    "temos", "acreditamos", "fizemos", "aprendemos", "lançamos", "vivemos",
+    "tivemos", "fomos", "trabalhamos", "compartilhamos",
+  ],
+  vos_usted: [
+    "tú", "tu", "tus", "ti", "contigo", "vos", "usted", "ustedes", "te",
+    "você", "vocês", "teu", "tua", "teus", "tuas",
+    "you", "your", "yours",
+  ],
+};
+
+/**
+ * Persona gramatical dominante.
+ *
+ * El primer driver de LinkedIn: el post en primera persona del singular rinde
+ * distinto que la voz corporativa. Se devuelve `impersonal` si ninguna persona
+ * junta al menos dos apariciones — con una sola no se puede afirmar una voz.
+ */
+export function narrativeVoice(text: string): NarrativeVoice | null {
+  if (!text.trim()) return null;
+  const words = text.toLowerCase().match(/[\p{L}]+/gu) ?? [];
+  if (words.length < 8) return null;
+  const counts: Record<string, number> = { yo: 0, nosotros: 0, vos_usted: 0 };
+  const lookup = new Map<string, string>();
+  for (const [voice, list] of Object.entries(VOICE_WORDS)) {
+    for (const w of list) lookup.set(w, voice);
+  }
+  for (const w of words) {
+    const voice = lookup.get(w);
+    if (voice) counts[voice] += 1;
+  }
+  // "a gente" es la primera del plural del portugués coloquial y son dos
+  // palabras, así que no entra por el diccionario.
+  counts.nosotros += (text.toLowerCase().match(/\ba gente\b/g) ?? []).length;
+  // Empates se resuelven en este orden: si el autor habla de sí mismo, esa es
+  // la voz aunque también le hable al lector.
+  const order: Array<Exclude<NarrativeVoice, "impersonal">> = ["yo", "nosotros", "vos_usted"];
+  const best = order.reduce((a, b) => (counts[b] > counts[a] ? b : a));
+  return counts[best] >= 2 ? best : "impersonal";
+}
+
+const LIST_LINE_RE =
+  /^\s*(?:[•·\-–—*▪►✓✔→]|\d{1,2}[.)º°]|[①-⑳]|\p{Extended_Pictographic})\s*\S/u;
+
+/** Líneas que arrancan como ítem de lista. Lo escaneable se lee hasta el final. */
+export function countListLines(text: string): number {
+  return text.split(/\r?\n/).filter((l) => LIST_LINE_RE.test(l)).length;
+}
+
+/**
+ * El "aire" del texto.
+ *
+ * El formato de frases cortas separadas por saltos de línea retiene en el móvil.
+ * `paragraphs` ya contaba bloques; esto mide cómo están armados.
+ */
+export function lineRhythm(text: string): { avgLineChars: number | null; singleLineShare: number | null } {
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (!lines.length) return { avgLineChars: null, singleLineShare: null };
+  const avg = lines.reduce((a, l) => a + l.length, 0) / lines.length;
+  const blocks = text.split(/\r?\n\s*\r?\n/).map((b) => b.trim()).filter(Boolean);
+  const single = blocks.filter((b) => !/\r?\n/.test(b)).length;
+  return {
+    avgLineChars: Math.round(avg),
+    singleLineShare: blocks.length ? Number((single / blocks.length).toFixed(2)) : null,
+  };
+}
+
+/** Rasgos del hook medibles sin modelo: número, pregunta y largo. */
+export function firstLineSignals(line: string | null): {
+  hasNumber: boolean;
+  isQuestion: boolean;
+  words: number | null;
+} {
+  if (!line) return { hasNumber: false, isQuestion: false, words: null };
+  return {
+    hasNumber: /\d/.test(line),
+    // "¿" cuenta: una apertura en negrita Unicode o cortada suele perder el "?".
+    isQuestion: /[?¿]/.test(line),
+    words: (line.match(/[\p{L}\p{N}]+/gu) ?? []).length,
+  };
+}
+
+const LINK_IN_COMMENTS_RE =
+  /(link|enlace|url)[^\n]{0,30}(comentario|comentarios|coment[aá]rios?|comments?)|(comentario|coment[aá]rio|comment)[^\n]{0,20}(link|enlace)|👇\s*(link|enlace)/i;
+const LINK_IN_BIO_RE = /(link|enlace)[^\n]{0,15}\bbio\b/i;
+
+/**
+ * Dónde está el link.
+ *
+ * LinkedIn castiga el link externo en el cuerpo del post, y "link en
+ * comentarios" o "link en la bio" es justamente la forma de esquivarlo. Tratar
+ * los tres casos como "tiene link" —que es lo que hacía `has_external_link`—
+ * mezclaba lo que el algoritmo penaliza con el truco para evitarlo.
+ */
+export function linkPlacement(platform: string, caption: string, raw: unknown): LinkPlacement {
+  if (platform === "linkedin" && present(((raw ?? {}) as LinkedInExtras).article)) {
+    return "preview_articulo";
+  }
+  if (hasExternalLink(caption)) return "en_texto";
+  if (LINK_IN_COMMENTS_RE.test(caption)) return "en_comentarios";
+  if (LINK_IN_BIO_RE.test(caption)) return "en_bio";
+  return "ninguno";
+}
+
+/**
+ * Proporción del creativo.
+ *
+ * 4:5 y 9:16 ocupan más pantalla en el feed del celular que el cuadrado y el
+ * apaisado. En Instagram es decisivo.
+ */
+export function aspectRatio(platform: string, raw: unknown): AspectRatio | null {
+  let w: number | null | undefined;
+  let h: number | null | undefined;
+  if (platform === "instagram") {
+    const r = (raw ?? {}) as InstagramExtras;
+    w = r.dimensionsWidth;
+    h = r.dimensionsHeight;
+  } else {
+    const img = ((raw ?? {}) as LinkedInExtras).postImages?.[0];
+    w = img?.width;
+    h = img?.height;
+  }
+  if (!w || !h) return null;
+  const ratio = h / w;
+  if (ratio >= 1.6) return "vertical_9_16";
+  if (ratio >= 1.15) return "vertical_4_5";
+  if (ratio >= 0.9) return "cuadrado";
+  return "horizontal";
+}
+
+/** Preguntas en todo el texto. Más preguntas al lector suele traer más comentarios. */
+export function countQuestions(text: string): number {
+  return (text.match(/\?/g) ?? []).length;
+}
+
+const UTM_INFLUENCER_RE = /utm_(medium|source|campaign)=[^&\s]*(influenc|creator|embajador|ambassador)/i;
+
+/**
+ * Pista de colaboración paga.
+ *
+ * El influencer pago rinde distinto y contamina la síntesis. Hay casos reales
+ * con `utm_medium=influenciadores` en el link del artículo.
+ */
+export function sponsoredSignal(
+  caption: string,
+  raw: unknown,
+  paidPartnership: boolean | null | undefined,
+): SponsoredSignal {
+  if (paidPartnership) return "paid_partnership";
+  const articleLink = ((raw ?? {}) as LinkedInExtras).article?.link ?? "";
+  if (UTM_INFLUENCER_RE.test(caption) || UTM_INFLUENCER_RE.test(articleLink)) {
+    return "utm_influencer";
+  }
+  if (SPONSORED_RE.test(caption)) return "hashtag_publi";
+  return "ninguna";
+}
+
+/*
+ * Competidores que se pueden detectar sin falsos positivos. Fuente: los de
+ * `competitor_ads` y `content_sources` con kind=competitor_profile.
+ *
+ * Quedan AFUERA a propósito "Flash", "Senior" y "Dialog": son palabras comunes
+ * ("senior developer", "diálogo") y detectarlas por texto daría más ruido que
+ * señal. Es preferible no marcar una mención a marcar cien que no lo son.
+ */
+const COMPETITOR_RE = new RegExp(
+  "(?<![\\p{L}])(beehome|buk|caju|crehana|gupy|mand[üu]\\s?hr|naaloo|peopleforce|rankmi|s[óo]lides)(?![\\p{L}])",
+  "iu",
+);
+const FACTORIAL_RE = /(?<![\p{L}])Factorial(?![\p{L}])/u;
+const OWN_BRAND_RE = /(?<![\p{L}])humand(?![\p{L}])/iu;
+
+/**
+ * Si el post nombra un producto del rubro.
+ *
+ * Hipótesis fuerte de practitioner: hablar del producto propio rinde menos que
+ * hablar del problema que resuelve.
+ */
+export function brandMention(caption: string, companyMentions: number): BrandMention {
+  if (OWN_BRAND_RE.test(caption)) return "propio";
+  if (COMPETITOR_RE.test(caption) || FACTORIAL_RE.test(caption)) return "competidor";
+  if (companyMentions > 0) return "tercero";
+  return "ninguno";
+}
+
+/**
+ * Tipo de artículo de LinkedIn.
+ *
+ * Hoy `articulo_link` mezclaba el artículo nativo —que no saca al usuario de la
+ * plataforma— con el link a otra web, que sí. LinkedIn trata distinto a los dos.
+ */
+export function articleType(raw: unknown): ArticleType | null {
+  const format = linkedInFormat(raw);
+  if (format === "newsletter") return "newsletter";
+  if (format !== "article") return null;
+  const link = ((raw ?? {}) as LinkedInExtras).article?.link ?? "";
+  if (/linkedin\.com\/pulse\//i.test(link)) return "articulo_nativo_li";
+  if (/youtube\.com|youtu\.be/i.test(link)) return "youtube";
+  return "link_externo";
+}
+
+const REACTION_NAMES: Record<string, string> = {
+  EMPATHY: "empatia",
+  PRAISE: "aplauso",
+  INTEREST: "interes",
+  ENTERTAINMENT: "diversion",
+  APPRECIATION: "apoyo",
+};
+
+/**
+ * Qué reacción, aparte del like, predominó.
+ *
+ * Es un resultado y no un driver: no explica por qué funcionó un post, pero
+ * dice qué emoción tocó. Sirve para validar `emotional_trigger` contra lo que
+ * la audiencia hizo de verdad.
+ */
+export function dominantReaction(reactions: unknown): string | null {
+  if (!Array.isArray(reactions)) return null;
+  let total = 0;
+  let best: { type: string; count: number } | null = null;
+  for (const r of reactions as Array<{ type?: string; count?: number }>) {
+    const count = typeof r?.count === "number" ? r.count : 0;
+    total += count;
+    if (!r?.type || r.type === "LIKE") continue;
+    if (!best || count > best.count) best = { type: r.type, count };
+  }
+  if (total < MIN_REACTIONS_FOR_MIX) return null;
+  if (!best || best.count === 0) return "solo_like";
+  return REACTION_NAMES[best.type] ?? best.type.toLowerCase();
+}
+
+const MARKET_LANGUAGE: Record<string, Language> = { br: "pt", es: "es", hispam: "es" };
+
+/** El post no está en el idioma del mercado. Un post en español en Brasil rinde menos. */
+export function languageMismatch(language: Language | null, region: string | null): boolean | null {
+  if (!language || !region) return null;
+  const expected = MARKET_LANGUAGE[region];
+  return expected ? language !== expected : null;
+}
+
+/** Repost o post propio. El engagement de un repost puro es del original. */
+export function repostKind(platform: string, caption: string, raw: unknown): RepostKind {
+  if (platform !== "linkedin" || !present(((raw ?? {}) as LinkedInExtras).repost)) return "original";
+  return caption.trim().length > 20 ? "repost_con_texto" : "repost_puro";
+}
+
+/*
+ * Hashtags masivos del rubro: los que usa todo el mundo y no segmentan. La
+ * lista no pretende ser completa; alcanza para distinguir "pongo los de
+ * siempre" de "pongo los de mi nicho".
+ */
+const GENERIC_HASHTAGS = new Set([
+  "rrhh", "recursoshumanos", "rh", "recursoshumanos", "hr", "humanresources",
+  "liderazgo", "lideranca", "liderança", "leadership", "trabajo", "trabalho", "work",
+  "empleo", "emprego", "talento", "talent", "motivacion", "motivação", "motivacao",
+  "emprendimiento", "empreendedorismo", "business", "negocios", "marketing", "linkedin",
+  "gestaodepessoas", "gestióndepersonas", "gestiondepersonas", "carreira", "carrera",
+  "career", "management", "gestion", "gestão", "futurodeltrabajo", "futurodotrabalho",
+  "futureofwork", "cultura", "culture", "innovacion", "inovação", "inovacao",
+  "tecnologia", "technology", "ia", "ai",
+]);
+
+/**
+ * La estrategia de hashtags, contada.
+ *
+ * Antes la decidía el LLM. Es un conteo con una lista de genéricos: no hace
+ * falta un modelo, y sacarlo acorta la respuesta del clasificador, que es lo que
+ * hacía volver los lotes incompletos.
+ */
+export function hashtagStrategy(caption: string, hashtags: string[] | null | undefined): HashtagStrategy {
+  const fromText = (caption.match(/#[\p{L}\p{N}_]+/gu) ?? []).map((h) => h.slice(1));
+  const tags = [...new Set([...(hashtags ?? []), ...fromText].map((h) => h.toLowerCase().replace(/^#/, "")))];
+  if (!tags.length) return "ninguno";
+  const generic = tags.filter((t) => GENERIC_HASHTAGS.has(t)).length;
+  if (generic === tags.length) return tags.length <= 3 ? "pocos_genericos" : "muchos_genericos";
+  if (generic === 0) return "de_nicho";
+  return generic / tags.length >= 0.7 && tags.length > 3 ? "muchos_genericos" : "mixto";
+}
+
+/** Reels: interacción por reproducción y alcance relativo al tamaño de la cuenta. */
+export function reelMetrics(
+  raw: unknown,
+  likes: number | null | undefined,
+  followers: number | null | undefined,
+): { likesPerPlay: number | null; playsPerFollower: number | null } {
+  const r = (raw ?? {}) as InstagramExtras;
+  const plays = r.videoPlayCount ?? r.videoViewCount ?? null;
+  if (!plays || plays <= 0) return { likesPerPlay: null, playsPerFollower: null };
+  return {
+    likesPerPlay: likes != null ? Number((likes / plays).toFixed(4)) : null,
+    playsPerFollower: followers ? Number((plays / followers).toFixed(3)) : null,
+  };
+}
+
+// ─── Texto de portada (sobre el OCR del análisis visual) ─────────────────────
+
+export const COVER_BUCKETS = ["0", "1-8", "9-25", ">25"] as const;
+export type CoverBucket = (typeof COVER_BUCKETS)[number];
+
+export type CoverFeatures = {
+  cover_word_count: number;
+  cover_bucket: CoverBucket;
+  cover_has_number: boolean;
+  cover_is_question: boolean;
+  cover_is_list_promise: boolean;
+};
+
+const LIST_PROMISE_RE =
+  /(^|\n)\s*\d{1,2}\s+(errores|claves|tips|formas|maneras|cosas|pasos|razones|señales|ideas|preguntas|erros|dicas|maneiras|coisas|passos|motivos|sinais|perguntas|mistakes|ways|steps|reasons|signs)/i;
+
+/**
+ * Rasgos del texto escrito sobre la portada.
+ *
+ * El OCR ya se pagó en el análisis visual y no se explotaba. En el carrusel y el
+ * reel, la portada ES el hook: un titular corto se lee mientras se scrollea y un
+ * párrafo no. Todo esto sale gratis de ese texto.
+ */
+export function coverFeatures(visualText: string | null | undefined): CoverFeatures {
+  const text = (visualText ?? "").trim();
+  const words = (text.match(/[\p{L}\p{N}]+/gu) ?? []).length;
+  const bucket: CoverBucket = words === 0 ? "0" : words <= 8 ? "1-8" : words <= 25 ? "9-25" : ">25";
+  return {
+    cover_word_count: words,
+    cover_bucket: bucket,
+    cover_has_number: /\d/.test(text),
+    cover_is_question: /\?/.test(text),
+    cover_is_list_promise: LIST_PROMISE_RE.test(text),
+  };
+}
+
 // ─── Todo junto ──────────────────────────────────────────────────────────────
 
 export function computeFeatures(post: FeaturablePost, region: string | null): PostFeatures {
@@ -401,12 +930,23 @@ export function computeFeatures(post: FeaturablePost, region: string | null): Po
     authorType = t === "company" ? "empresa" : t ? "persona" : null;
   }
 
-  // Las menciones de LinkedIn vienen embebidas en el texto como nombres, no
-  // como @handle: ahí el conteo del texto da cero y es honesto que dé cero.
-  const mentionCount = Math.max(
-    post.mentions?.length ?? 0,
-    caption.match(MENTION_RE)?.length ?? 0,
-  );
+  // Las menciones de LinkedIn no vienen como @handle en el texto sino marcadas
+  // en `contentAttributes`. El comentario anterior decía que daba cero "con
+  // honestidad"; daba cero por no mirar donde estaban. En Instagram no se puede
+  // distinguir persona de empresa, así que todas cuentan como personas.
+  const textMentions = Math.max(post.mentions?.length ?? 0, caption.match(MENTION_RE)?.length ?? 0);
+  const li = post.platform === "linkedin" ? linkedInMentions(post.raw) : { persons: 0, companies: 0 };
+  const personMentions = post.platform === "linkedin" ? li.persons : textMentions;
+  const companyMentions = li.companies;
+  const mentionCount = Math.max(textMentions, personMentions + companyMentions);
+
+  const language = detectLanguage(caption);
+  const firstSignals = firstLineSignals(line);
+  const rhythm = lineRhythm(caption);
+  const listLines = countListLines(caption);
+  const reel = post.platform === "instagram" && isVideo
+    ? reelMetrics(post.raw, post.likes_count, post.author_followers_at_fetch)
+    : { likesPerPlay: null, playsPerFollower: null };
 
   return {
     format_detail: detail,
@@ -436,6 +976,33 @@ export function computeFeatures(post: FeaturablePost, region: string | null): Po
     weekday: when?.weekday ?? null,
     daypart: when?.daypart ?? null,
     non_like_share: post.platform === "linkedin" ? nonLikeShare(post.reactions) : null,
-    language: detectLanguage(caption),
+    language,
+
+    person_mentions: personMentions,
+    company_mentions: companyMentions,
+    distribution_boost: distributionBoost(post.platform, post.raw, personMentions + companyMentions),
+    narrative_voice: narrativeVoice(caption),
+    list_lines: listLines,
+    has_list: listLines >= 2,
+    avg_line_chars: rhythm.avgLineChars,
+    single_line_paragraph_share: rhythm.singleLineShare,
+    first_line_has_number: firstSignals.hasNumber,
+    first_line_is_question: firstSignals.isQuestion,
+    first_line_words: firstSignals.words,
+    link_placement: linkPlacement(post.platform, caption, post.raw),
+    aspect_ratio: aspectRatio(post.platform, post.raw),
+    question_count: countQuestions(caption),
+    sponsored_signal: sponsoredSignal(caption, post.raw, post.is_paid_partnership),
+    brand_mention: brandMention(caption, companyMentions),
+    article_type: post.platform === "linkedin" ? articleType(post.raw) : null,
+    dominant_reaction: post.platform === "linkedin" ? dominantReaction(post.reactions) : null,
+    language_mismatch: languageMismatch(language, region),
+    comments_disabled:
+      post.platform === "instagram" &&
+      ((post.raw ?? {}) as { isCommentsDisabled?: boolean | null }).isCommentsDisabled === true,
+    is_repost: repostKind(post.platform, caption, post.raw),
+    hashtag_strategy: hashtagStrategy(caption, post.hashtags),
+    likes_per_play: reel.likesPerPlay,
+    plays_per_follower: reel.playsPerFollower,
   };
 }

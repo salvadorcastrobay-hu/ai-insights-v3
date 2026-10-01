@@ -29,39 +29,25 @@ export type ContentSource = {
   last_run_status: string | null;
 };
 
-/** Los seis perfiles objetivo de la sección 7 del brief. */
-export type TargetProfile =
-  | "hr_manager"
-  | "people"
-  | "chro"
-  | "ceo"
-  | "dueno_pyme"
-  | "operations";
-
-export const TARGET_PROFILE_LABELS: Record<TargetProfile, string> = {
-  hr_manager: "HR Manager",
-  people: "People",
-  chro: "CHRO",
-  ceo: "CEO",
-  dueno_pyme: "Dueño PyME",
-  operations: "Operations",
-};
-
 /** Espeja el schema de classify.ts en el motor. */
 export type PostAnalysis = {
   is_relevant_to_hr: boolean;
   theme: string;
   audience_signal: Audience;
-  target_profiles: TargetProfile[];
-  // Copy in: el texto dentro de la pieza.
+  /** Para qué está hecho: liderazgo de opinión, educativo, producto, evento… */
+  content_intent?: string;
+  /** Con qué respalda lo que dice: experiencia propia, dato propio, estudio… */
+  evidence_type?: string;
+  /** De quién habla la pieza: el autor, el equipo, un cliente… */
+  protagonist?: string;
+  /** La emoción que busca. Reemplaza a `tone`, que era 64% "informativo/reflexivo". */
+  emotional_trigger?: string;
+  specificity?: "generico" | "algo_concreto" | "muy_concreto";
+  /** La primera línea real del copy, calculada en código. */
   hook: string | null;
   hook_pattern: string;
   structure: string;
   cta: string | null;
-  tone: string;
-  // Copy out: el texto que la acompaña.
-  hashtag_strategy: string;
-  replicability: "alta" | "media" | "baja";
   /**
    * Lo que el post AFIRMA, como oración que se puede sostener o refutar.
    * Reemplaza a humand_angle y why_it_worked, que eran relleno: el 46% de los
@@ -146,14 +132,22 @@ export type ContentPost = {
    * las imágenes para después mirar cuarenta sería pagar por lo que nadie lee.
    */
   visual_analysis: {
-    visual_format: string;
+    creative_type?: string;
     text_on_image: string;
     /** El texto ESCRITO sobre la imagen, transcripto. Es contenido que el
      *  análisis de texto no puede ver y que en RRHH suele ser el mensaje. */
     visual_text: string | null;
-    color_key: string;
-    face_present: boolean;
-    brand_visible: boolean;
+    production_level?: string;
+    person_identity?: string;
+    person_framing?: string;
+    people_count?: string;
+    setting?: string;
+    brand_treatment?: string;
+    screenshot_of?: string;
+    video_style?: string;
+    product_ui_visible?: boolean;
+    burned_captions?: boolean;
+    cover_is_designed?: boolean;
   } | null;
   /** Paths en nuestro bucket privado. Esto es lo durable. */
   stored_media: { images: string[]; videos: string[] } | null;
@@ -211,6 +205,20 @@ export type MarketPosition = {
   is_tension: boolean;
 };
 
+export type SynthesisAxis =
+  | "content_intent"
+  | "evidence_type"
+  | "protagonist"
+  | "emotional_trigger"
+  | "specificity"
+  | "narrative_voice"
+  | "first_line"
+  | "has_list"
+  | "link_placement"
+  | "aspect_ratio"
+  | "author_role"
+  | "author_cadence";
+
 export type RegionSynthesis = {
   region: string;
   posts_considered: number;
@@ -230,7 +238,8 @@ export type RegionSynthesis = {
     median_outlier: number | null;
   }> | null;
   top_topics: Array<{ key: string; count: number }>;
-  tone_mix: Array<{ key: string; count: number }>;
+  /** Qué emoción busca el corte superior. Antes `tone_mix`. */
+  emotion_mix?: Array<{ key: string; count: number }>;
   replicable_ideas: Array<{
     post_url: string | null;
     author_handle: string;
@@ -251,14 +260,21 @@ export type RegionSynthesis = {
   winning_timeliness?: PatternLift[] | null;
   /** Corte superior contra una muestra de control del resto. */
   visual_lift?: {
-    visual_format: PatternContrast[];
+    creative_type: PatternContrast[];
     production_level: PatternContrast[];
     person_framing: PatternContrast[];
+    person_identity?: PatternContrast[];
+    setting?: PatternContrast[];
+    brand_treatment?: PatternContrast[];
     text_on_image: PatternContrast[];
+    cover_text?: PatternContrast[];
+    video_style?: PatternContrast[];
     top_n: number;
     rest_n: number;
   } | null;
   copy_shape?: CopyShapeRow[] | null;
+  /** Los ejes de la auditoría de contenido, todos con el mismo lift. */
+  winning_axes?: Partial<Record<SynthesisAxis, PatternLift[]>> | null;
   timing?: { weekday: PatternLift[]; daypart: PatternLift[]; sample: number } | null;
   company_pages?: {
     posts: number;

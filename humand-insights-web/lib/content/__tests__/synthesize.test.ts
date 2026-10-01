@@ -20,14 +20,15 @@ function analysis(over: Partial<PostAnalysis> = {}): PostAnalysis {
     is_relevant_to_hr: true,
     theme: "clima_cultura",
     audience_signal: "hr_leader",
-    target_profiles: ["hr_manager", "chro"],
+    content_intent: "opinion_liderazgo",
+    evidence_type: "ninguna",
+    protagonist: "autor",
+    emotional_trigger: "orgullo",
+    specificity: "algo_concreto",
     hook: "Un hook",
-    hook_pattern: "pov",
-    structure: "opinion",
+    hook_pattern: "pregunta",
+    structure: "tesis_y_argumentos",
     cta: null,
-    tone: "educativo",
-    hashtag_strategy: "ninguno",
-    replicability: "alta",
     claim: "Adaptarlo a comunicación interna",
     counterclaim: null,
     claim_object: "onboarding remoto",
@@ -135,7 +136,7 @@ test("las ideas replicables exigen una afirmación, no una etiqueta", () => {
   // que sea su formato.
   const posts = [
     ...Array.from({ length: MIN_TOP_POSTS }, (_, i) => post(`conclaim-${i}`, 0.9 - i * 0.01)),
-    post("sinclaim", 0.5, { replicability: "alta", claim: null }),
+    post("sinclaim", 0.5, { claim: null }),
   ];
   const s = synthesizeRegion("br", posts);
   assert.ok(s.replicable_ideas.length > 0);
@@ -156,13 +157,13 @@ test("compareOwnBrand marca los patrones que funcionan y no usamos", () => {
     winning_structures: null,
     visual_mix: null,
     top_topics: [],
-    tone_mix: [],
+    emotion_mix: [],
     replicable_ideas: [],
   } satisfies RegionSynthesis;
 
   // Lo propio: solo anuncios, y solo sobre reclutamiento.
   const own = Array.from({ length: 6 }, (_, i) =>
-    post(`own-${i}`, 0.2, { hook_pattern: "anuncio", theme: "reclutamiento" }),
+    post(`own-${i}`, 0.2, { hook_pattern: "anuncio_novedad", theme: "reclutamiento" }),
   ).map((p) => ({ ...p, likes_count: 30, comments_count: 1, shares_count: 0 }));
 
   const reference = Array.from({ length: 10 }, (_, i) => ({
@@ -183,7 +184,7 @@ test("compareOwnBrand marca los patrones que funcionan y no usamos", () => {
   assert.ok(faltantes.includes("pregunta"));
 
   assert.ok(
-    cmp.overused_patterns.some((p) => p.key === "anuncio"),
+    cmp.overused_patterns.some((p) => p.key === "anuncio_novedad"),
     "usamos solo anuncio y no está entre los que ganan",
   );
   assert.deepEqual(
@@ -203,12 +204,12 @@ test("compareOwnBrand no acusa de sobreuso a un patron sin lift medido", () => {
     winning_structures: null,
     visual_mix: null,
     top_topics: [],
-    tone_mix: [],
+    emotion_mix: [],
     replicable_ideas: [],
     insufficient_sample: "muestra chica",
   } satisfies RegionSynthesis;
 
-  const own = Array.from({ length: 4 }, (_, i) => post(`o${i}`, 0.3, { hook_pattern: "pov" }));
+  const own = Array.from({ length: 4 }, (_, i) => post(`o${i}`, 0.3, { hook_pattern: "pregunta" }));
   const cmp = compareOwnBrand(own, sinPatrones, []);
 
   // Sin lift medido no se puede afirmar nada: ni que falta ni que sobra.
@@ -289,7 +290,7 @@ test("synthesizeRegion mide la forma del copy arriba contra el resto", () => {
 
 test("synthesizeRegion calcula lift visual solo con control suficiente", () => {
   const visual = (fmt: string, prod: string) => ({
-    visual_format: fmt,
+    creative_type: fmt,
     text_on_image: "titular_corto",
     visual_text: null,
     production_level: prod,
@@ -303,17 +304,73 @@ test("synthesizeRegion calcula lift visual solo con control suficiente", () => {
         ...post(`p${i}`, 100 - i),
         author_handle: `autor${i % 12}`,
         visual: top
-          ? visual(i % 3 ? "carrusel_texto" : "foto_stock", "plantilla")
-          : visual(i % 3 ? "foto_stock" : "carrusel_texto", i % 2 ? "producido" : "plantilla"),
+          ? visual(i % 3 ? "placa_texto" : "foto_stock", "plantilla")
+          : visual(i % 3 ? "foto_stock" : "placa_texto", i % 2 ? "producido" : "plantilla"),
       }),
     );
   }
   const s = synthesizeRegion("br", posts);
   assert.ok(s.visual_lift, "con 12 arriba y 48 en el control hay lift");
-  const carrusel = s.visual_lift!.visual_format.find((r) => r.key === "carrusel_texto");
+  const carrusel = s.visual_lift!.creative_type.find((r) => r.key === "placa_texto");
   assert.ok(carrusel && carrusel.lift > 1);
 
   // Sin control: cae a la mezcla, no inventa un lift.
   const soloTop = posts.map((p, i) => (i < 12 ? p : { ...p, visual: null }));
   assert.equal(synthesizeRegion("br", soloTop).visual_lift, null);
+});
+
+test("el corte superior se arma por cuánto superó a su autor, no por el score del feed", () => {
+  // viral_score suma alcance absoluto y recencia: un post enorme de una cuenta
+  // grande y reciente le ganaba a uno que rindió 10 veces lo normal de su autor.
+  const grande = { ...post("grande", 0.99), outlier_factor: 1.1 };
+  const fuera = { ...post("fuera_de_serie", 0.10), outlier_factor: 10 };
+  const relleno = Array.from({ length: 40 }, (_, i) => ({
+    ...post(`relleno-${i}`, 0.5),
+    outlier_factor: 1 + i * 0.01,
+  }));
+  const s = synthesizeRegion("br", [grande, fuera, ...relleno]);
+  assert.ok(s.top_posts_count > 0);
+  // Se reconstruye el corte con el mismo criterio para verificarlo.
+  const top = [grande, fuera, ...relleno]
+    .sort((a, b) => (b.outlier_factor ?? 0) - (a.outlier_factor ?? 0))
+    .slice(0, s.top_posts_count)
+    .map((p) => p.post_id);
+  assert.ok(top.includes("fuera_de_serie"), "el que rindió 10x tiene que estar arriba");
+  assert.ok(!top.includes("grande"), "el de score alto pero 1,1x no");
+});
+
+test("un post sin línea base no entra ni al corte ni al denominador", () => {
+  const sinBase = { ...post("sin_base", 0.99), outlier_factor: null };
+  const conBase = Array.from({ length: 12 }, (_, i) => post(`ok-${i}`, 0.5));
+  const s = synthesizeRegion("br", [sinBase, ...conBase]);
+  assert.equal(s.posts_considered, 12);
+});
+
+test("synthesizeRegion mide lift en los ejes de la auditoría, incluido quién firma", () => {
+  const posts: AnalyzedPost[] = [];
+  for (let i = 0; i < 60; i += 1) {
+    const top = i < 12;
+    posts.push(
+      withFeatures(
+        {
+          ...post(`p${i}`, 1, {
+            evidence_type: top ? "dato_propio" : i % 4 ? "ninguna" : "dato_propio",
+            specificity: top ? "muy_concreto" : "generico",
+          }),
+          author_handle: `autor${i % 10}`,
+          outlier_factor: 100 - i,
+          author_role: top ? "ceo_fundador" : i % 3 ? "rrhh_operativo" : "ceo_fundador",
+        },
+        { first_line_has_number: top, has_list: false },
+      ),
+    );
+  }
+  const s = synthesizeRegion("br", posts);
+  const axes = s.winning_axes!;
+  assert.ok((axes.evidence_type?.find((r) => r.key === "dato_propio")?.lift ?? 0) > 1);
+  assert.ok((axes.specificity?.find((r) => r.key === "muy_concreto")?.lift ?? 0) > 1);
+  assert.ok((axes.author_role?.find((r) => r.key === "ceo_fundador")?.lift ?? 0) > 1);
+  assert.ok((axes.first_line?.find((r) => r.key === "con_numero")?.lift ?? 0) > 1);
+  // Un eje sin variación no aparece: un lift de 1,0 en todos no dice nada.
+  assert.equal(axes.has_list?.find((r) => r.key === "con_lista"), undefined);
 });

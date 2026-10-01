@@ -38,6 +38,7 @@ function toAnalyzable(post: StoredContentPost): AnalyzedPost {
     viral_score: number | null;
     outlier_factor: number | null;
     debate_factor: number | null;
+    author?: { author_role: string | null; is_top_voice: boolean | null } | null;
   };
   return {
     post_id: post.post_id,
@@ -47,6 +48,8 @@ function toAnalyzable(post: StoredContentPost): AnalyzedPost {
     viral_score: raw.viral_score,
     outlier_factor: raw.outlier_factor,
     debate_factor: raw.debate_factor ?? null,
+    author_role: raw.author?.author_role ?? null,
+    posted_at: post.posted_at ?? null,
     visual: (post as unknown as { visual_analysis?: never }).visual_analysis ?? null,
     // Las filas anteriores al backfill no tienen `features`: se calculan con la
     // misma función, así la síntesis no depende de que el backfill haya corrido.

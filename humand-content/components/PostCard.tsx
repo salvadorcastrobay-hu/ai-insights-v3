@@ -8,8 +8,8 @@ import type { ContentPost } from "@/lib/content/types";
  *
  * Sofía escanea para contestar una sola pregunta: "¿esto lo puedo replicar?".
  * Eso se decide con cuatro datos —cuánto rindió, de qué va, por qué funcionó y
- * si nos sirve—, así que la tarjeta muestra siete campos de los veintiuno que
- * tiene el clasificador. El resto vive en el desplegable o no se muestra.
+ * si nos sirve—, así que la tarjeta muestra pocos campos de los que tiene el
+ * clasificador. El resto vive en el desplegable o no se muestra.
  *
  * La versión anterior volcaba diez campos como párrafos grises del mismo
  * tamaño: sin jerarquía, el ojo no tiene dónde aterrizar.
@@ -40,6 +40,50 @@ function formatLabel(post: ContentPost): string | null {
   if (f.slide_count && f.slide_count > 1) return `${base} · ${f.slide_count} placas`;
   if (f.video_length) return `${base} · ${f.video_length}`;
   return base;
+}
+
+/**
+ * Cómo está hecha la pieza, en una línea: lo que se decidiría en un brief para
+ * replicarla. Solo valores que dicen algo — "sin persona" o "no es video" en
+ * cada tarjeta serían ruido.
+ */
+const MADE_LABELS: Record<string, string> = {
+  foto_real: "foto real",
+  foto_stock: "foto de stock",
+  placa_texto: "placa de texto",
+  infografia_dato: "infografía",
+  persona_real: "persona real",
+  modelo_stock: "modelo de stock",
+  persona_ilustrada: "persona ilustrada",
+  cabeza_parlante: "hablando a cámara",
+  pov_situacion: "POV",
+  animacion_motion: "animación",
+  entrevista_dialogo: "entrevista",
+  tutorial_pantalla: "tutorial de pantalla",
+  registro_evento: "evento filmado",
+  montaje_broll: "montaje",
+  experiencia_personal: "respaldo: experiencia propia",
+  dato_propio: "respaldo: dato propio",
+  dato_externo_citado: "respaldo: dato externo",
+  caso_empresa_cliente: "respaldo: caso de empresa",
+  cita_autoridad: "respaldo: cita de autoridad",
+  muy_concreto: "muy concreto",
+};
+const SKIP = new Set(["sin_persona", "no_es_video", "no_determinable", "ninguna", "generico", "algo_concreto", "neutra"]);
+
+function madeOf(post: ContentPost): string[] {
+  const v = post.visual_analysis;
+  const a = post.analysis;
+  const keys = [
+    v?.creative_type,
+    v?.person_identity,
+    v?.video_style,
+    v?.burned_captions ? "subtitulado" : null,
+    a?.evidence_type,
+    a?.specificity,
+    a?.emotional_trigger,
+  ].filter((k): k is string => Boolean(k) && !SKIP.has(k as string));
+  return keys.map((k) => MADE_LABELS[k] ?? k.replace(/_/g, " "));
 }
 
 function platformLabel(platform: string): string {
@@ -247,6 +291,12 @@ export function PostCard({
             */}
             {post.image_url ? (
               <FullImage src={post.image_url} />
+            ) : null}
+            {madeOf(post).length ? (
+              <p className="mt-2 text-[12px] leading-[1.5] text-[var(--muted)]">
+                <span className="font-semibold">Cómo está hecho · </span>
+                {madeOf(post).join(" · ")}
+              </p>
             ) : null}
             {post.caption ? (
               <p className="mt-2 whitespace-pre-wrap rounded-[var(--r-m)] bg-[var(--surface-sunk)] p-3 text-[14px] leading-[1.5] text-[var(--text)]">
