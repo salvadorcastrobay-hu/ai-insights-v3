@@ -1,6 +1,8 @@
 import type { Session, User } from "@supabase/supabase-js";
 
-export const APP_ROLES = ["admin", "campaign_advisor", "viewer"] as const;
+// `content` da acceso a humand-content (mismos usuarios de Supabase). Esta app
+// no lo usa para nada; está para que el rol se reconozca como válido.
+export const APP_ROLES = ["admin", "campaign_advisor", "viewer", "content"] as const;
 export type AppRole = (typeof APP_ROLES)[number];
 
 const APP_ROLE_SET = new Set<AppRole>(APP_ROLES);
