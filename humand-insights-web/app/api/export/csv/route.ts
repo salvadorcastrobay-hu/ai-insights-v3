@@ -58,16 +58,25 @@ export async function GET(request: Request) {
       // BOM + header para que Excel abra con acentos correctos.
       controller.enqueue(encoder.encode(`﻿${exportColumns.map(csvEscape).join(",")}\n`));
       try {
-        const cursor = sql`SELECT * FROM rpc_export_insights(${JSON.stringify(
-          filterJson,
-        )}::jsonb)`.cursor(1000);
-        for await (const batch of cursor) {
-          let chunk = "";
-          for (const row of batch) {
-            chunk += csvLine(row as Record<string, unknown>, exportColumns) + "\n";
+        // - tx.json(): pasar el objeto. Con `${JSON.stringify(f)}::jsonb`
+        //   postgres.js lo re-encodea y llega un jsonb *string* → el RPC
+        //   ignoraba todos los filtros (y caía en prompt_version v3.0).
+        // - Transacción + SET LOCAL: el cursor es UNA sola query abierta
+        //   durante todo el stream; el export completo tarda >2 min y el
+        //   statement_timeout default (2min) lo cortaba a la mitad.
+        await sql.begin(async (tx) => {
+          await tx`SET LOCAL statement_timeout = '10min'`;
+          const cursor = tx`SELECT * FROM rpc_export_insights(${tx.json(
+            filterJson as Parameters<typeof tx.json>[0],
+          )})`.cursor(1000);
+          for await (const batch of cursor) {
+            let chunk = "";
+            for (const row of batch) {
+              chunk += csvLine(row as Record<string, unknown>, exportColumns) + "\n";
+            }
+            controller.enqueue(encoder.encode(chunk));
           }
-          controller.enqueue(encoder.encode(chunk));
-        }
+        });
         controller.close();
       } catch (err) {
         console.error("[export/csv] stream failed:", err);
