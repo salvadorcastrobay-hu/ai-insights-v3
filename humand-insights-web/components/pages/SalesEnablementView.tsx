@@ -9,12 +9,13 @@ import { MetricCard } from "@/components/layout/MetricCard";
 import { SectionHeader } from "@/components/layout/SectionHeader";
 import { EmptyState, PageTitle } from "@/components/pages/common";
 import { useTranslations } from "next-intl";
+import type { CsvLinks } from "@/lib/data/csv-export-links";
 import { formatCurrency } from "@/lib/data/computations";
 import type { SalesEnablementData } from "@/lib/data/sales-enablement-data";
 
-type Props = { data: SalesEnablementData; filteredRows: import("@/lib/supabase/types").InsightRow[] };
+type Props = { data: SalesEnablementData; csv: CsvLinks };
 
-export function SalesEnablementView({ data, filteredRows }: Props) {
+export function SalesEnablementView({ data, csv }: Props) {
   const t = useTranslations("salesEnablement");
   const { open: drill } = useDrillDown();
   const {
@@ -52,7 +53,7 @@ export function SalesEnablementView({ data, filteredRows }: Props) {
       <section className="grid gap-3 lg:grid-cols-2">
         <ChartCard
           title={t("frictionRankingChart")}
-          rawRows={filteredRows.filter((r) => r.insight_type === "deal_friction")}
+          csv={csv.deal_friction}
           ask={{
             chartTitle: "Top fricciones",
             chartKind: "horizontal-bar",

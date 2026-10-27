@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { AskChartButton } from "@/components/ask-chart/AskChartButton";
 import type { AskChartContext } from "@/components/ask-chart/AskChartProvider";
 import { DownloadCsvButton } from "@/components/charts/DownloadCsvButton";
+import type { CsvLink } from "@/lib/data/csv-export-links";
 import type { InsightRow } from "@/lib/supabase/types";
 
 type ChartMeta = {
@@ -21,8 +22,11 @@ type Props = {
   ask?: AskChartContext;
   /** Underlying insight rows for the CSV export (full detail con verbatims). */
   rawRows?: InsightRow[];
-  /** Alternativa a rawRows: URL del export CSV server-side. */
-  csvHref?: string;
+  /**
+   * Alternativa a rawRows: export CSV server-side (/api/export/csv). `n`
+   * alimenta el footer igual que rawRows.length.
+   */
+  csv?: CsvLink;
   /**
    * Sample size del chart. Si no se pasa pero hay `rawRows`, se infiere
    * `n=rawRows.length`. Para suprimir el footer, pasar `meta={null}`.
@@ -39,15 +43,16 @@ function metaCaption(meta: ChartMeta): string {
   return parts.join(" · ");
 }
 
-export function ChartCard({ children, title, ask, rawRows, csvHref, meta }: Props) {
-  const hasCsv = !!csvHref || (rawRows && rawRows.length > 0);
+export function ChartCard({ children, title, ask, rawRows, csv, meta }: Props) {
+  const hasCsv = (csv != null && csv.n > 0) || (rawRows != null && rawRows.length > 0);
   const showActions = !!ask || hasCsv;
   // Inferir meta automáticamente si no se pasó explícitamente. meta={null}
   // suprime el footer (algunos charts tienen su propio sample size visible).
   const resolvedMeta: ChartMeta | null =
     meta === null
       ? null
-      : meta ?? (rawRows && rawRows.length > 0 ? { n: rawRows.length } : null);
+      : meta ??
+        (csv && csv.n > 0 ? { n: csv.n } : rawRows && rawRows.length > 0 ? { n: rawRows.length } : null);
   const caption = resolvedMeta ? metaCaption(resolvedMeta) : "";
   return (
     <div className="rounded-[var(--radius-m)] bg-[var(--color-bg-card)] p-2 shadow-[var(--shadow-4dp)]">
@@ -61,7 +66,7 @@ export function ChartCard({ children, title, ask, rawRows, csvHref, meta }: Prop
           {showActions ? (
             <div className="flex items-center gap-1.5">
               {hasCsv ? (
-                <DownloadCsvButton filename={ask?.chartTitle || title || "chart"} rows={rawRows} href={csvHref} />
+                <DownloadCsvButton filename={ask?.chartTitle || title || "chart"} rows={rawRows} href={csv?.href} />
               ) : null}
               {ask ? <AskChartButton context={ask} /> : null}
             </div>

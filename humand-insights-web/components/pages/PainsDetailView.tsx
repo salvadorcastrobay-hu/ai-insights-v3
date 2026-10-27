@@ -1,7 +1,5 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
-import { parseAsInteger, parseAsString, useQueryStates } from "nuqs";
 
 import { ChartCard } from "@/components/charts/ChartCard";
 import { HorizontalBarChart } from "@/components/charts/BarChart";
@@ -11,24 +9,16 @@ import { MetricCard } from "@/components/layout/MetricCard";
 import { PageTitle } from "@/components/pages/common";
 import { ConfidenceBadge } from "@/components/ui/ConfidenceBadge";
 import { Input } from "@/components/ui/input";
+import { LoadMoreButton, TableTruncatedNote, usePagedTableParams } from "@/components/ui/paged-table";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@/components/ui/table";
-import { useFilterTransition } from "@/components/layout/FilterTransition";
 import { useTranslations } from "next-intl";
 import { useTaxonomyLabel } from "@/lib/taxonomy-labels";
-import { PAIN_TABLE_MAX, PAIN_TABLE_PAGE, type PainsDetailData } from "@/lib/data/pains-detail-data";
+import type { CsvLink } from "@/lib/data/csv-export-links";
+import type { PainsDetailData } from "@/lib/data/pains-detail-data";
 
-type Props = { data: PainsDetailData; csvHref: string };
+type Props = { data: PainsDetailData; csv: CsvLink };
 
-// Filtros de la tabla de detalle en la URL: el server filtra y corta las filas
-// (la tabla no recibe el universo entero de pains).
-const TABLE_PARSERS = {
-  pt_theme: parseAsString.withDefault(""),
-  pt_module: parseAsString.withDefault(""),
-  pt_q: parseAsString.withDefault(""),
-  pt_limit: parseAsInteger.withDefault(PAIN_TABLE_PAGE),
-};
-
-export function PainsDetailView({ data, csvHref }: Props) {
+export function PainsDetailView({ data, csv }: Props) {
   const t = useTranslations("pains");
   const tl = useTaxonomyLabel();
   const {
@@ -47,34 +37,7 @@ export function PainsDetailView({ data, csvHref }: Props) {
   const pct = (n: number) => (phaseTotal > 0 ? `${Math.round((n / phaseTotal) * 100)}%` : "0%");
   const ratePct = (n: number) => `${Math.round(n * 100)}%`;
 
-  const shared = useFilterTransition();
-  const [, localStart] = useTransition();
-  const [loadingMore, startLoadMore] = useTransition();
-  const [table, setTable] = useQueryStates(TABLE_PARSERS, {
-    shallow: false,
-    startTransition: shared?.startTransition ?? localStart,
-    clearOnDefault: true,
-    scroll: false,
-  });
-  // Cambiar un filtro de la tabla vuelve a la primera página.
-  const setTableFilter = (patch: Partial<Record<"pt_theme" | "pt_module" | "pt_q", string>>) =>
-    void setTable({ ...patch, pt_limit: null });
-  // "Cargar más" usa su propia transition: no atenúa la página entera
-  // (el overlay compartido), solo el botón.
-  const loadMore = () =>
-    void setTable(
-      { pt_limit: Math.min(painTableRows.length + PAIN_TABLE_PAGE, PAIN_TABLE_MAX) },
-      { startTransition: startLoadMore },
-    );
-  const canLoadMore = painTableTotal > painTableRows.length && painTableRows.length < PAIN_TABLE_MAX;
-
-  // La búsqueda pega al server: debounce para no recomputar en cada tecla.
-  const [search, setSearch] = useState(table.pt_q);
-  useEffect(() => {
-    if (search === table.pt_q) return;
-    const id = setTimeout(() => void setTable({ pt_q: search, pt_limit: null }), 400);
-    return () => clearTimeout(id);
-  }, [search, table.pt_q, setTable]);
+  const table = usePagedTableParams("pt", ["theme", "module"] as const);
 
   const pctGeneral = kpis.total > 0 ? Math.round((kpis.generales / kpis.total) * 100) : 0;
   const pctLinked = kpis.total > 0 ? Math.round((kpis.vinculados / kpis.total) * 100) : 0;
@@ -96,8 +59,7 @@ export function PainsDetailView({ data, csvHref }: Props) {
       <section className="space-y-3">
         <ChartCard
           title={t("byModule")}
-          csvHref={csvHref}
-          meta={{ n: kpis.total }}
+          csv={csv}
           ask={{
             chartTitle: "Pains por módulo",
             chartKind: "horizontal-bar",
@@ -232,19 +194,19 @@ export function PainsDetailView({ data, csvHref }: Props) {
 
       <ChartCard title={t("detail")}>
         <div className="mb-3 grid gap-2 md:grid-cols-3">
-          <select className="rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] p-2" value={table.pt_theme} onChange={(e) => setTableFilter({ pt_theme: e.target.value })}>
+          <select className="rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] p-2" value={table.filters.theme} onChange={(e) => table.setFilter("theme", e.target.value)}>
             <option value="">{t("allThemes")}</option>
             {themes.map((option) => (
               <option key={option} value={option}>{option}</option>
             ))}
           </select>
-          <select className="rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] p-2" value={table.pt_module} onChange={(e) => setTableFilter({ pt_module: e.target.value })}>
+          <select className="rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] p-2" value={table.filters.module} onChange={(e) => table.setFilter("module", e.target.value)}>
             <option value="">{t("allModules")}</option>
             {modules.map((option) => (
               <option key={option} value={option}>{option}</option>
             ))}
           </select>
-          <Input placeholder={t("searchPain")} value={search} onChange={(e) => setSearch(e.target.value)} />
+          <Input placeholder={t("searchPain")} value={table.search} onChange={(e) => table.setSearch(e.target.value)} />
         </div>
 
         <div className="max-h-[600px] overflow-auto">
@@ -276,27 +238,14 @@ export function PainsDetailView({ data, csvHref }: Props) {
               ))}
             </Tbody>
           </Table>
-          {canLoadMore ? (
-            <div className="flex justify-center py-3">
-              <button
-                type="button"
-                onClick={loadMore}
-                disabled={loadingMore}
-                className="rounded-full border border-[var(--color-neutral-200)] bg-white px-4 py-1.5 text-[12px] font-medium text-[var(--color-text-secondary)] transition-all hover:border-[var(--color-brand-400)] hover:text-[var(--color-brand-500)] disabled:opacity-60"
-              >
-                {loadingMore ? t("loadingMore") : t("loadMore", { n: Math.min(PAIN_TABLE_PAGE, painTableTotal - painTableRows.length) })}
-              </button>
-            </div>
-          ) : null}
+          <LoadMoreButton
+            shown={painTableRows.length}
+            total={painTableTotal}
+            loadingMore={table.loadingMore}
+            onLoadMore={() => table.loadMore(painTableRows.length)}
+          />
         </div>
-        {painTableTotal > painTableRows.length ? (
-          <p className="mt-2 text-[12px] text-[var(--color-text-secondary)]">
-            {t(canLoadMore ? "tableTruncated" : "tableMaxed", {
-              shown: painTableRows.length.toLocaleString(),
-              total: painTableTotal.toLocaleString(),
-            })}
-          </p>
-        ) : null}
+        <TableTruncatedNote shown={painTableRows.length} total={painTableTotal} />
       </ChartCard>
     </div>
   );

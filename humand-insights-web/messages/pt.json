@@ -114,10 +114,6 @@
     "winLostRate": "Win-rate e lost-rate por pain",
     "detail": "Detalhe por pain",
     "searchPain": "Buscar pain…",
-    "tableTruncated": "Mostrando {shown} de {total} pains. Carregue mais, refine com os filtros ou baixe o CSV para ver todos.",
-    "tableMaxed": "Mostrando {shown} de {total} pains (máximo na tela). Refine com os filtros ou baixe o CSV para ver todos.",
-    "loadMore": "Carregar mais {n}",
-    "loadingMore": "Carregando…",
     "allThemes": "Todos os temas",
     "allModules": "Todos os módulos",
     "historicalNote": "O total de pains reflete todos os registros históricos do recorte atual. O Executive Summary pode mostrar um número menor se aplicar filtros de período por padrão.",
@@ -696,5 +692,11 @@
     "discardChanges": "Descartar alterações",
     "applyFilters": "Aplicar filtros",
     "applied": "Aplicado"
+  },
+  "tablePaging": {
+    "truncated": "Mostrando {shown} de {total}. Carregue mais, refine com os filtros ou baixe o CSV para ver todos.",
+    "maxed": "Mostrando {shown} de {total} (máximo na tela). Refine com os filtros ou baixe o CSV para ver todos.",
+    "loadMore": "Carregar mais {n}",
+    "loadingMore": "Carregando…"
   }
 }

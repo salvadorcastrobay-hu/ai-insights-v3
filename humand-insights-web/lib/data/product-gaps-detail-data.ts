@@ -1,6 +1,7 @@
 import { applyFilters, type Filters } from "@/lib/data/filters";
 import { filterByType, groupDistinctTranscripts } from "@/lib/data/dashboard-aggregations";
 import { formatCurrency, uniqueDealsRevenue } from "@/lib/data/computations";
+import { paginateRows, textMatcher } from "@/lib/data/table-page";
 import type { InsightRow } from "@/lib/supabase/types";
 
 export type NameValue = { name: string; value: number };
@@ -77,7 +78,21 @@ export type ProductGapsDetailData = {
   gapTypes: string[];
   priorities: string[];
   priorityLabelByKey: Record<string, string>;
+  /** Página de la tabla de detalle (filtrada en server por tableFilter). */
   gapTableRows: GapTableRow[];
+  /** Cuántos gaps matchean tableFilter en total, antes del corte. */
+  gapTableTotal: number;
+  /** Opciones de los selects de la tabla, sobre todos los gaps. */
+  gapTableModules: string[];
+  gapTablePriorities: string[];
+};
+
+// Filtros propios de la tabla de detalle. Los charts usan todos los gaps.
+export type GapTableFilter = {
+  priority: string | null;
+  module: string | null;
+  search: string | null;
+  limit?: number | null;
 };
 
 const PRIORITY_META: Record<string, { label: string; meaning: string; emoji: string }> = {
@@ -108,6 +123,7 @@ export function buildProductGapsDetailData(
   rows: InsightRow[],
   _totalTranscripts: number,
   filters: Filters,
+  tableFilter: GapTableFilter = { priority: null, module: null, search: null },
 ): ProductGapsDetailData {
   const filteredRows = applyFilters(rows, filters);
   const gaps = filterByType(filteredRows, "product_gap");
@@ -264,7 +280,14 @@ export function buildProductGapsDetailData(
     priorityLabelByKey[key] = `${PRIORITY_META[key].emoji} ${PRIORITY_META[key].label}`;
   }
 
-  const gapTableRows: GapTableRow[] = gaps.map((row) => ({
+  const matchesText = textMatcher(tableFilter.search);
+  const table = paginateRows(
+    gaps,
+    (row) =>
+      (!tableFilter.priority || row.gap_priority === tableFilter.priority) &&
+      (!tableFilter.module || row.module_display === tableFilter.module) &&
+      (!matchesText || matchesText(`${row.summary ?? ""} ${row.gap_description ?? ""}`)),
+    (row): GapTableRow => ({
     id: row.id,
     feature_display: row.feature_display,
     gap_priority: row.gap_priority,
@@ -280,7 +303,9 @@ export function buildProductGapsDetailData(
     summary: row.summary,
     isDealbreaker: row.gap_priority === "dealbreaker",
     confidence: row.confidence ?? null,
-  }));
+    }),
+    tableFilter.limit,
+  );
 
   return {
     kpis: {
@@ -305,6 +330,9 @@ export function buildProductGapsDetailData(
     gapTypes,
     priorities,
     priorityLabelByKey,
-    gapTableRows,
+    gapTableRows: table.rows,
+    gapTableTotal: table.total,
+    gapTableModules: [...new Set(gaps.map((r) => r.module_display).filter(Boolean))] as string[],
+    gapTablePriorities: [...new Set(gaps.map((r) => r.gap_priority).filter(Boolean))] as string[],
   };
 }
