@@ -30,7 +30,9 @@ for (const envFile of [".env.local", ".env.qa"]) {
 
 import { createClient } from "@supabase/supabase-js";
 
-type AppRole = "admin" | "campaign_advisor" | "viewer";
+// `content`: acceso a humand-content. Si falta acá, re-correr el script se lo
+// saca a quien lo tenga, porque pisa los roles con esta lista.
+type AppRole = "admin" | "campaign_advisor" | "viewer" | "content";
 
 type SeedUser = {
   email: string;
@@ -48,8 +50,11 @@ const USERS: SeedUser[] = [
   { email: "pedro@humand.co", roles: ["campaign_advisor", "viewer"], first_name: "Pedro" },
   { email: "raphael.montressor@humand.co", roles: ["campaign_advisor", "viewer"], first_name: "Raphael", last_name: "Montressor" },
   { email: "laura.flores@humand.co", roles: ["campaign_advisor", "viewer"], first_name: "Laura", last_name: "Flôres" },
+  { email: "camila.lamouret@humand.co", roles: ["campaign_advisor", "viewer"], first_name: "Camila", last_name: "Lamouret" },
+  { email: "isabel.hori@humand.co", roles: ["campaign_advisor", "viewer"], first_name: "Isabel", last_name: "Hori" },
   { email: "agustina.ini@humand.co", roles: ["viewer"], first_name: "Agus", last_name: "Ini" },
   { email: "agustina.orlando@humand.co", roles: ["viewer"], first_name: "Agustina", last_name: "Orlando" },
+  { email: "camila.disisto@humand.co", roles: ["viewer"], first_name: "Camila", last_name: "Di Sisto" },
   { email: "aimee@humand.co", roles: ["viewer"], first_name: "Aimee" },
   { email: "augusto.ferrer@humand.co", roles: ["viewer"], first_name: "Augusto", last_name: "Ferrer" },
   { email: "daniel.moreno@humand.co", roles: ["viewer"], first_name: "Daniel", last_name: "Moreno" },
@@ -61,7 +66,7 @@ const USERS: SeedUser[] = [
   { email: "manuela.cavallo@humand.co", roles: ["viewer"], first_name: "Manuela", last_name: "Cavallo" },
   { email: "marcos.palacio@humand.co", roles: ["viewer"], first_name: "Marcos", last_name: "Palacio" },
   { email: "nico.cordes@humand.co", roles: ["viewer"], first_name: "Nico", last_name: "Cordes" },
-  { email: "sofia.esposito@humand.co", roles: ["viewer"], first_name: "Sofía", last_name: "Esposito" },
+  { email: "sofia.esposito@humand.co", roles: ["viewer", "content"], first_name: "Sofía", last_name: "Esposito" },
   { email: "soledad.barca@humand.co", roles: ["viewer"], first_name: "Sole", last_name: "Barca" },
   { email: "vanina.moreira@humand.co", roles: ["viewer"], first_name: "Vanina", last_name: "Moreira" },
   { email: "vivi@humand.co", roles: ["viewer"], first_name: "Vivi" },

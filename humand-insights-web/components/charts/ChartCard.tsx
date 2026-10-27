@@ -21,6 +21,8 @@ type Props = {
   ask?: AskChartContext;
   /** Underlying insight rows for the CSV export (full detail con verbatims). */
   rawRows?: InsightRow[];
+  /** Alternativa a rawRows: URL del export CSV server-side. */
+  csvHref?: string;
   /**
    * Sample size del chart. Si no se pasa pero hay `rawRows`, se infiere
    * `n=rawRows.length`. Para suprimir el footer, pasar `meta={null}`.
@@ -37,8 +39,9 @@ function metaCaption(meta: ChartMeta): string {
   return parts.join(" · ");
 }
 
-export function ChartCard({ children, title, ask, rawRows, meta }: Props) {
-  const showActions = !!ask || (rawRows && rawRows.length > 0);
+export function ChartCard({ children, title, ask, rawRows, csvHref, meta }: Props) {
+  const hasCsv = !!csvHref || (rawRows && rawRows.length > 0);
+  const showActions = !!ask || hasCsv;
   // Inferir meta automáticamente si no se pasó explícitamente. meta={null}
   // suprime el footer (algunos charts tienen su propio sample size visible).
   const resolvedMeta: ChartMeta | null =
@@ -57,8 +60,8 @@ export function ChartCard({ children, title, ask, rawRows, meta }: Props) {
           )}
           {showActions ? (
             <div className="flex items-center gap-1.5">
-              {rawRows && rawRows.length > 0 ? (
-                <DownloadCsvButton filename={ask?.chartTitle || title || "chart"} rows={rawRows} />
+              {hasCsv ? (
+                <DownloadCsvButton filename={ask?.chartTitle || title || "chart"} rows={rawRows} href={csvHref} />
               ) : null}
               {ask ? <AskChartButton context={ask} /> : null}
             </div>

@@ -61,31 +61,66 @@ export type PainsDetailData = {
   painsByOutcome: PainByOutcomeRow[];
   themes: string[];
   modules: string[];
+  /** Hasta tableFilter.limit filas que matchean tableFilter (no todo el universo). */
   painTableRows: PainTableRow[];
+  /** Cuántas filas matchean tableFilter en total, antes del corte. */
+  painTableTotal: number;
 };
 
+// Filtros propios de la tabla de detalle (tema, módulo, búsqueda libre).
+// Se aplican en server: los charts siguen usando todos los pains.
+export type PainTableFilter = {
+  theme: string | null;
+  module: string | null;
+  search: string | null;
+  /** Filas a devolver ("Cargar más" suma de a PAIN_TABLE_PAGE). */
+  limit?: number;
+};
+
+// La tabla renderiza una fila por pain con resumen + cita. Con ~100K pains
+// mandarlas todas al cliente tumba el navegador (OOM), así que paginamos:
+// arranca en PAIN_TABLE_PAGE y "Cargar más" suma de a una página, hasta
+// PAIN_TABLE_MAX (más allá de eso, el CSV).
+export const PAIN_TABLE_PAGE = 200;
+export const PAIN_TABLE_MAX = 5000;
+
 // Acepta rows YA FILTRADOS (page route llama applyFilters una sola vez y
-// pasa el resultado acá + a filteredRows del cliente). Evita duplicar memoria.
+// pasa el resultado acá). Evita duplicar memoria.
 export function buildPainsDetailData(
   filteredRows: InsightRow[],
   _totalTranscripts: number,
+  tableFilter: PainTableFilter = { theme: null, module: null, search: null },
 ): PainsDetailData {
   const pains = filterByType(filteredRows, "pain");
 
   const themes = [...new Set(pains.map((row) => row.pain_theme).filter(Boolean))] as string[];
   const modules = [...new Set(pains.map((row) => row.module_display).filter(Boolean))] as string[];
 
-  const painTableRows: PainTableRow[] = pains.map((row) => ({
-    id: row.id,
-    insight_subtype_display: row.insight_subtype_display,
-    pain_theme: row.pain_theme,
-    module_display: row.module_display,
-    segment: row.segment,
-    company_name: row.company_name,
-    summary: row.summary,
-    verbatim_quote: row.verbatim_quote,
-    confidence: row.confidence ?? null,
-  }));
+  const needle = tableFilter.search?.trim().toLowerCase() || null;
+  const limit = Math.min(Math.max(tableFilter.limit ?? PAIN_TABLE_PAGE, PAIN_TABLE_PAGE), PAIN_TABLE_MAX);
+  const painTableRows: PainTableRow[] = [];
+  let painTableTotal = 0;
+  for (const row of pains) {
+    if (tableFilter.theme && row.pain_theme !== tableFilter.theme) continue;
+    if (tableFilter.module && row.module_display !== tableFilter.module) continue;
+    if (needle) {
+      const blob = `${row.summary} ${row.verbatim_quote ?? ""} ${row.insight_subtype_display}`.toLowerCase();
+      if (!blob.includes(needle)) continue;
+    }
+    painTableTotal++;
+    if (painTableRows.length >= limit) continue;
+    painTableRows.push({
+      id: row.id,
+      insight_subtype_display: row.insight_subtype_display,
+      pain_theme: row.pain_theme,
+      module_display: row.module_display,
+      segment: row.segment,
+      company_name: row.company_name,
+      summary: row.summary,
+      verbatim_quote: row.verbatim_quote,
+      confidence: row.confidence ?? null,
+    });
+  }
 
   // Funnel phase + outcome: deals únicos por (pain, phase) y (pain, won/lost).
   // Una sola pasada O(n) sobre pains.
@@ -177,5 +212,6 @@ export function buildPainsDetailData(
     themes,
     modules,
     painTableRows,
+    painTableTotal,
   };
 }
