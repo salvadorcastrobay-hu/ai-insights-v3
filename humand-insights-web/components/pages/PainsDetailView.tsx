@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useState, useTransition } from "react";
+import { parseAsInteger, parseAsString, useQueryStates } from "nuqs";
 
 import { ChartCard } from "@/components/charts/ChartCard";
 import { HorizontalBarChart } from "@/components/charts/BarChart";
@@ -11,13 +12,23 @@ import { PageTitle } from "@/components/pages/common";
 import { ConfidenceBadge } from "@/components/ui/ConfidenceBadge";
 import { Input } from "@/components/ui/input";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@/components/ui/table";
+import { useFilterTransition } from "@/components/layout/FilterTransition";
 import { useTranslations } from "next-intl";
 import { useTaxonomyLabel } from "@/lib/taxonomy-labels";
-import type { PainsDetailData } from "@/lib/data/pains-detail-data";
+import { PAIN_TABLE_MAX, PAIN_TABLE_PAGE, type PainsDetailData } from "@/lib/data/pains-detail-data";
 
-type Props = { data: PainsDetailData; filteredRows: import("@/lib/supabase/types").InsightRow[] };
+type Props = { data: PainsDetailData; csvHref: string };
 
-export function PainsDetailView({ data, filteredRows }: Props) {
+// Filtros de la tabla de detalle en la URL: el server filtra y corta las filas
+// (la tabla no recibe el universo entero de pains).
+const TABLE_PARSERS = {
+  pt_theme: parseAsString.withDefault(""),
+  pt_module: parseAsString.withDefault(""),
+  pt_q: parseAsString.withDefault(""),
+  pt_limit: parseAsInteger.withDefault(PAIN_TABLE_PAGE),
+};
+
+export function PainsDetailView({ data, csvHref }: Props) {
   const t = useTranslations("pains");
   const tl = useTaxonomyLabel();
   const {
@@ -30,26 +41,40 @@ export function PainsDetailView({ data, filteredRows }: Props) {
     themes,
     modules,
     painTableRows,
+    painTableTotal,
   } = data;
   const phaseTotal = phaseSummary.pre_sale + phaseSummary.closed + phaseSummary.post_sale;
   const pct = (n: number) => (phaseTotal > 0 ? `${Math.round((n / phaseTotal) * 100)}%` : "0%");
   const ratePct = (n: number) => `${Math.round(n * 100)}%`;
 
-  const [theme, setTheme] = useState("");
-  const [module, setModule] = useState("");
-  const [search, setSearch] = useState("");
+  const shared = useFilterTransition();
+  const [, localStart] = useTransition();
+  const [loadingMore, startLoadMore] = useTransition();
+  const [table, setTable] = useQueryStates(TABLE_PARSERS, {
+    shallow: false,
+    startTransition: shared?.startTransition ?? localStart,
+    clearOnDefault: true,
+    scroll: false,
+  });
+  // Cambiar un filtro de la tabla vuelve a la primera página.
+  const setTableFilter = (patch: Partial<Record<"pt_theme" | "pt_module" | "pt_q", string>>) =>
+    void setTable({ ...patch, pt_limit: null });
+  // "Cargar más" usa su propia transition: no atenúa la página entera
+  // (el overlay compartido), solo el botón.
+  const loadMore = () =>
+    void setTable(
+      { pt_limit: Math.min(painTableRows.length + PAIN_TABLE_PAGE, PAIN_TABLE_MAX) },
+      { startTransition: startLoadMore },
+    );
+  const canLoadMore = painTableTotal > painTableRows.length && painTableRows.length < PAIN_TABLE_MAX;
 
-  const tableRows = useMemo(() => {
-    return painTableRows.filter((row) => {
-      if (theme && row.pain_theme !== theme) return false;
-      if (module && row.module_display !== module) return false;
-      if (search) {
-        const blob = `${row.summary} ${row.verbatim_quote ?? ""} ${row.insight_subtype_display}`.toLowerCase();
-        if (!blob.includes(search.toLowerCase())) return false;
-      }
-      return true;
-    });
-  }, [painTableRows, theme, module, search]);
+  // La búsqueda pega al server: debounce para no recomputar en cada tecla.
+  const [search, setSearch] = useState(table.pt_q);
+  useEffect(() => {
+    if (search === table.pt_q) return;
+    const id = setTimeout(() => void setTable({ pt_q: search, pt_limit: null }), 400);
+    return () => clearTimeout(id);
+  }, [search, table.pt_q, setTable]);
 
   const pctGeneral = kpis.total > 0 ? Math.round((kpis.generales / kpis.total) * 100) : 0;
   const pctLinked = kpis.total > 0 ? Math.round((kpis.vinculados / kpis.total) * 100) : 0;
@@ -71,7 +96,8 @@ export function PainsDetailView({ data, filteredRows }: Props) {
       <section className="space-y-3">
         <ChartCard
           title={t("byModule")}
-          rawRows={filteredRows}
+          csvHref={csvHref}
+          meta={{ n: kpis.total }}
           ask={{
             chartTitle: "Pains por módulo",
             chartKind: "horizontal-bar",
@@ -206,13 +232,13 @@ export function PainsDetailView({ data, filteredRows }: Props) {
 
       <ChartCard title={t("detail")}>
         <div className="mb-3 grid gap-2 md:grid-cols-3">
-          <select className="rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] p-2" value={theme} onChange={(e) => setTheme(e.target.value)}>
+          <select className="rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] p-2" value={table.pt_theme} onChange={(e) => setTableFilter({ pt_theme: e.target.value })}>
             <option value="">{t("allThemes")}</option>
             {themes.map((option) => (
               <option key={option} value={option}>{option}</option>
             ))}
           </select>
-          <select className="rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] p-2" value={module} onChange={(e) => setModule(e.target.value)}>
+          <select className="rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] p-2" value={table.pt_module} onChange={(e) => setTableFilter({ pt_module: e.target.value })}>
             <option value="">{t("allModules")}</option>
             {modules.map((option) => (
               <option key={option} value={option}>{option}</option>
@@ -221,7 +247,7 @@ export function PainsDetailView({ data, filteredRows }: Props) {
           <Input placeholder={t("searchPain")} value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
 
-        <div className="max-h-[420px] overflow-auto">
+        <div className="max-h-[600px] overflow-auto">
           <Table>
             <Thead>
               <Tr>
@@ -236,7 +262,7 @@ export function PainsDetailView({ data, filteredRows }: Props) {
               </Tr>
             </Thead>
             <Tbody>
-              {tableRows.map((row) => (
+              {painTableRows.map((row) => (
                 <Tr key={row.id}>
                   <Td>{tl(row.insight_subtype_display)}</Td>
                   <Td>{row.pain_theme}</Td>
@@ -250,7 +276,27 @@ export function PainsDetailView({ data, filteredRows }: Props) {
               ))}
             </Tbody>
           </Table>
+          {canLoadMore ? (
+            <div className="flex justify-center py-3">
+              <button
+                type="button"
+                onClick={loadMore}
+                disabled={loadingMore}
+                className="rounded-full border border-[var(--color-neutral-200)] bg-white px-4 py-1.5 text-[12px] font-medium text-[var(--color-text-secondary)] transition-all hover:border-[var(--color-brand-400)] hover:text-[var(--color-brand-500)] disabled:opacity-60"
+              >
+                {loadingMore ? t("loadingMore") : t("loadMore", { n: Math.min(PAIN_TABLE_PAGE, painTableTotal - painTableRows.length) })}
+              </button>
+            </div>
+          ) : null}
         </div>
+        {painTableTotal > painTableRows.length ? (
+          <p className="mt-2 text-[12px] text-[var(--color-text-secondary)]">
+            {t(canLoadMore ? "tableTruncated" : "tableMaxed", {
+              shown: painTableRows.length.toLocaleString(),
+              total: painTableTotal.toLocaleString(),
+            })}
+          </p>
+        ) : null}
       </ChartCard>
     </div>
   );

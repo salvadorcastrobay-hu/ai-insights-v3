@@ -8,9 +8,17 @@ type Props = {
   /** Filename slug — derives from the chart title. */
   filename: string;
   /** Insights underlying this chart (after filtering by global filters + chart scope). */
-  rows: InsightRow[];
+  rows?: InsightRow[];
+  /**
+   * Alternativa a `rows`: URL de un export server-side (/api/export/csv).
+   * Para charts con demasiadas filas como para mandarlas al cliente.
+   */
+  href?: string;
   className?: string;
 };
+
+const BUTTON_CLASS =
+  "group inline-flex items-center gap-1 rounded-full border border-[var(--color-neutral-200)] bg-white px-2 py-[3px] text-[11px] font-medium text-[var(--color-text-secondary)] transition-all hover:border-[var(--color-brand-400)] hover:text-[var(--color-brand-500)]";
 
 const COLUMNS: Array<{ header: string; field: keyof InsightRow }> = [
   { header: "transcript_id", field: "transcript_id" },
@@ -72,7 +80,22 @@ function slug(s: string): string {
  *
  * Si no hay rows o el componente no recibió rawRows, no renderiza.
  */
-export function DownloadCsvButton({ filename, rows, className }: Props) {
+export function DownloadCsvButton({ filename, rows, href, className }: Props) {
+  if (href) {
+    return (
+      <a
+        href={href}
+        download
+        onClick={(e) => e.stopPropagation()}
+        className={`${BUTTON_CLASS} ${className ?? ""}`}
+        aria-label={`Descargar CSV de ${filename}`}
+        title="Descargar CSV con verbatims"
+      >
+        <Download className="h-3 w-3 transition-transform group-hover:-translate-y-[1px]" />
+        <span>CSV</span>
+      </a>
+    );
+  }
   if (!rows || rows.length === 0) return null;
 
   const onClick = (e: React.MouseEvent<HTMLButtonElement>) => {
@@ -94,9 +117,7 @@ export function DownloadCsvButton({ filename, rows, className }: Props) {
     <button
       type="button"
       onClick={onClick}
-      className={`group inline-flex items-center gap-1 rounded-full border border-[var(--color-neutral-200)] bg-white px-2 py-[3px] text-[11px] font-medium text-[var(--color-text-secondary)] transition-all hover:border-[var(--color-brand-400)] hover:text-[var(--color-brand-500)] ${
-        className ?? ""
-      }`}
+      className={`${BUTTON_CLASS} ${className ?? ""}`}
       aria-label={`Descargar CSV de ${filename} (${rows.length} insights)`}
       title={`Descargar CSV con verbatims — ${rows.length.toLocaleString()} filas`}
     >
