@@ -4,6 +4,7 @@ import {
   groupDistinctTranscripts,
 } from "@/lib/data/dashboard-aggregations";
 import { getDealOutcome, getFunnelPhase } from "@/lib/data/normalizers";
+import { paginateRows, textMatcher } from "@/lib/data/table-page";
 import type { InsightRow } from "@/lib/supabase/types";
 
 export type NameValue = { name: string; value: number };
@@ -73,16 +74,9 @@ export type PainTableFilter = {
   theme: string | null;
   module: string | null;
   search: string | null;
-  /** Filas a devolver ("Cargar más" suma de a PAIN_TABLE_PAGE). */
-  limit?: number;
+  /** Filas a devolver ("Cargar más" suma de a TABLE_PAGE). */
+  limit?: number | null;
 };
-
-// La tabla renderiza una fila por pain con resumen + cita. Con ~100K pains
-// mandarlas todas al cliente tumba el navegador (OOM), así que paginamos:
-// arranca en PAIN_TABLE_PAGE y "Cargar más" suma de a una página, hasta
-// PAIN_TABLE_MAX (más allá de eso, el CSV).
-export const PAIN_TABLE_PAGE = 200;
-export const PAIN_TABLE_MAX = 5000;
 
 // Acepta rows YA FILTRADOS (page route llama applyFilters una sola vez y
 // pasa el resultado acá). Evita duplicar memoria.
@@ -96,20 +90,15 @@ export function buildPainsDetailData(
   const themes = [...new Set(pains.map((row) => row.pain_theme).filter(Boolean))] as string[];
   const modules = [...new Set(pains.map((row) => row.module_display).filter(Boolean))] as string[];
 
-  const needle = tableFilter.search?.trim().toLowerCase() || null;
-  const limit = Math.min(Math.max(tableFilter.limit ?? PAIN_TABLE_PAGE, PAIN_TABLE_PAGE), PAIN_TABLE_MAX);
-  const painTableRows: PainTableRow[] = [];
-  let painTableTotal = 0;
-  for (const row of pains) {
-    if (tableFilter.theme && row.pain_theme !== tableFilter.theme) continue;
-    if (tableFilter.module && row.module_display !== tableFilter.module) continue;
-    if (needle) {
-      const blob = `${row.summary} ${row.verbatim_quote ?? ""} ${row.insight_subtype_display}`.toLowerCase();
-      if (!blob.includes(needle)) continue;
-    }
-    painTableTotal++;
-    if (painTableRows.length >= limit) continue;
-    painTableRows.push({
+  const matchesText = textMatcher(tableFilter.search);
+  const table = paginateRows(
+    pains,
+    (row) =>
+      (!tableFilter.theme || row.pain_theme === tableFilter.theme) &&
+      (!tableFilter.module || row.module_display === tableFilter.module) &&
+      (!matchesText ||
+        matchesText(`${row.summary} ${row.verbatim_quote ?? ""} ${row.insight_subtype_display}`)),
+    (row): PainTableRow => ({
       id: row.id,
       insight_subtype_display: row.insight_subtype_display,
       pain_theme: row.pain_theme,
@@ -119,8 +108,9 @@ export function buildPainsDetailData(
       summary: row.summary,
       verbatim_quote: row.verbatim_quote,
       confidence: row.confidence ?? null,
-    });
-  }
+    }),
+    tableFilter.limit,
+  );
 
   // Funnel phase + outcome: deals únicos por (pain, phase) y (pain, won/lost).
   // Una sola pasada O(n) sobre pains.
@@ -211,7 +201,7 @@ export function buildPainsDetailData(
     painsByOutcome,
     themes,
     modules,
-    painTableRows,
-    painTableTotal,
+    painTableRows: table.rows,
+    painTableTotal: table.total,
   };
 }

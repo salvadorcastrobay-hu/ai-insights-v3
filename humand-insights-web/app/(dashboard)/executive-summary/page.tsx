@@ -1,13 +1,11 @@
 import { ExecutiveSummaryView } from "@/components/pages/ExecutiveSummaryView";
 import { DataQualityFooter } from "@/components/layout/DataQualityFooter";
 import { applyFilters } from "@/lib/data/filters";
+import { buildCsvLinks } from "@/lib/data/csv-export-links";
 import { buildExecutiveSummaryData } from "@/lib/data/executive-summary-data";
 import { computeSampleStats } from "@/lib/data/sample-stats";
 import { parseFiltersFromSearchParams } from "@/lib/data/search-params-filters";
-import { prepareRowsForClient } from "@/lib/data/redact-quotes";
 import { loadInsights, loadTotalTranscriptsCount } from "@/lib/supabase/queries";
-import { getServerUserRoles } from "@/lib/supabase/server";
-import type { AppRole } from "@/lib/auth/roles";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -25,18 +23,16 @@ export default async function Page({ searchParams }: PageProps) {
   const params = await searchParams;
   const filters = parseFiltersFromSearchParams(params);
 
-  const [rows, totalTranscripts, userRoles] = await Promise.all([
+  const [rows, totalTranscripts] = await Promise.all([
     loadInsights(process.env.NEXT_PUBLIC_PROMPT_VERSION ?? "v3.2"),
     loadTotalTranscriptsCount(),
-    getServerUserRoles(),
   ]);
   const data = buildExecutiveSummaryData(rows, totalTranscripts, filters);
   const filteredRows = applyFilters(rows, filters);
-  const filteredRowsSafe = prepareRowsForClient(filteredRows, userRoles as AppRole[]);
   const stats = computeSampleStats(filteredRows, totalTranscripts);
   return (
     <>
-      <ExecutiveSummaryView data={data} filteredRows={filteredRowsSafe} />
+      <ExecutiveSummaryView data={data} csv={buildCsvLinks(params, filteredRows)} />
       <DataQualityFooter stats={stats} pageLabel="Executive Summary" />
     </>
   );

@@ -11,10 +11,11 @@ import { EmptyState, PageTitle } from "@/components/pages/common";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@/components/ui/table";
 import { useTranslations } from "next-intl";
 import { useTaxonomyLabel } from "@/lib/taxonomy-labels";
+import type { CsvLinks } from "@/lib/data/csv-export-links";
 import { formatCurrency } from "@/lib/data/computations";
 import type { ProductIntelligenceData } from "@/lib/data/product-intelligence-data";
 
-type Props = { data: ProductIntelligenceData; filteredRows: import("@/lib/supabase/types").InsightRow[] };
+type Props = { data: ProductIntelligenceData; csv: CsvLinks };
 
 function Caption({ children }: { children: React.ReactNode }) {
   return (
@@ -51,7 +52,7 @@ function SelectBox({
   );
 }
 
-export function ProductIntelligenceView({ data, filteredRows }: Props) {
+export function ProductIntelligenceView({ data, csv }: Props) {
   const t = useTranslations("productIntelligence");
   const tl = useTaxonomyLabel();
   const {
@@ -92,7 +93,7 @@ export function ProductIntelligenceView({ data, filteredRows }: Props) {
         />
         <ChartCard
           title={t("topPainsTitle")}
-          rawRows={filteredRows.filter((r) => r.insight_type === "pain")}
+          csv={csv.pain}
           ask={{
             chartTitle: t("topPainsChartTitle"),
             chartKind: "horizontal-bar",
@@ -155,7 +156,7 @@ export function ProductIntelligenceView({ data, filteredRows }: Props) {
         <section className="grid gap-3 lg:grid-cols-2">
           <ChartCard
             title={t("topGapsFreq")}
-            rawRows={filteredRows.filter((r) => r.insight_type === "product_gap")}
+            csv={csv.product_gap}
             ask={{
               chartTitle: t("topGapsFreq"),
               chartKind: "horizontal-bar",
@@ -169,7 +170,7 @@ export function ProductIntelligenceView({ data, filteredRows }: Props) {
           </ChartCard>
           <ChartCard
             title={t("topGapsRevenue")}
-            rawRows={filteredRows.filter((r) => r.insight_type === "product_gap")}
+            csv={csv.product_gap}
             ask={{
               chartTitle: t("topGapsRevenue"),
               chartKind: "horizontal-bar",

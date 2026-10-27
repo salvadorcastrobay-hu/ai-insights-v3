@@ -1,6 +1,5 @@
 "use client";
 
-import { useMemo, useState } from "react";
 
 import { ChartCard } from "@/components/charts/ChartCard";
 import { HorizontalBarChart } from "@/components/charts/BarChart";
@@ -11,13 +10,14 @@ import { SectionHeader } from "@/components/layout/SectionHeader";
 import { PageTitle } from "@/components/pages/common";
 import { ConfidenceBadge } from "@/components/ui/ConfidenceBadge";
 import { Input } from "@/components/ui/input";
+import { LoadMoreButton, TableTruncatedNote, usePagedTableParams } from "@/components/ui/paged-table";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@/components/ui/table";
 import { useTranslations } from "next-intl";
 import { useTaxonomyLabel } from "@/lib/taxonomy-labels";
+import type { CsvLinks } from "@/lib/data/csv-export-links";
 import type { ProductGapsDetailData } from "@/lib/data/product-gaps-detail-data";
-import type { InsightRow } from "@/lib/supabase/types";
 
-type Props = { data: ProductGapsDetailData; filteredRows: InsightRow[] };
+type Props = { data: ProductGapsDetailData; csv: CsvLinks };
 
 const PRIORITY_COLORS: Record<string, string> = {
   "⚠️ Must Have": "#E53E3E",
@@ -25,7 +25,7 @@ const PRIORITY_COLORS: Record<string, string> = {
   "🚫 Dealbreaker": "#9B2335",
 };
 
-export function ProductGapsDetailView({ data, filteredRows }: Props) {
+export function ProductGapsDetailView({ data, csv }: Props) {
   const t = useTranslations("productGaps");
   const tl = useTaxonomyLabel();
   const { open: drill } = useDrillDown();
@@ -38,35 +38,12 @@ export function ProductGapsDetailView({ data, filteredRows }: Props) {
     existingModulePct,
     priorityLabelByKey,
     gapTableRows,
+    gapTableTotal,
+    gapTableModules,
+    gapTablePriorities,
   } = data;
 
-  const [priority, setPriority] = useState("");
-  const [module, setModule] = useState("");
-  const [search, setSearch] = useState("");
-
-  const filtered = useMemo(
-    () =>
-      gapTableRows.filter((row) => {
-        if (priority && row.gap_priority !== priority) return false;
-        if (module && row.module_display !== module) return false;
-        if (search) {
-          const blob = `${row.summary ?? ""} ${row.gap_description ?? ""}`.toLowerCase();
-          if (!blob.includes(search.toLowerCase())) return false;
-        }
-        return true;
-      }),
-    [gapTableRows, priority, module, search],
-  );
-
-  const moduleOptions = useMemo(
-    () => [...new Set(gapTableRows.map((r) => r.module_display).filter(Boolean))] as string[],
-    [gapTableRows],
-  );
-
-  const priorityOptions = useMemo(
-    () => [...new Set(gapTableRows.map((r) => r.gap_priority).filter(Boolean))] as string[],
-    [gapTableRows],
-  );
+  const table = usePagedTableParams("gt", ["priority", "module"] as const);
 
   // Topfeatures data with priority tag prepended for display
   const topFeaturesDisplay = topFeatures.map((row) => ({
@@ -93,7 +70,7 @@ export function ProductGapsDetailView({ data, filteredRows }: Props) {
         description={t("topFeaturesDesc")}
       />
       <ChartCard
-        rawRows={filteredRows.filter((r) => r.insight_type === "product_gap")}
+        csv={csv.product_gap}
         ask={{
           chartTitle: "Top 20 features faltantes",
           chartKind: "horizontal-bar",
@@ -213,11 +190,11 @@ export function ProductGapsDetailView({ data, filteredRows }: Props) {
         <div className="mb-3 grid gap-2 md:grid-cols-3">
           <select
             className="rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] p-2"
-            value={priority}
-            onChange={(e) => setPriority(e.target.value)}
+            value={table.filters.priority}
+            onChange={(e) => table.setFilter("priority", e.target.value)}
           >
             <option value="">{t("allPriorities")}</option>
-            {priorityOptions.map((option) => (
+            {gapTablePriorities.map((option) => (
               <option key={option} value={option}>
                 {priorityLabelByKey[option] ?? option}
               </option>
@@ -225,11 +202,11 @@ export function ProductGapsDetailView({ data, filteredRows }: Props) {
           </select>
           <select
             className="rounded-[var(--radius-s)] border border-[var(--color-neutral-200)] p-2"
-            value={module}
-            onChange={(e) => setModule(e.target.value)}
+            value={table.filters.module}
+            onChange={(e) => table.setFilter("module", e.target.value)}
           >
             <option value="">{t("allModules")}</option>
-            {moduleOptions.map((option) => (
+            {gapTableModules.map((option) => (
               <option key={option} value={option}>
                 {option}
               </option>
@@ -237,11 +214,11 @@ export function ProductGapsDetailView({ data, filteredRows }: Props) {
           </select>
           <Input
             placeholder={t("searchGap")}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            value={table.search}
+            onChange={(e) => table.setSearch(e.target.value)}
           />
         </div>
-        <div className="max-h-[480px] overflow-auto">
+        <div className="max-h-[600px] overflow-auto">
           <Table>
             <Thead>
               <Tr>
@@ -258,7 +235,7 @@ export function ProductGapsDetailView({ data, filteredRows }: Props) {
               </Tr>
             </Thead>
             <Tbody>
-              {filtered.map((row) => (
+              {gapTableRows.map((row) => (
                 <Tr
                   key={row.id}
                   className={row.isDealbreaker ? "bg-[#fff0f0]" : ""}
@@ -277,7 +254,14 @@ export function ProductGapsDetailView({ data, filteredRows }: Props) {
               ))}
             </Tbody>
           </Table>
+          <LoadMoreButton
+            shown={gapTableRows.length}
+            total={gapTableTotal}
+            loadingMore={table.loadingMore}
+            onLoadMore={() => table.loadMore(gapTableRows.length)}
+          />
         </div>
+        <TableTruncatedNote shown={gapTableRows.length} total={gapTableTotal} />
       </ChartCard>
     </div>
   );

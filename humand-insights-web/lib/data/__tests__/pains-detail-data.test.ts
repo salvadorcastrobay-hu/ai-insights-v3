@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildPainsDetailData, PAIN_TABLE_MAX, PAIN_TABLE_PAGE } from "../pains-detail-data";
+import { buildPainsDetailData } from "../pains-detail-data";
+import { TABLE_MAX as PAIN_TABLE_MAX, TABLE_PAGE as PAIN_TABLE_PAGE } from "../table-page";
 import type { InsightRow } from "../../supabase/types";
 
 function pain(i: number, overrides: Partial<InsightRow> = {}): InsightRow {

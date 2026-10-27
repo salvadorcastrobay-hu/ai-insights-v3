@@ -9,15 +9,15 @@ import { useDrillDown } from "@/components/drill-down/DrillDownProvider";
 import { MetricCard } from "@/components/layout/MetricCard";
 import { SectionHeader } from "@/components/layout/SectionHeader";
 import { EmptyState, PageTitle } from "@/components/pages/common";
+import type { CsvLinks } from "@/lib/data/csv-export-links";
 import { formatCurrency } from "@/lib/data/computations";
 import { shortSegmentLabel } from "@/lib/data/normalizers";
 import { useTranslations } from "next-intl";
 import type { ExecutiveSummaryData } from "@/lib/data/executive-summary-data";
-import type { InsightRow } from "@/lib/supabase/types";
 
 type Props = {
   data: ExecutiveSummaryData;
-  filteredRows: InsightRow[];
+  csv: CsvLinks;
 };
 
 function formatPeriod(start: string | null, end: string | null): string {
@@ -30,7 +30,7 @@ function formatPeriod(start: string | null, end: string | null): string {
   return `${fmt(start)} - ${fmt(end)}`;
 }
 
-export function ExecutiveSummaryView({ data, filteredRows }: Props) {
+export function ExecutiveSummaryView({ data, csv }: Props) {
   const t = useTranslations("executiveSummary");
   const tc = useTranslations("common");
   const { open: drill } = useDrillDown();
@@ -80,7 +80,7 @@ export function ExecutiveSummaryView({ data, filteredRows }: Props) {
         <section className="space-y-3">
           <ChartCard
             title={t("byIndustry")}
-            rawRows={filteredRows}
+            csv={csv.all}
             ask={{
               chartTitle: "Distribución por Industria",
               chartKind: "horizontal-bar",
@@ -92,7 +92,7 @@ export function ExecutiveSummaryView({ data, filteredRows }: Props) {
           </ChartCard>
           <ChartCard
             title={t("bySegment")}
-            rawRows={filteredRows}
+            csv={csv.all}
             ask={{
               chartTitle: t("bySegment"),
               chartKind: "horizontal-bar",
@@ -108,7 +108,7 @@ export function ExecutiveSummaryView({ data, filteredRows }: Props) {
           </ChartCard>
           <ChartCard
             title={t("byCountry")}
-            rawRows={filteredRows}
+            csv={csv.all}
             ask={{
               chartTitle: "Distribución por País",
               chartKind: "horizontal-bar",
@@ -128,7 +128,7 @@ export function ExecutiveSummaryView({ data, filteredRows }: Props) {
         />
         <ChartCard
           title={t("insightsByType")}
-          rawRows={filteredRows}
+          csv={csv.all}
           ask={{
             chartTitle: "Insights por Tipo",
             chartKind: "horizontal-bar",
@@ -147,7 +147,7 @@ export function ExecutiveSummaryView({ data, filteredRows }: Props) {
         />
         <ChartCard
           title={t("topPains")}
-          rawRows={filteredRows.filter((r) => r.insight_type === "pain")}
+          csv={csv.pain}
           ask={{
             chartTitle: "Top 10 Pains (demos únicas)",
             chartKind: "horizontal-bar",
@@ -189,7 +189,7 @@ export function ExecutiveSummaryView({ data, filteredRows }: Props) {
         />
         <ChartCard
           title="Módulos más buscados en la primera demo"
-          rawRows={filteredRows}
+          csv={csv.all}
           ask={{
             chartTitle: "Módulos más buscados",
             chartKind: "horizontal-bar",
@@ -210,7 +210,7 @@ export function ExecutiveSummaryView({ data, filteredRows }: Props) {
         <section className="space-y-3">
           <ChartCard
             title="Top 20 Feature Gaps — Frecuencia"
-            rawRows={filteredRows.filter((r) => r.insight_type === "product_gap")}
+            csv={csv.product_gap}
             ask={{
               chartTitle: "Top 20 Feature Gaps — Frecuencia",
               chartKind: "horizontal-bar",
@@ -231,7 +231,7 @@ export function ExecutiveSummaryView({ data, filteredRows }: Props) {
           </ChartCard>
           <ChartCard
             title="Top 20 Feature Gaps — Revenue en Riesgo"
-            rawRows={filteredRows.filter((r) => r.insight_type === "product_gap")}
+            csv={csv.product_gap}
             ask={{
               chartTitle: "Top 20 Feature Gaps — Revenue en Riesgo",
               chartKind: "horizontal-bar",
@@ -257,7 +257,7 @@ export function ExecutiveSummaryView({ data, filteredRows }: Props) {
         />
         <ChartCard
           title="Top Competidores Mencionados"
-          rawRows={filteredRows.filter((r) => r.insight_type === "competitive_signal" && !r.is_own_brand_competitor)}
+          csv={csv.competitive_signal}
           ask={{
             chartTitle: "Top Competidores Mencionados",
             chartKind: "stacked-bar",
@@ -285,7 +285,7 @@ export function ExecutiveSummaryView({ data, filteredRows }: Props) {
         <section className="grid gap-3 lg:grid-cols-2">
           <ChartCard
             title="Top 10 Fricciones (demos únicas)"
-            rawRows={filteredRows.filter((r) => r.insight_type === "deal_friction")}
+            csv={csv.deal_friction}
             ask={{
               chartTitle: "Top 10 Fricciones",
               chartKind: "horizontal-bar",
@@ -303,7 +303,7 @@ export function ExecutiveSummaryView({ data, filteredRows }: Props) {
           </ChartCard>
           <ChartCard
             title="Fricciones — Revenue en Riesgo"
-            rawRows={filteredRows.filter((r) => r.insight_type === "deal_friction")}
+            csv={csv.deal_friction}
             ask={{
               chartTitle: "Fricciones — Revenue en Riesgo",
               chartKind: "horizontal-bar",
@@ -334,7 +334,7 @@ export function ExecutiveSummaryView({ data, filteredRows }: Props) {
         <section className="space-y-3">
           <ChartCard
             title="Top 10 Preguntas Frecuentes (demos únicas)"
-            rawRows={filteredRows.filter((r) => r.insight_type === "faq")}
+            csv={csv.faq}
             ask={{
               chartTitle: "Top 10 FAQs",
               chartKind: "horizontal-bar",
