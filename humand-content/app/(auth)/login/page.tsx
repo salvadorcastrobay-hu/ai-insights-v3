@@ -27,7 +27,7 @@ function LoginForm() {
       return;
     }
     // refresh() para que el middleware vuelva a correr con la cookie nueva.
-    router.replace(params.get("next") ?? "/discovery");
+    router.replace(params.get("next") ?? "/");
     router.refresh();
   }
 

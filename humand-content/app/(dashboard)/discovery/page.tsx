@@ -1,34 +1,65 @@
-import { EmptyState, PageHeader, SectionLabel } from "@/components/ui";
+import { EmptyState, PageHeader } from "@/components/ui";
 import { PostCard } from "@/components/PostCard";
-import { loadRankedPosts } from "@/lib/content/queries";
+import { FORMAT_GROUPS } from "@/lib/content/labels";
+import { loadOwnHandles, loadRankedPosts, loadSyntheses } from "@/lib/content/queries";
+import { whyItWorked } from "@/lib/content/why";
 
 export const dynamic = "force-dynamic";
 
-const REGIONS = [
+type Option = { value: string; label: string; soon?: boolean };
+
+/*
+ * Argentina y México salen del país de cada cuenta (content_authors.country);
+ * "Resto de HISPAM" es hispam sin ellas.
+ */
+const REGIONS: Option[] = [
   { value: "", label: "Todos" },
   { value: "br", label: "Brasil" },
   { value: "es", label: "España" },
-  { value: "hispam", label: "HISPAM" },
+  { value: "ar", label: "Argentina" },
+  { value: "mx", label: "México" },
+  { value: "hispam", label: "Resto de HISPAM" },
 ];
 
-const AUDIENCES = [
-  { value: "hr_leader", label: "RRHH" },
-  { value: "candidate", label: "Candidatos" },
+const REGION_NAMES: Record<string, string> = { ar: "Argentina", mx: "México" };
+
+/*
+ * Audiencias de la reclasificación (content_posts.audience). Pymes sigue
+ * apagada: 5 posts de 4 cuentas en toda la base, porque las cuentas que
+ * seguimos son de RRHH y casi no le hablan a ese público. Se prende cuando
+ * sumemos fuentes.
+ */
+const AUDIENCES: Option[] = [
+  { value: "rrhh", label: "RRHH" },
+  { value: "empleados", label: "Empleados" },
+  { value: "management_ceo", label: "Management / CEO" },
+  { value: "pymes", label: "Pymes", soon: true },
+  { value: "candidatos", label: "Quien busca trabajo" },
   { value: "", label: "Todas" },
 ];
 
-const PLATFORMS = [
+/** Links guardados con los valores de antes de la reclasificación. */
+const OLD_AUDIENCES: Record<string, string> = { hr_leader: "rrhh", candidate: "candidatos", management: "management_ceo" };
+
+const PLATFORMS: Option[] = [
   { value: "", label: "Todas" },
   { value: "linkedin", label: "LinkedIn" },
   { value: "instagram", label: "Instagram" },
 ];
 
-const ORDENES = [
-  { value: "", label: "Alcance" },
-  { value: "debate", label: "Discusión" },
+const FORMATS: Option[] = [{ value: "", label: "Todos" }, ...FORMAT_GROUPS.map((g) => ({ value: g.key, label: g.label }))];
+
+/*
+ * "Discusión" no se entendía (feedback: "llamarlo engagement"). Las dos
+ * opciones ahora dicen qué ordenan: cuánto superó el post a su cuenta, o
+ * cuánto más se comentó de lo habitual.
+ */
+const ORDERS: Option[] = [
+  { value: "", label: "Más engagement" },
+  { value: "debate", label: "Más comentarios" },
 ];
 
-type Params = { region?: string; audience?: string; platform?: string; sortBy?: string };
+type Params = { region?: string; audience?: string; platform?: string; format?: string; sortBy?: string };
 
 function FilterGroup({
   label,
@@ -37,153 +68,131 @@ function FilterGroup({
   build,
 }: {
   label: string;
-  options: Array<{ value: string; label: string }>;
+  options: Option[];
   current: string;
   build: (value: string) => string;
 }) {
   return (
-    <div className="flex shrink-0 items-center gap-1.5">
-      <span className="text-[12px] uppercase leading-[1.4] text-[var(--faint)]">{label}</span>
-      {options.map((option) => (
-        <a
-          key={option.value}
-          href={build(option.value)}
-          // El rótulo del grupo se ve pero no está asociado: sin esto hay dos
-          // links "Todas" que en el árbol son indistinguibles.
-          aria-label={`${label}: ${option.label}`}
-          aria-current={current === option.value ? "true" : undefined}
-          className={`rounded-full border px-3 py-1 text-[12px] leading-[1.4] transition-colors ${
-            current === option.value
-              ? "border-transparent bg-[var(--brand-soft-2)] font-semibold text-[var(--brand-deep)]"
-              : "border-[var(--border)] text-[var(--muted)] hover:border-[var(--border-strong)]"
-          }`}
-        >
-          {option.label}
-        </a>
-      ))}
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span className="w-[88px] shrink-0 text-[12px] uppercase leading-[1.4] text-[var(--faint)]">{label}</span>
+      {options.map((option) =>
+        option.soon ? (
+          <span
+            key={option.value}
+            title="Próximamente"
+            className="cursor-not-allowed rounded-full border border-dashed border-[var(--border)] px-3 py-1 text-[12px] leading-[1.4] text-[var(--faint)]"
+          >
+            {option.label}
+          </span>
+        ) : (
+          <a
+            key={option.value}
+            href={build(option.value)}
+            // El rótulo del grupo se ve pero no está asociado: sin esto hay
+            // varios links "Todas" indistinguibles para un lector de pantalla.
+            aria-label={`${label}: ${option.label}`}
+            aria-current={current === option.value ? "true" : undefined}
+            className={`rounded-full border px-3 py-1 text-[12px] leading-[1.4] transition-colors ${
+              current === option.value
+                ? "border-transparent bg-[var(--brand-soft-2)] font-semibold text-[var(--brand-deep)]"
+                : "border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:border-[var(--border-strong)]"
+            }`}
+          >
+            {option.label}
+          </a>
+        ),
+      )}
     </div>
   );
 }
 
-export default async function DiscoveryPage({
-  searchParams,
-}: {
-  searchParams: Promise<Params>;
-}) {
+export default async function InspirationPage({ searchParams }: { searchParams: Promise<Params> }) {
   const params = await searchParams;
   const region = params.region ?? "";
   const platform = params.platform ?? "";
+  const format = params.format ?? "";
   const sortBy = params.sortBy === "debate" ? "debate" : "";
-  // Por defecto se muestra la audiencia de RRHH: un post que explota entre
-  // candidatos enseña formato, pero su tema no sirve para el calendario.
-  const audience = params.audience ?? "hr_leader";
+  // Por defecto, RRHH: un post que explota entre quienes buscan trabajo enseña
+  // formato, pero su tema no sirve para el calendario.
+  const audience = OLD_AUDIENCES[params.audience ?? ""] ?? params.audience ?? "rrhh";
 
-  const posts = await loadRankedPosts({
-    region: region || undefined,
-    audience: audience || undefined,
-    platform: platform || undefined,
-    sortBy: sortBy === "debate" ? "debate" : undefined,
-    onlyRelevant: true,
-    // Solo posts de cuentas con línea base conocida: sin eso no se puede decir
-    // que un post haya funcionado, solo que tuvo volumen.
-    onlyMeasured: true,
-    limit: 40,
-  });
+  const own = await loadOwnHandles();
+  const [posts, syntheses] = await Promise.all([
+    loadRankedPosts({
+      region: region || undefined,
+      audience: audience || undefined,
+      platform: platform || undefined,
+      formats: FORMAT_GROUPS.find((g) => g.key === format)?.formats,
+      sortBy: sortBy === "debate" ? "debate" : "outlier",
+      onlyRelevant: true,
+      // Solo cuentas con línea base conocida: sin eso no se puede decir que un
+      // post haya funcionado, solo que tuvo volumen.
+      onlyMeasured: true,
+      limit: 48,
+      // Lo nuestro no es inspiración: va en "Insights propios".
+      excludeHandles: own,
+    }),
+    loadSyntheses(),
+  ]);
+
+  const visible = posts;
+  const accounts = new Set(visible.map((p) => `${p.platform}:${p.author_handle}`)).size;
+  const countryName = REGION_NAMES[region];
+  // Argentina y México no tienen síntesis propia: sus posts se explican contra
+  // la de hispam, que es la que los midió.
+  const whyRegion = countryName ? "hispam" : region || undefined;
 
   const link = (next: Partial<Params>) => {
-    const merged = { region, audience, platform, sortBy, ...next };
+    const merged = { region, audience, platform, format, sortBy, ...next };
     const qs = new URLSearchParams(
       Object.entries(merged).filter(([, v]) => v) as Array<[string, string]>,
     ).toString();
     return `/discovery${qs ? `?${qs}` : ""}`;
   };
 
-  const podium = posts.slice(0, 3);
-  const rest = posts.slice(3);
-
   return (
     <>
       <PageHeader
-        title="Qué funciona"
+        title="Inspiración"
         subtitle={
           sortBy === "debate"
-            ? "Posts que se discutieron mucho más de lo normal para su autor. La discusión marca un tema sobre el que el mercado no se puso de acuerdo — y eso es material para escribir, aunque el post no haya tenido alcance."
-            : "Posts de referentes del rubro ordenados por cuánto superaron el promedio de su propio autor. Solo entran cuentas con historial suficiente para medirlo."
+            ? "Posts que se comentaron mucho más de lo habitual en su cuenta. Marcan temas sobre los que el rubro no está de acuerdo: material para escribir."
+            : "Posts de otros que más superaron el engagement habitual de su propia cuenta. Se compara cada post contra los de la misma cuenta, no contra el resto: por eso una cuenta chica y una grande se pueden mirar juntas."
         }
       />
 
-      {/* En mobile los filtros scrollean en horizontal: envueltos se comían tres
-          líneas de alto antes de llegar al primer post. */}
-      <div className="-mx-4 mb-6 flex gap-5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
-        <FilterGroup
-          label="Mercado"
-          options={REGIONS}
-          current={region}
-          build={(value) => link({ region: value })}
-        />
-        <FilterGroup
-          label="Audiencia"
-          options={AUDIENCES}
-          current={audience}
-          build={(value) => link({ audience: value })}
-        />
-        <FilterGroup
-          label="Red"
-          options={PLATFORMS}
-          current={platform}
-          build={(value) => link({ platform: value })}
-        />
-        <FilterGroup
-          label="Ordenar por"
-          options={ORDENES}
-          current={sortBy}
-          build={(value) => link({ sortBy: value })}
-        />
+      <div className="mb-6 space-y-2 rounded-[var(--r-l)] border border-[var(--border)] bg-[var(--surface)] p-4">
+        <FilterGroup label="Mercado" options={REGIONS} current={region} build={(v) => link({ region: v })} />
+        <FilterGroup label="Audiencia" options={AUDIENCES} current={audience} build={(v) => link({ audience: v })} />
+        <FilterGroup label="Red" options={PLATFORMS} current={platform} build={(v) => link({ platform: v })} />
+        <FilterGroup label="Formato" options={FORMATS} current={format} build={(v) => link({ format: v })} />
+        <FilterGroup label="Ordenar" options={ORDERS} current={sortBy} build={(v) => link({ sortBy: v })} />
       </div>
 
-      {!posts.length ? (
-        <EmptyState
-          title="No hay posts para este corte"
-          hint="Probá sacar filtros, o corré una actualización desde Sistema."
-        />
+      {countryName && accounts < 3 ? (
+        // Pocas cuentas no es "lo que funciona en el país": es lo que funciona
+        // en esas cuentas. Se dice antes de que lo lea como tendencia.
+        <div className="mb-4 rounded-[var(--r-m)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
+          <p className="text-[14px] font-semibold leading-[1.4]">Todavía seguimos pocas cuentas de {countryName}</p>
+          <p className="text-[14px] leading-[1.4] text-[var(--muted)]">
+            {accounts === 0
+              ? "Ninguna con métricas para este corte."
+              : `Estos posts son de ${accounts === 1 ? "una sola cuenta" : `${accounts} cuentas`}: muestran qué le funciona a ${accounts === 1 ? "esa cuenta" : "esas cuentas"}, no al mercado.`}{" "}
+            Se completa cuando sumemos referentes de {countryName}.
+          </p>
+        </div>
+      ) : null}
+
+      {!visible.length ? (
+        <EmptyState title="No hay posts para este corte" hint="Probá sacar algún filtro." />
       ) : (
         <>
-          {/* El podio le da forma visible al pedido original: "los 5 que más
-              engagement tuvieron". Sin esto el #1 y el #37 se ven idénticos. */}
-          <section className="mb-8">
-            <SectionLabel>
-              {sortBy === "debate"
-                ? "Los que más se discutieron"
-                : "Los que más superaron su propio promedio"}
-            </SectionLabel>
-            {/*
-              El multiplicador es el número que decide todo el orden y no se
-              explicaba en ningún lado. Sin saber contra qué se compara, "46×"
-              puede leerse como "46 veces mejor que el resto del mercado", que
-              no es lo que dice.
-            */}
-            <p className="-mt-1 mb-3 text-[12px] leading-[1.4] text-[var(--faint)]">
-              {sortBy === "debate"
-                ? "El multiplicador compara la proporción de comentarios de este post contra la habitual de esa misma cuenta. Un 4× no es que tuvo cuatro veces más comentarios: es que discutieron cuatro veces más de lo que esa cuenta suele generar."
-                : "El multiplicador compara este post contra la mediana de los últimos posts de esa misma cuenta, no contra el resto del mercado. Por eso una cuenta de 700 seguidores y una de 700.000 se pueden mirar juntas. Se cuentan likes y comentarios, y el comentario pesa más."}
-            </p>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {podium.map((post, index) => (
-                <PostCard key={post.id} post={post} rank={index + 1} hero />
-              ))}
-            </div>
-          </section>
-
-          {rest.length ? (
-            <section>
-              <SectionLabel>El resto del corte · {rest.length} posts</SectionLabel>
-              <div className="grid gap-4 xl:grid-cols-2">
-                {rest.map((post, index) => (
-                  <PostCard key={post.id} post={post} rank={index + 4} />
-                ))}
-              </div>
-            </section>
-          ) : null}
+          <p className="mb-3 text-[12px] leading-[1.4] text-[var(--faint)]">{visible.length} posts</p>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {visible.map((post) => (
+              <PostCard key={post.id} post={post} why={whyItWorked(post, syntheses, whyRegion)} />
+            ))}
+          </div>
         </>
       )}
     </>
