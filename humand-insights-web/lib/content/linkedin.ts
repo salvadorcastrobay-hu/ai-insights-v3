@@ -132,6 +132,8 @@ export type LinkedInFetchOpts = {
   maxPosts?: number;
   /** Ventana temporal. 3 meses da margen para tener mediana por autor. */
   postedLimit?: "any" | "24h" | "week" | "month" | "3months";
+  /** YYYY-MM-DD. Si viene, manda sobre postedLimit: es una fecha exacta, no un balde. */
+  postedLimitDate?: string | null;
   /**
    * Los reposts inflan el conteo del autor con engagement que no es suyo y
    * ensucian la mediana que usa el ranking. Por defecto quedan afuera.
@@ -151,6 +153,7 @@ export async function fetchLinkedInProfilePosts(
     targetUrls,
     maxPosts: opts.maxPosts ?? 30,
     postedLimit: opts.postedLimit ?? "3months",
+    ...(opts.postedLimitDate ? { postedLimitDate: opts.postedLimitDate } : {}),
     includeReposts: opts.includeReposts ?? false,
     includeQuotePosts: false,
     scrapeReactions: false,
@@ -226,6 +229,8 @@ export type LinkedInSearchOpts = LinkedInFetchOpts & {
   /** Si viene, se usa para derivar authorKeywords cuando no se pasa explícito. */
   language?: string | null;
   contentType?: "all" | "videos" | "images";
+  /** Recibe cuántos posts devolvió el actor ANTES del filtro local: es lo que se cobra. */
+  onFetched?: (count: number) => void;
 };
 
 /**
@@ -254,6 +259,7 @@ export async function searchLinkedInPosts(
     ...(opts.contentType ? { contentType: opts.contentType } : {}),
   });
   const posts = await fetchDataset(await pollRun(runId));
+  opts.onFetched?.(posts.length);
   // Post-filtro local: la red de seguridad sobre authorKeywords.
   return posts.filter((p) => looksLikeHrAuthor(p.author?.info));
 }

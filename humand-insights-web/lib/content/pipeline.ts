@@ -33,6 +33,21 @@ import { compareOwnBrand, synthesizeAll, type AnalyzedPost } from "./synthesize"
 /** Regiones que no representan un mercado y no se sintetizan por separado. */
 const NON_MARKET_REGIONS = new Set(["global", "sin_region", "unknown"]);
 
+/**
+ * Qué posts propios se comparan contra cada mercado.
+ *
+ * Antes iban todos contra todos. Con @humand.br (en portugués, para Brasil)
+ * eso mezclaría sus posts en la comparación de HISPAM. Ahora: los de la
+ * cuenta de ese mercado más los globales (LinkedIn). Si el mercado no tiene
+ * cuenta propia —España—, se compara con lo que no es de Brasil, que es lo
+ * que se hacía antes.
+ */
+export function ownForRegion<P extends { region: string | null }>(own: P[], region: string): P[] {
+  const isGlobal = (p: P) => NON_MARKET_REGIONS.has(p.region ?? "global");
+  if (own.some((p) => p.region === region)) return own.filter((p) => p.region === region || isGlobal(p));
+  return own.filter((p) => p.region !== "br");
+}
+
 function toAnalyzable(post: StoredContentPost): AnalyzedPost {
   const raw = post as unknown as {
     viral_score: number | null;
@@ -295,8 +310,9 @@ export async function runSynthesis(
     // "Comparás el desempeño propio de Humand contra los patrones detectados"
     // (prompt maestro del brief). Se guarda por mercado, con los patrones de
     // ese mercado como vara.
-    if (own.length) {
-      const comparison = compareOwnBrand(own, synthesis, reference);
+    const ownHere = ownForRegion(own, synthesis.region);
+    if (ownHere.length) {
+      const comparison = compareOwnBrand(ownHere, synthesis, reference);
       await saveOwnBrandComparison(synthesis.region, comparison);
     }
 

@@ -177,7 +177,12 @@ function profileFromFirstPost(handle: string, posts: RawInstagramPost[]): RawIns
 
 export async function fetchInstagramFeed(
   handle: string,
-  opts: { maxItems?: number } = {},
+  opts: {
+    maxItems?: number;
+    /** YYYY-MM-DD. El actor cobra por post devuelto: sin ventana, una cuenta
+     *  que no publicó en meses igual devuelve (y cobra) sus posts viejos. */
+    onlyPostsNewerThan?: string | null;
+  } = {},
 ): Promise<{ profile: RawInstagramProfile; posts: RawInstagramPost[] }> {
   const maxItems = opts.maxItems ?? 50;
   const runId = await startRun(ACTOR_PROFILE, {
@@ -185,6 +190,7 @@ export async function fetchInstagramFeed(
     resultsType: "posts",
     resultsLimit: maxItems,
     addParentData: true,
+    ...(opts.onlyPostsNewerThan ? { onlyPostsNewerThan: opts.onlyPostsNewerThan } : {}),
   });
   const datasetId = await pollRun(runId);
   const posts = await fetchDataset(datasetId);

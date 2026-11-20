@@ -1,6 +1,10 @@
-name: Content Discovery — ingesta diaria
+name: Content Discovery — ingesta semanal
 
-# Sección 8 del brief: "Ingesta de posts nuevos — Diaria".
+# Era diaria (sección 8 del brief) y cada corrida pedía todas las fuentes
+# completas: el plan de Apify se gastaba el primer día del ciclo y el resto del
+# mes no entraba nada. Ahora es semanal, cada fuente pide solo lo reciente y el
+# motor corta al llegar al tope mensual (ver lib/content/budget.ts). El archivo
+# conserva el nombre para no perder el historial de corridas.
 #
 # El trabajo no corre acá: corre en el motor (humand-insights-web en Railway),
 # que es donde están ffmpeg y las API keys. Esto solo lo dispara. El job queda
@@ -9,11 +13,11 @@ name: Content Discovery — ingesta diaria
 
 on:
   schedule:
-    - cron: "0 7 * * *"   # 07:00 UTC (04:00 ART), antes del horario laboral
+    - cron: "0 7 * * 1"   # lunes 07:00 UTC (04:00 ART), antes del análisis semanal de las 09:00
   workflow_dispatch:
     inputs:
       maxItemsPerSource:
-        description: "Tope de posts por fuente (vacío = el results_limit de cada una)"
+        description: "Tope de posts por fuente (vacío = el de cada tipo, ver budget.ts). Nunca pisa el tope mensual."
         required: false
         type: string
 
