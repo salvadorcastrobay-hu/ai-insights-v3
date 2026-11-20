@@ -1,14 +1,17 @@
 import { Badge, Bar, Callout, Card, EmptyState, PageHeader, SectionLabel } from "@/components/ui";
+import { label as readable } from "@/lib/content/labels";
 import {
   loadMarketPositions,
-  loadOwnBrandComparisons,
+  loadOwnHandles,
   loadSyntheses,
+  loadTrendRows,
 } from "@/lib/content/queries";
+import { themeTrends, type ThemeTrend, type TrendRow } from "@/lib/content/trends";
+import { marketPatterns } from "@/lib/content/why";
 import {
   regionLabel,
   type CopyShapeRow,
   type MarketPosition,
-  type OwnBrandComparison,
   type PatternContrast,
   type PatternLift,
   type RegionSynthesis,
@@ -276,7 +279,7 @@ function CopyShape({ rows }: { rows: CopyShapeRow[] }) {
   });
   if (!notable.length) return null;
   const fmt = (r: CopyShapeRow, v: number) =>
-    r.kind === "share" ? pct(v) : Math.round(v).toLocaleString("es");
+    r.kind === "share" ? pct(v) : Math.round(v).toLocaleString("es-AR");
 
   return (
     <div className="mb-5">
@@ -472,100 +475,100 @@ function LiftList({ title, rows }: { title: string; rows: PatternLift[] }) {
   );
 }
 
+function times(n: number): string {
+  return `${(Math.round(n * 10 + 1e-9) / 10).toFixed(1).replace(".", ",")}×`;
+}
+
 /**
- * Lo que pide el prompt maestro del brief: comparar el desempeño propio contra
- * los patrones detectados. Sin esto sabemos qué funciona pero no si lo estamos
- * aplicando.
- *
- * Los tres hallazgos van separados y con su propio encabezado. Antes se
- * emitían como tres párrafos unidos con " · ", o sea la parte más accionable de
- * la app formateada como un CSV.
+ * El resumen del mercado: lo que pidió Sofía ("un resumen de lo que funciona")
+ * antes que cualquier tabla. Dos listas cortas y todo el detalle plegado abajo.
  */
-function OwnBrand({ cmp }: { cmp: OwnBrandComparison }) {
-  if (!cmp.own_posts) return null;
-  const own = cmp.own_median_engagement;
-  const ref = cmp.reference_median_engagement;
-
-  const blocks = [
-    {
-      title: "Funcionan y casi no usamos",
-      items: cmp.missing_patterns.map((p) => `${p.key.replace(/_/g, " ")} · ${p.lift}×`),
-      tone: "brand" as const,
-    },
-    {
-      title: "Formatos que funcionan y casi no publicamos",
-      items: (cmp.missing_formats ?? []).map((f) => `${label(f.key)} · ${f.lift}×`),
-      tone: "brand" as const,
-    },
-    {
-      title: "Temas que funcionan y no tocamos",
-      items: cmp.missing_themes.map((t) => `${t.key.replace(/_/g, " ")} · ${t.lift}×`),
-      tone: "brand" as const,
-    },
-    {
-      title: "Usamos mucho, sin evidencia de que rinda",
-      items: cmp.overused_patterns.map(
-        (p) => `${p.key.replace(/_/g, " ")} · ${Math.round(p.own_share * 100)}% de lo nuestro`,
-      ),
-      tone: "muted" as const,
-    },
-  ].filter((b) => b.items.length);
-
+function Summary({ synthesis, trends, windowEnd }: { synthesis: RegionSynthesis; trends: ThemeTrend[]; windowEnd: string | null }) {
+  const patterns = marketPatterns(synthesis);
+  const market = regionLabel(synthesis.region);
   return (
-    <div className="mt-5 rounded-[var(--r-m)] border border-[var(--border)] bg-[var(--surface-sunk)] p-4">
-      <SectionLabel>Humand contra estos patrones</SectionLabel>
-
-      {own !== null && ref !== null ? (
-        <p className="mb-1 text-[14px] leading-[1.4]">
-          Engagement mediano propio{" "}
-          <span className="font-semibold tabular-nums">{own.toLocaleString("es")}</span> contra{" "}
-          <span className="font-semibold tabular-nums">{ref.toLocaleString("es")}</span> de los
-          referentes
+    <div className="mb-4 grid gap-4 md:grid-cols-2">
+      <div className="rounded-[var(--r-m)] bg-[var(--surface-sunk)] p-4">
+        <p className="text-[16px] font-semibold leading-[1.4]">Lo que más se repite en lo que rinde</p>
+        <p className="mb-2 text-[12px] leading-[1.4] text-[var(--faint)]">
+          Cuánto más aparece en los posts que más superaron a su cuenta en {market} que en el total del mercado.
         </p>
-      ) : null}
+        {patterns.length ? (
+          <ul className="space-y-1.5">
+            {patterns.map((p) => (
+              <li key={p.text} className="flex items-baseline justify-between gap-3 text-[14px] leading-[1.4]">
+                <span className="text-[var(--text)]">{p.text}</span>
+                <span className="shrink-0 text-[12px] text-[var(--faint)]">
+                  <span className="text-[14px] font-semibold tabular-nums text-[var(--brand-deep)]">{times(p.lift)}</span>{" "}
+                  · {p.authors} cuentas
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-[14px] leading-[1.4] text-[var(--muted)]">
+            Todavía nada se destaca con la fuerza suficiente en {market}.
+          </p>
+        )}
+      </div>
 
-      <p className="mb-3 text-[12px] leading-[1.4] text-[var(--faint)]">
-        Se comparan nuestros {cmp.own_posts} posts contra los patrones de este mercado. Son los
-        mismos posts en los tres: publicamos global, los patrones son locales.
-      </p>
-
-      {blocks.length ? (
-        <div className="grid gap-3 sm:grid-cols-2">
-          {blocks.map((block) => (
-            <div key={block.title}>
-              <p className="mb-1.5 text-[12px] font-semibold leading-[1.4]">{block.title}</p>
-              <div className="flex flex-wrap gap-1">
-                {block.items.map((item) => (
-                  <Badge key={item} tone={block.tone}>
-                    {item}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p className="text-[14px] leading-[1.4] text-[var(--muted)]">
-          Sin diferencias claras contra los patrones de este mercado.
+      <div className="rounded-[var(--r-m)] bg-[var(--surface-sunk)] p-4">
+        <p className="text-[16px] font-semibold leading-[1.4]">Temas que vienen creciendo</p>
+        <p className="mb-2 text-[12px] leading-[1.4] text-[var(--faint)]">
+          Cuánto más se publica sobre cada tema en los últimos 30 días que en los dos meses anteriores, entre las
+          cuentas que seguimos en {market}
+          {windowEnd
+            ? ` (hasta el ${new Date(windowEnd).toLocaleDateString("es", { day: "numeric", month: "short" })})`
+            : ""}
+          . Es de qué se habla más, no qué rinde más.
         </p>
-      )}
+        {trends.length ? (
+          <ul className="space-y-1.5">
+            {trends.slice(0, 5).map((t) => (
+              <li key={t.theme} className="flex items-baseline justify-between gap-3 text-[14px] leading-[1.4]">
+                <span className="text-[var(--text)]">{readable(t.theme)}</span>
+                <span className="shrink-0 text-[12px] text-[var(--faint)]">
+                  {pct(t.prevShare)} → {pct(t.recentShare)} de los posts · {t.authors} cuentas
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-[14px] leading-[1.4] text-[var(--muted)]">
+            Ningún tema subió con claridad en el último mes.
+          </p>
+        )}
+      </div>
     </div>
   );
 }
 
-export default async function InsightsPage() {
-  const [syntheses, ownComparisons, marketPositions] = await Promise.all([
+const REGION_TABS = [
+  { value: "", label: "Todos" },
+  { value: "br", label: "Brasil" },
+  { value: "es", label: "España" },
+  { value: "hispam", label: "HISPAM" },
+];
+
+export default async function InsightsPage({ searchParams }: { searchParams: Promise<{ region?: string }> }) {
+  const { region = "" } = await searchParams;
+  const own = await loadOwnHandles();
+  const [allSyntheses, marketPositions, trendRows] = await Promise.all([
     loadSyntheses(),
-    loadOwnBrandComparisons().catch(() => []),
     loadMarketPositions().catch(() => []),
+    // Sin tendencias la página sigue sirviendo: no se cae por esto.
+    loadTrendRows(own).catch((): TrendRow[] => []),
   ]);
+  const syntheses = region ? allSyntheses.filter((s) => s.region === region) : allSyntheses;
   const tensiones = marketPositions.filter((p) => p.is_tension);
-  const ownByRegion = new Map(ownComparisons.map((c) => [c.region, c.comparison]));
 
   if (!syntheses.length) {
     return (
       <>
-        <PageHeader title="Patrones" />
+        <PageHeader
+          title="Insights claves"
+          subtitle="Qué está funcionando en las redes del rubro, por mercado."
+        />
         <EmptyState title="Todavía no hay síntesis generada" />
       </>
     );
@@ -574,37 +577,27 @@ export default async function InsightsPage() {
   return (
     <>
       <PageHeader
-        title="Patrones"
-        subtitle="El lift compara cuánto aparece un patrón arriba contra cuánto aparece en el total. Mayor a 1 significa que funciona mejor de lo que su frecuencia explicaría."
+        title="Insights claves"
+        subtitle="Qué está funcionando en las redes del rubro, por mercado. Cada número compara cuánto aparece algo en los posts que más rindieron contra el resto: 2× es que aparece el doble de lo que su frecuencia explicaría."
       />
 
-      {/*
-        Las tensiones van arriba y son del RUBRO, no de un mercado.
-        Por mercado hay ~100 claims relevantes y ninguna práctica junta los
-        autores que hacen falta; agrupando los tres, sí. Y tiene sentido de
-        fondo: que se discuta si la encuesta de clima sirve no es un debate
-        brasileño ni español. Lo que sí es por mercado es qué formato y qué
-        hook rinden, y eso está más abajo.
-      */}
-      {tensiones.length ? (
-        <Card className="mb-6">
-          <div className="mb-3">
-            <h2 className="text-[18px] font-semibold leading-[1.4]">
-              Sobre qué está dividido el rubro
-            </h2>
-            <p className="mt-1 text-[14px] leading-[1.4] text-[var(--muted)]">
-              Temas donde los referentes sostienen posiciones opuestas, con cuánto rinde
-              cada lado. Se calcula sobre los tres mercados juntos: el debate es del
-              rubro, no de un país.
-            </p>
-          </div>
-          <div className="space-y-2">
-            {tensiones.slice(0, 5).map((p) => (
-              <Tension key={p.object_label} position={p} />
-            ))}
-          </div>
-        </Card>
-      ) : null}
+      <nav aria-label="Mercado" className="mb-6 flex flex-wrap gap-1.5">
+        {REGION_TABS.map((t) => (
+          <a
+            key={t.value}
+            href={t.value ? `/insights?region=${t.value}` : "/insights"}
+            aria-current={region === t.value ? "true" : undefined}
+            className={`rounded-full border px-3 py-1 text-[14px] leading-[1.4] transition-colors ${
+              region === t.value
+                ? "border-transparent bg-[var(--brand-soft-2)] font-semibold text-[var(--brand-deep)]"
+                : "border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:border-[var(--border-strong)]"
+            }`}
+          >
+            {t.label}
+          </a>
+        ))}
+      </nav>
+
 
       <div className="space-y-6">
         {syntheses.map((s) => (
@@ -625,132 +618,170 @@ export default async function InsightsPage() {
               </div>
             ) : null}
 
-            {/* Primero de qué se discute, después con qué formato: el formato
-                sin el mensaje no le dice a nadie qué escribir. */}
-            {s.positions?.length ? (
-              <div className="mb-5">
-                <SectionLabel>
-                  {s.positions.some((p) => p.is_tension)
-                    ? "Sobre qué discute el mercado"
-                    : "De qué se habla, y desde qué postura"}
-                </SectionLabel>
-                {/*
-                  Cuando no hay ninguna tensión hay que decirlo. Una lista de
-                  consensos bajo el título "sobre qué se discute" haría pensar
-                  que el mercado está dividido cuando no lo está — y lo
-                  interesante para Content es justamente lo contrario: un tema
-                  donde todos dicen lo mismo es un tema donde tomar la posición
-                  contraria no tiene competencia.
-                */}
-                {!s.positions.some((p) => p.is_tension) ? (
-                  <p className="mb-2 text-[12px] leading-[1.4] text-[var(--faint)]">
-                    Ningún tema tiene los dos lados sostenidos por varias voces: en este
-                    mercado hay consenso, no debate. Hace falta más volumen de posts para
-                    detectar una tensión real.
-                  </p>
+            <Summary synthesis={s} {...themeTrends(trendRows, s.region)} />
+
+            <details className="group/detail">
+              <summary className="cursor-pointer list-none text-[14px] font-semibold leading-[1.4] text-[var(--brand-ink)] hover:underline">
+                <span className="group-open/detail:hidden">Ver el detalle completo</span>
+                <span className="hidden group-open/detail:inline">Ocultar el detalle</span>
+              </summary>
+              <div className="mt-4">
+
+                {/* Primero de qué se discute, después con qué formato: el formato
+                    sin el mensaje no le dice a nadie qué escribir. */}
+                {s.positions?.length ? (
+                  <div className="mb-5">
+                    <SectionLabel>
+                      {s.positions.some((p) => p.is_tension)
+                        ? "Sobre qué discute el mercado"
+                        : "De qué se habla, y desde qué postura"}
+                    </SectionLabel>
+                    {/*
+                      Cuando no hay ninguna tensión hay que decirlo. Una lista de
+                      consensos bajo el título "sobre qué se discute" haría pensar
+                      que el mercado está dividido cuando no lo está — y lo
+                      interesante para Content es justamente lo contrario: un tema
+                      donde todos dicen lo mismo es un tema donde tomar la posición
+                      contraria no tiene competencia.
+                    */}
+                    {!s.positions.some((p) => p.is_tension) ? (
+                      <p className="mb-2 text-[12px] leading-[1.4] text-[var(--faint)]">
+                        Ningún tema tiene los dos lados sostenidos por varias voces: en este
+                        mercado hay consenso, no debate. Hace falta más volumen de posts para
+                        detectar una tensión real.
+                      </p>
+                    ) : null}
+                    <div className="space-y-2">
+                      {s.positions.slice(0, 5).map((p) => (
+                        <Tension key={p.object_label} position={p} />
+                      ))}
+                    </div>
+                  </div>
                 ) : null}
-                <div className="space-y-2">
-                  {s.positions.slice(0, 5).map((p) => (
-                    <Tension key={p.object_label} position={p} />
-                  ))}
-                </div>
-              </div>
-            ) : null}
 
-            {s.visual_lift ? (
-              <div className="mb-5">
-                <SectionLabel>Cómo se ve lo que funciona</SectionLabel>
-                <p className="mb-3 text-[12px] leading-[1.4] text-[var(--faint)]">
-                  {s.visual_lift.top_n} piezas del corte superior contra una muestra de{" "}
-                  {s.visual_lift.rest_n} del resto del mercado. Es asociación, no causa: dice qué
-                  aparece más en lo que rinde.
-                </p>
+                {s.visual_lift ? (
+                  <div className="mb-5">
+                    <SectionLabel>Cómo se ve lo que funciona</SectionLabel>
+                    <p className="mb-3 text-[12px] leading-[1.4] text-[var(--faint)]">
+                      {s.visual_lift.top_n} piezas del corte superior contra una muestra de{" "}
+                      {s.visual_lift.rest_n} del resto del mercado. Es asociación, no causa: dice qué
+                      aparece más en lo que rinde.
+                    </p>
+                    <div className="grid gap-6 sm:grid-cols-2">
+                      <ContrastList title="Tipo de pieza" rows={s.visual_lift.creative_type} />
+                      <ContrastList title="Nivel de producción" rows={s.visual_lift.production_level} />
+                      <ContrastList title="Quién aparece" rows={s.visual_lift.person_identity ?? []} />
+                      <ContrastList title="Cómo aparece la persona" rows={s.visual_lift.person_framing} />
+                      <ContrastList title="Dónde transcurre" rows={s.visual_lift.setting ?? []} />
+                      <ContrastList title="Cuánto se ve la marca" rows={s.visual_lift.brand_treatment ?? []} />
+                      <ContrastList title="Texto sobre la imagen" rows={s.visual_lift.text_on_image} />
+                      <ContrastList title="Palabras en la portada" rows={s.visual_lift.cover_text ?? []} />
+                      {/* Leído de la portada, no del video entero: por eso solo entre videos. */}
+                      <ContrastList title="Estilo de video (entre videos)" rows={s.visual_lift.video_style ?? []} />
+                    </div>
+                  </div>
+                ) : s.visual_mix?.length ? (
+                  <div className="mb-5">
+                    <SectionLabel>Cómo se ve lo que funciona</SectionLabel>
+                    {/*
+                      Sin muestra de control todavía: se compara DENTRO del corte,
+                      no contra el resto, y llamarlo lift sería afirmar algo que el
+                      dato no sostiene.
+                    */}
+                    <p className="mb-2 text-[12px] leading-[1.4] text-[var(--faint)]">
+                      Sobre las piezas del corte superior que pudimos analizar visualmente. Es
+                      una comparación entre las que funcionaron, no contra el resto del mercado.
+                    </p>
+                    <ul className="space-y-2">
+                      {s.visual_mix.slice(0, 6).map((v) => (
+                        <li
+                          key={v.key}
+                          className="flex items-baseline gap-2 text-[14px] leading-[1.4]"
+                        >
+                          <span className="min-w-0 flex-1 truncate">{label(v.key)}</span>
+                          <span className="shrink-0 tabular-nums text-[var(--muted)]">
+                            {v.posts} posts · {v.authors} autores
+                          </span>
+                          {v.median_outlier ? (
+                            <span className="shrink-0 font-semibold tabular-nums">
+                              {v.median_outlier.toFixed(1)}×
+                            </span>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+
+                {s.copy_shape?.length ? <CopyShape rows={s.copy_shape} /> : null}
+
                 <div className="grid gap-6 sm:grid-cols-2">
-                  <ContrastList title="Tipo de pieza" rows={s.visual_lift.creative_type} />
-                  <ContrastList title="Nivel de producción" rows={s.visual_lift.production_level} />
-                  <ContrastList title="Quién aparece" rows={s.visual_lift.person_identity ?? []} />
-                  <ContrastList title="Cómo aparece la persona" rows={s.visual_lift.person_framing} />
-                  <ContrastList title="Dónde transcurre" rows={s.visual_lift.setting ?? []} />
-                  <ContrastList title="Cuánto se ve la marca" rows={s.visual_lift.brand_treatment ?? []} />
-                  <ContrastList title="Texto sobre la imagen" rows={s.visual_lift.text_on_image} />
-                  <ContrastList title="Palabras en la portada" rows={s.visual_lift.cover_text ?? []} />
-                  {/* Leído de la portada, no del video entero: por eso solo entre videos. */}
-                  <ContrastList title="Estilo de video (entre videos)" rows={s.visual_lift.video_style ?? []} />
+                  <LiftList title="Hooks que ganan" rows={s.winning_hooks ?? []} />
+                  <LiftList title="Temas que ganan" rows={s.winning_themes ?? []} />
+                  <LiftList title="Estructuras que ganan" rows={s.winning_structures ?? []} />
+                  <LiftList title="Formatos que ganan" rows={s.winning_formats ?? []} />
+                  <LiftList title="Qué le piden al lector" rows={s.winning_ctas ?? []} />
+                  <LiftList title="Vigencia" rows={s.winning_timeliness ?? []} />
                 </div>
-              </div>
-            ) : s.visual_mix?.length ? (
-              <div className="mb-5">
-                <SectionLabel>Cómo se ve lo que funciona</SectionLabel>
-                {/*
-                  Sin muestra de control todavía: se compara DENTRO del corte,
-                  no contra el resto, y llamarlo lift sería afirmar algo que el
-                  dato no sostiene.
-                */}
-                <p className="mb-2 text-[12px] leading-[1.4] text-[var(--faint)]">
-                  Sobre las piezas del corte superior que pudimos analizar visualmente. Es
-                  una comparación entre las que funcionaron, no contra el resto del mercado.
-                </p>
-                <ul className="space-y-2">
-                  {s.visual_mix.slice(0, 6).map((v) => (
-                    <li
-                      key={v.key}
-                      className="flex items-baseline gap-2 text-[14px] leading-[1.4]"
-                    >
-                      <span className="min-w-0 flex-1 truncate">{label(v.key)}</span>
-                      <span className="shrink-0 tabular-nums text-[var(--muted)]">
-                        {v.posts} posts · {v.authors} autores
-                      </span>
-                      {v.median_outlier ? (
-                        <span className="shrink-0 font-semibold tabular-nums">
-                          {v.median_outlier.toFixed(1)}×
-                        </span>
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
 
-            {s.copy_shape?.length ? <CopyShape rows={s.copy_shape} /> : null}
+                {s.winning_axes ? <Axes axes={s.winning_axes} /> : null}
 
-            <div className="grid gap-6 sm:grid-cols-2">
-              <LiftList title="Hooks que ganan" rows={s.winning_hooks ?? []} />
-              <LiftList title="Temas que ganan" rows={s.winning_themes ?? []} />
-              <LiftList title="Estructuras que ganan" rows={s.winning_structures ?? []} />
-              <LiftList title="Formatos que ganan" rows={s.winning_formats ?? []} />
-              <LiftList title="Qué le piden al lector" rows={s.winning_ctas ?? []} />
-              <LiftList title="Vigencia" rows={s.winning_timeliness ?? []} />
-            </div>
-
-            {s.winning_axes ? <Axes axes={s.winning_axes} /> : null}
-
-            <div className="mt-5">
-              {s.timing ? <Timing timing={s.timing} /> : null}
-              {s.company_pages ? <CompanyPages data={s.company_pages} /> : null}
-            </div>
-
-            {s.top_topics.length ? (
-              <div className="mt-5">
-                <SectionLabel>De qué hablan</SectionLabel>
-                <div className="flex flex-wrap gap-1">
-                  {s.top_topics.slice(0, 10).map((t) => (
-                    <Badge key={t.key} tone="muted">
-                      {t.key}
-                    </Badge>
-                  ))}
+                <div className="mt-5">
+                  {s.timing ? <Timing timing={s.timing} /> : null}
+                  {s.company_pages ? <CompanyPages data={s.company_pages} /> : null}
                 </div>
-              </div>
-            ) : null}
 
-            {ownByRegion.has(s.region) ? <OwnBrand cmp={ownByRegion.get(s.region)!} /> : null}
+                {s.top_topics.length ? (
+                  <div className="mt-5">
+                    <SectionLabel>De qué hablan</SectionLabel>
+                    <div className="flex flex-wrap gap-1">
+                      {s.top_topics.slice(0, 10).map((t) => (
+                        <Badge key={t.key} tone="muted">
+                          {t.key}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </details>
           </Card>
         ))}
       </div>
 
+      {/*
+        Las tensiones son del RUBRO, no de un mercado: van después de los
+        resúmenes por mercado, que es lo primero que se viene a buscar.
+        Por mercado hay ~100 claims relevantes y ninguna práctica junta los
+        autores que hacen falta; agrupando los tres, sí. Y tiene sentido de
+        fondo: que se discuta si la encuesta de clima sirve no es un debate
+        brasileño ni español. Lo que sí es por mercado es qué formato y qué
+        hook rinden, y eso está más abajo.
+      */}
+      {tensiones.length ? (
+        <Card className="mt-6">
+          <div className="mb-3">
+            <h2 className="text-[18px] font-semibold leading-[1.4]">
+              Sobre qué está dividido el rubro
+            </h2>
+            <p className="mt-1 text-[14px] leading-[1.4] text-[var(--muted)]">
+              Temas donde los referentes sostienen posiciones opuestas, con cuánto rinde
+              cada lado. Se calcula sobre los tres mercados juntos: el debate es del
+              rubro, no de un país.
+            </p>
+          </div>
+          <div className="space-y-2">
+            {tensiones.slice(0, 5).map((p) => (
+              <Tension key={p.object_label} position={p} />
+            ))}
+          </div>
+        </Card>
+      ) : null}
+
       <p className="mt-6 text-[12px] leading-[1.4] text-[var(--faint)]">
         Las ideas replicables que antes se listaban acá son el feed de{" "}
         <a href="/discovery" className="font-semibold text-[var(--brand-ink)] hover:underline">
-          Qué funciona
+          Inspiración
         </a>{" "}
         — eran los mismos posts mostrados dos veces.
       </p>

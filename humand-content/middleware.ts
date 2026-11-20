@@ -5,10 +5,17 @@ import { CONTENT_ROLES, getSessionRoles, hasAnyRole } from "@/lib/auth/roles";
 import { applySupabaseCookies, createMiddlewareSupabaseClient } from "@/lib/supabase/server";
 
 const LOGIN_PATH = "/login";
-const DEFAULT_REDIRECT = "/discovery";
+const DEFAULT_REDIRECT = "/";
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
+
+  // Solo para revisar la app en local sin loguearse. Exige las dos cosas: un
+  // build de producción nunca corre con NODE_ENV "development", y el flag vive
+  // en .env.local, que no se commitea.
+  if (process.env.NODE_ENV === "development" && process.env.CONTENT_DEV_SKIP_AUTH === "1") {
+    return NextResponse.next();
+  }
   const { supabase, getResponse } = createMiddlewareSupabaseClient(request);
 
   const {

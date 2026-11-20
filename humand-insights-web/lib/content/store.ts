@@ -84,6 +84,9 @@ export type ContentPostUpsert = {
    * post-features.ts.
    */
   features?: PostFeatures | null;
+  /** Solo cuentas propias leídas por la Graph API de Meta (ver meta.ts). */
+  native_insights?: unknown;
+  native_fetched_at?: string | null;
   raw: unknown;
 };
 
@@ -112,7 +115,7 @@ export type RefreshJob = {
   options: Record<string, unknown>;
   source_ids: string[];
   current_label: string | null;
-  progress: Record<string, number>;
+  progress: Record<string, unknown>;
   results: unknown[];
   cancel_requested: boolean;
   error: string | null;
@@ -227,6 +230,24 @@ export async function insertSuggestedSources(
     );
   if (error) throw error;
   return count ?? 0;
+}
+
+/**
+ * Items de Apify cobrados por las corridas de discovery desde una fecha. Sale
+ * de `progress.billed` de cada job; las corridas de antes de que existiera el
+ * campo no lo tienen y cuentan 0. Paginado por las dudas, aunque son decenas.
+ */
+export async function billedSince(iso: string): Promise<number> {
+  const { data, error } = await getSupabase()
+    .from("content_refresh_jobs")
+    .select("progress")
+    .eq("kind", "discovery")
+    .gte("started_at", iso)
+    .limit(1000);
+  // Si no se puede leer el gasto, se asume el tope agotado: es preferible una
+  // corrida que no trae nada a una que gasta a ciegas.
+  if (error) throw error;
+  return (data ?? []).reduce((sum, row) => sum + Number((row.progress as Record<string, unknown>)?.billed ?? 0), 0);
 }
 
 export async function markSourceRun(sourceId: string, status: string): Promise<void> {
@@ -565,6 +586,14 @@ export async function loadHandlesWithUnscoredPosts(platform: string): Promise<st
       .select("author_handle")
       .eq("platform", platform)
       .is("viral_score", null)
+      // Solo los que nunca pasaron por el scoring. Un post fijado pasa, pero
+      // queda sin viral_score a propósito (scorePosts lo excluye: junta
+      // engagement por estar arriba). Antes entraban acá y cada tanda de
+      // analyze volvía a puntuar todas las cuentas que tenían uno: 13 cuentas
+      // y ~400 posts por llamada, para no cambiar nada (medido 2026-11-11:
+      // los 20 "rezagados" eran todos fijados).
+      .is("scored_at", null)
+      .eq("is_pinned", false)
       .lt("posted_at", cutoff)
       .limit(2000);
     if (error) throw error;

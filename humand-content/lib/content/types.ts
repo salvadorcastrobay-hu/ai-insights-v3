@@ -97,6 +97,15 @@ export type PostFeatures = {
   is_sponsored: boolean;
 };
 
+export type NativeInsights = {
+  reach: number | null;
+  views: number | null;
+  saved: number | null;
+  shares: number | null;
+  total_interactions: number | null;
+  fetched_at?: string;
+};
+
 export type ContentPost = {
   id: string;
   platform: Platform;
@@ -109,6 +118,17 @@ export type ContentPost = {
   likes_count: number | null;
   comments_count: number | null;
   shares_count: number | null;
+  /** Reproducciones. Solo reels y videos de Instagram; LinkedIn no las expone. */
+  video_views?: number | null;
+  /**
+   * Lo que Meta mide de nuestros posts y el scraping no ve. Solo cuentas
+   * propias leídas por la Graph API; null en el resto.
+   */
+  native_insights?: NativeInsights | null;
+  /** Si algún anuncio nuestro usó este post. Se completa en Insights propios. */
+  promoted?: { ads: number; spend: number; currency: string } | null;
+  /** Interacciones sobre seguidores al momento del scrape. Null sin seguidores. */
+  engagement_rate?: number | null;
   outlier_factor: number | null;
   /**
    * Cuánto más se discutió el post que lo normal de su autor. Mide fricción,
@@ -157,6 +177,8 @@ export type ContentPost = {
    */
   image_url?: string | null;
   author: PostAuthor | null;
+  /** Mercados de las fuentes que trajeron el post. Resuelto en la query. */
+  regions?: string[];
 };
 
 /** Lo que se necesita del autor para pintar una tarjeta. */
@@ -429,4 +451,33 @@ export type CoverageSnapshot = {
   competitors_covered: number;
   posts_ingested: number;
   posts_analyzed: number;
+};
+
+/** Un anuncio nuestro de Meta con sus métricas en la ventana (content_own_ads). */
+export type OwnAd = {
+  ad_id: string;
+  ad_account_id: string;
+  ad_account_name: string | null;
+  currency: string | null;
+  campaign_id: string | null;
+  campaign_name: string | null;
+  objective: string | null;
+  adset_name: string | null;
+  ad_name: string | null;
+  status: string | null;
+  created_time: string | null;
+  creative_title: string | null;
+  creative_body: string | null;
+  object_type: string | null;
+  thumbnail_url: string | null;
+  ig_permalink: string | null;
+  ig_shortcode: string | null;
+  period_start: string;
+  period_end: string;
+  spend: number;
+  impressions: number;
+  reach: number;
+  clicks: number;
+  leads: number;
+  fetched_at: string;
 };

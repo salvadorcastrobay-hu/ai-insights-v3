@@ -36,6 +36,7 @@ import {
   type RawInstagramPost,
 } from "@/lib/competitor-ads/apify";
 import {
+  billedSince,
   createJob,
   findActiveJob,
   handlesNeedingHydration,
@@ -63,6 +64,10 @@ import {
   type RefreshJob,
   type StoredContentPost,
 } from "./store";
+import { classifyAudiences, inferCountries } from "./audience";
+import { fetchOwnInstagramPosts, findInstagramAccount, type InstagramAccount } from "./meta";
+import { refreshOwnAds, type OwnAdsResult } from "./own-ads";
+import { allowance, monthStart, monthlyBudget, planSources, runShare, windowStart } from "./budget";
 import { classifyPosts } from "./classify";
 import { computeFeatures, linkedInFormat, type PostFeatures } from "./post-features";
 import {
@@ -84,10 +89,22 @@ const HEARTBEAT_MS = 10_000;
 const PROFILE_KINDS = new Set(["profile", "competitor_profile", "own_brand"]);
 
 export type DiscoveryOptions = {
-  /** Tope global por fuente. Si no viene, manda el results_limit de cada una. */
+  /**
+   * Pisa el tope por fuente (ver budget.ts). Para cargas puntuales a mano, como
+   * traer la historia de una cuenta nueva. Nunca pisa el tope del mes.
+   */
   maxItemsPerSource?: number;
   /** Corta la corrida entera. Red de seguridad contra un gasto inesperado. */
   maxTotalItems?: number;
+  /** Sin ventana de fechas: trae la historia y no solo lo reciente. Va con maxItemsPerSource. */
+  backfill?: boolean;
+  /** Pisa CONTENT_MONTHLY_ITEM_BUDGET para esta corrida. */
+  monthlyItemBudget?: number;
+  /**
+   * Actualiza los ads propios (Graph API, gratis). Por defecto corre en las
+   * corridas completas y no en las de fuentes sueltas.
+   */
+  ownAds?: boolean;
 };
 
 export type SourceResult = {
@@ -100,6 +117,10 @@ export type SourceResult = {
   /** Cuentas nuevas dejadas como 'suggested' (solo fuentes de tipo hashtag). */
   suggested_accounts?: number;
   error?: string;
+  /** Por qué no se corrió, cuando no es un error (ej. tope del mes). */
+  skipped?: string;
+  /** "meta" cuando se leyó por la Graph API y no por Apify. */
+  via?: "meta";
 };
 
 // ─── Mapeo de items de Apify ─────────────────────────────────────────────────
@@ -291,66 +312,137 @@ function mapLinkedInPost(raw: RawLinkedInPost): ContentPostUpsert | null {
  * que en LinkedIn la búsqueda ordena por relevancia y sí lo devuelve — así que
  * ahí los resultados se rankean directo.
  */
-async function fetchSource(
-  source: ContentSource,
-  maxItems: number,
-): Promise<ContentPostUpsert[]> {
-  const mapped = await fetchAndMap(source, maxItems);
-  // La región es de la fuente, no del post: por eso se calcula acá y no en el
-  // mapper. Es la que decide el huso horario de `weekday` y `daypart`.
-  return mapped.map((p) => ({ ...p, features: computeFeatures(p, source.region) }));
+/**
+ * Cuántos items cobra Apify por cada post que se le pide a una fuente. La
+ * búsqueda de LinkedIn pide el doble y filtra por headline.
+ */
+export function itemCost(source: Pick<ContentSource, "platform" | "kind">): number {
+  return source.platform === "linkedin" && (source.kind === "keyword" || source.kind === "hashtag") ? 2 : 1;
 }
 
-async function fetchAndMap(
-  source: ContentSource,
-  maxItems: number,
-): Promise<ContentPostUpsert[]> {
+type Fetched = { posts: ContentPostUpsert[]; billed: number };
+
+/**
+ * Cuentas propias de Instagram que se leen por la Graph API de Meta. Es
+ * gratis, así que no pasa por el tope de Apify, y pide una ventana más larga:
+ * vuelve a traer alcance y guardados de los posts de los últimos meses, que
+ * siguen sumando.
+ */
+const NATIVE_WINDOW_DAYS = 90;
+const NATIVE_MAX_POSTS = 200;
+
+async function nativeAccountFor(source: ContentSource): Promise<InstagramAccount | null> {
+  if (source.platform !== "instagram" || source.kind !== "own_brand") return null;
+  return findInstagramAccount(source.value);
+}
+
+async function fetchNative(account: InstagramAccount, source: ContentSource, backfill: boolean): Promise<Fetched> {
+  const since = backfill ? null : new Date(Date.now() - NATIVE_WINDOW_DAYS * 86_400_000).toISOString().slice(0, 10);
+  const mapped = await fetchOwnInstagramPosts(account, { since, max: NATIVE_MAX_POSTS });
+  const now = new Date().toISOString();
+  const posts = mapped
+    .filter((p): p is NonNullable<typeof p> => p !== null)
+    .map((p) => ({ ...p, native_fetched_at: p.native_insights ? now : null, features: computeFeatures(p, source.region) }));
+  // El autor sale de la misma API: con followers frescos la hidratación por
+  // Apify lo saltea.
+  await upsertAuthors([
+    {
+      platform: "instagram",
+      handle: account.username,
+      full_name: account.name ?? null,
+      biography: account.biography ?? null,
+      website: account.website ?? null,
+      followers_count: account.followers_count ?? null,
+      following_count: account.follows_count ?? null,
+      posts_count: account.media_count ?? null,
+      avatar_url: account.profile_picture_url ?? null,
+      platform_author_id: account.id,
+    },
+  ]);
+  return { posts, billed: 0 };
+}
+
+async function fetchSource(source: ContentSource, maxItems: number, since: string | null): Promise<Fetched> {
+  const { posts, billed } = await fetchAndMap(source, maxItems, since);
+  // La región es de la fuente, no del post: por eso se calcula acá y no en el
+  // mapper. Es la que decide el huso horario de `weekday` y `daypart`.
+  return { posts: posts.map((p) => ({ ...p, features: computeFeatures(p, source.region) })), billed };
+}
+
+/**
+ * Trae y mapea los posts de una fuente. `billed` es lo que devolvió el actor
+ * antes de cualquier filtro nuestro: es lo que Apify cobra.
+ */
+async function fetchAndMap(source: ContentSource, maxItems: number, since: string | null): Promise<Fetched> {
   if (source.platform === "linkedin") {
     switch (source.kind) {
       case "profile":
       case "competitor_profile":
       case "own_brand": {
-        const posts = await fetchLinkedInProfilePosts([source.value], { maxPosts: maxItems });
-        return posts.map(mapLinkedInPost).filter((p): p is ContentPostUpsert => p !== null);
+        const posts = await fetchLinkedInProfilePosts([source.value], {
+          maxPosts: maxItems,
+          // Sin ventana (carga de historia), todo; si no, desde la fecha.
+          postedLimit: since ? "3months" : "any",
+          postedLimitDate: since,
+        });
+        return {
+          posts: posts.map(mapLinkedInPost).filter((p): p is ContentPostUpsert => p !== null),
+          billed: posts.length,
+        };
       }
       case "hashtag":
       case "keyword": {
+        let billed = 0;
         const posts = await searchLinkedInPosts(source.value, {
-          // Se pide de más y se filtra duro por headline: a USD 0,00001 el post
-          // el sobrecosto es nulo y la precisión sube mucho.
-          maxPosts: Math.max(maxItems * 2, 40),
+          // Se pide el doble y se filtra duro por headline. Cuesta USD 0,002 el
+          // post (no 0,00001, como decía este comentario): antes pedía como
+          // mínimo 40 por búsqueda y 16 búsquedas eran 640 posts por corrida.
+          maxPosts: maxItems * itemCost(source),
           sortBy: "relevance",
           language: source.language,
+          onFetched: (n) => {
+            billed = n;
+          },
         });
-        return posts.map(mapLinkedInPost).filter((p): p is ContentPostUpsert => p !== null);
+        return {
+          posts: posts.map(mapLinkedInPost).filter((p): p is ContentPostUpsert => p !== null),
+          billed,
+        };
       }
       default:
-        return [];
+        return { posts: [], billed: 0 };
     }
   }
 
   // Instagram
   switch (source.kind) {
     case "hashtag": {
+      // El hashtag ya devuelve lo más reciente: no necesita ventana.
       const raw = await fetchInstagramHashtag(source.value, { maxItems });
-      return raw
-        .map((item) => mapInstagramPost(item, source.platform))
-        .filter((p): p is ContentPostUpsert => p !== null);
+      return {
+        posts: raw
+          .map((item) => mapInstagramPost(item, source.platform))
+          .filter((p): p is ContentPostUpsert => p !== null),
+        billed: raw.length,
+      };
     }
     case "profile":
     case "competitor_profile":
     case "own_brand": {
-      const feed = await fetchInstagramFeed(source.value, { maxItems });
-      return feed.posts
-        .map((item) => mapInstagramPost(item, source.platform))
-        .filter((p): p is ContentPostUpsert => p !== null);
+      const feed = await fetchInstagramFeed(source.value, { maxItems, onlyPostsNewerThan: since });
+      return {
+        posts: feed.posts
+          .map((item) => mapInstagramPost(item, source.platform))
+          .filter((p): p is ContentPostUpsert => p !== null),
+        billed: feed.posts.length,
+      };
     }
     case "keyword":
       // En Instagram no se scrapea: se resuelve aparte con searchInstagram y
       // queda como sugerencias. loadRunnableSources ya lo filtra.
-      return [];
+      return { posts: [], billed: 0 };
     default:
-      return [];
+      return { posts: [], billed: 0 };
   }
 }
 
@@ -432,8 +524,8 @@ async function suggestAccountsFromHashtag(
  * Completa followers de los autores que no conocemos. Sin esto, los posts que
  * vienen de hashtag quedan sin engagement rate y el ranking se degrada.
  */
-async function hydrateAuthors(platform: string, handles: string[]): Promise<number> {
-  const pending = await handlesNeedingHydration(platform, handles);
+async function hydrateAuthors(platform: string, handles: string[], max = Infinity): Promise<number> {
+  const pending = (await handlesNeedingHydration(platform, handles)).slice(0, max);
   if (!pending.length) return 0;
 
   // Un solo run para todos los handles: mucho más barato que uno por cuenta.
@@ -532,10 +624,37 @@ export async function rescoreAuthors(platform: Platform, handles: string[]): Pro
  * Va por score descendente a propósito: lo que importa entender es lo que
  * funcionó. Clasificar la cola larga sería gastar tokens en ruido.
  */
-export async function runAnalysis(
-  platform: Platform,
-  limit = 100,
-): Promise<{ analyzed: number; skipped: number }> {
+export type AnalysisResult = {
+  analyzed: number;
+  skipped: number;
+  /** Posts que recibieron audiencia en esta tanda (ver audience.ts). */
+  audiences: number;
+  /** Cuentas de HISPAM a las que se les buscó país en esta tanda. */
+  countries: number;
+};
+
+export async function runAnalysis(platform: Platform, limit = 100): Promise<AnalysisResult> {
+  const result = await classifyNew(platform, limit);
+  // Después de clasificar, porque la audiencia solo se pide para los posts que
+  // el clasificador marcó relevantes. Corre aunque no haya posts nuevos: puede
+  // quedar cola de tandas anteriores. Si falla, no tira la tanda: lo
+  // clasificado ya está guardado y la semana siguiente se reintenta.
+  const audiences = await classifyAudiences(platform, limit).catch((err) => {
+    console.warn(`[analyze] audiencia de ${platform} falló:`, err);
+    return { classified: 0 };
+  });
+  const countries = await inferCountries(platform).catch((err) => {
+    console.warn(`[analyze] país de ${platform} falló:`, err);
+    return { inferred: 0, unknown: 0 };
+  });
+  return {
+    ...result,
+    audiences: audiences.classified,
+    countries: countries.inferred + countries.unknown,
+  };
+}
+
+async function classifyNew(platform: Platform, limit: number): Promise<{ analyzed: number; skipped: number }> {
   // Primero se rescatan los que quedaron sin puntuar: el clasificador exige
   // viral_score, así que un post sin score es un post que nunca se analiza.
   // Sin esto el backlog crece en silencio cada vez que una fuente deja de
@@ -630,16 +749,37 @@ async function runDiscovery(job: RefreshJob, options: DiscoveryOptions): Promise
    *  de decidir si una cuenta vale la pena aprobar. */
   const discoveredHandles = new Set<string>();
   let totalUpserted = 0;
+  /** Items que cobró Apify en esta corrida (posts crudos + perfiles hidratados). */
+  let billed = 0;
 
-  const sources = await loadRunnableSources(job.source_ids.length ? job.source_ids : undefined);
-  await updateJob(job.id, { state: "running", progress: { done: 0, total: sources.length, upserted: 0 } });
+  const now = new Date();
+  const budget = options.monthlyItemBudget ?? monthlyBudget();
+  // Si no se puede leer lo gastado, la corrida no arranca: mejor no traer nada
+  // que gastar a ciegas.
+  const spentBefore = await billedSince(monthStart(now));
+  const since = options.backfill ? null : windowStart(now);
+  // Tope de esta corrida: su parte del mes, o lo que se pida a mano. Las
+  // cargas a mano (backfill) no se reparten, pero tampoco pasan el tope del mes.
+  const runCap = Math.min(
+    options.maxTotalItems ?? Infinity,
+    options.backfill ? Infinity : runShare(budget, spentBefore, now),
+  );
+  const plan = planSources(
+    await loadRunnableSources(job.source_ids.length ? job.source_ids : undefined),
+    options.maxItemsPerSource,
+  );
+  const sources = plan.map((p) => p.source);
+  await updateJob(job.id, {
+    state: "running",
+    progress: { done: 0, total: sources.length, upserted: 0, billed: 0, budget, spent_before: spentBefore, run_cap: runCap },
+  });
 
   const heartbeat = setInterval(() => {
     void updateJob(job.id, {});
   }, HEARTBEAT_MS);
 
   try {
-    for (const [index, source] of sources.entries()) {
+    for (const [index, { source, maxItems: planned }] of plan.entries()) {
       const current = await getCancelState(job.id);
       if (current) {
         await updateJob(job.id, {
@@ -653,16 +793,21 @@ async function runDiscovery(job: RefreshJob, options: DiscoveryOptions): Promise
       const label = source.label ?? source.value;
       await updateJob(job.id, {
         current_label: label,
-        progress: { done: index, total: sources.length, upserted: totalUpserted },
+        progress: { done: index, total: sources.length, upserted: totalUpserted, billed, budget, spent_before: spentBefore },
       });
 
-      const maxItems = Math.min(
-        source.results_limit,
-        options.maxItemsPerSource ?? source.results_limit,
-        Math.max(0, (options.maxTotalItems ?? Infinity) - totalUpserted),
-      );
+      const native = await nativeAccountFor(source).catch(() => null);
+      const cost = itemCost(source);
+      const maxItems = native
+        ? planned
+        : Math.min(
+            allowance(planned, budget, spentBefore + billed, cost),
+            allowance(planned, runCap, billed, cost),
+          );
 
       if (maxItems <= 0) {
+        // Salteada, no fallida: no cuenta para summarizeSourceResults ni pisa
+        // el last_run_status de la fuente.
         results.push({
           source_id: source.id,
           label,
@@ -670,13 +815,17 @@ async function runDiscovery(job: RefreshJob, options: DiscoveryOptions): Promise
           region: source.region,
           fetched: 0,
           upserted: 0,
-          error: "cupo total de la corrida agotado",
+          skipped: "tope de la corrida o del mes alcanzado",
         });
         continue;
       }
 
       try {
-        const mapped = await fetchSource(source, maxItems);
+        const fetched = native
+          ? await fetchNative(native, source, Boolean(options.backfill))
+          : await fetchSource(source, maxItems, since);
+        const mapped = fetched.posts;
+        billed += fetched.billed;
         const raw = mapped.map((m) => m.raw as RawLinkedInPost);
 
         await upsertPosts(mapped);
@@ -732,6 +881,7 @@ async function runDiscovery(job: RefreshJob, options: DiscoveryOptions): Promise
           fetched: mapped.length,
           upserted: mapped.length,
           suggested_accounts: suggested,
+          ...(native ? { via: "meta" as const } : {}),
         });
         await markSourceRun(source.id, "ok");
       } catch (err) {
@@ -752,7 +902,7 @@ async function runDiscovery(job: RefreshJob, options: DiscoveryOptions): Promise
 
       await updateJob(job.id, {
         results,
-        progress: { done: index + 1, total: sources.length, upserted: totalUpserted },
+        progress: { done: index + 1, total: sources.length, upserted: totalUpserted, billed, budget, spent_before: spentBefore },
       });
     }
 
@@ -761,8 +911,14 @@ async function runDiscovery(job: RefreshJob, options: DiscoveryOptions): Promise
     const igHandles = touchedByPlatform.get("instagram") ?? new Set<string>();
     const toHydrate = [...new Set([...igHandles, ...discoveredHandles])];
     await updateJob(job.id, { current_label: "Hidratando autores…" });
-    const hydrated = toHydrate.length
-      ? await hydrateAuthors("instagram", toHydrate).catch((err) => {
+    // La hidratación también se cobra (un item por perfil), así que respeta el
+    // tope. handlesNeedingHydration ya deja solo las cuentas que no conocemos.
+    const hydrateBudget = Math.min(
+      allowance(toHydrate.length, budget, spentBefore + billed),
+      allowance(toHydrate.length, runCap, billed),
+    );
+    const hydrated = hydrateBudget
+      ? await hydrateAuthors("instagram", toHydrate, hydrateBudget).catch((err) => {
           console.warn("[discovery-job] hidratación falló:", err);
           return 0;
         })
@@ -780,6 +936,17 @@ async function runDiscovery(job: RefreshJob, options: DiscoveryOptions): Promise
       await refreshAuthorSegments(platform).catch((err) => {
         console.warn(`[discovery-job] no se pudo segmentar autores de ${platform}:`, err);
         return 0;
+      });
+    }
+
+    // Ads propios: no dependen de las fuentes ni del tope de Apify. Un error
+    // acá no tumba la corrida, queda escrito en el progreso.
+    let ownAds: OwnAdsResult | { error: string } | null = null;
+    if (options.ownAds ?? !job.source_ids.length) {
+      await updateJob(job.id, { current_label: "Actualizando ads propios…" });
+      ownAds = await refreshOwnAds().catch((err) => {
+        console.warn("[discovery-job] ads propios:", err);
+        return { error: (err as Error)?.message ?? String(err) };
       });
     }
 
@@ -831,8 +998,14 @@ async function runDiscovery(job: RefreshJob, options: DiscoveryOptions): Promise
         done: sources.length,
         total: sources.length,
         upserted: totalUpserted,
+        // Cota superior de lo cobrado: los perfiles hidratados cuentan aunque
+        // alguno vuelva vacío.
+        billed: billed + hydrated,
+        budget,
+        spent_before: spentBefore,
         hydrated,
         scored,
+        own_ads: ownAds,
       },
     });
   } catch (err) {
